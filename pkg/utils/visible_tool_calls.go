@@ -39,9 +39,6 @@ func BuildVisibleToolCalls(
 		explanation := ""
 		if tc.ExtraContent != nil {
 			explanation = strings.TrimSpace(tc.ExtraContent.ToolFeedbackExplanation)
-			if maxArgsLen > 0 {
-				explanation = Truncate(explanation, maxArgsLen)
-			}
 		}
 		if name == "" && explanation == "" && argsPreview == "" {
 			continue

@@ -549,6 +549,9 @@ func sessionTranscriptMessages(
 				}
 				content = ""
 			}
+			if hasToolCallsMsg && utils.ToolCallExplanationDuplicatesContent(content, msg.ToolCalls) {
+				content = ""
+			}
 
 			chatMsg := sessionChatMessage{
 				Role:        "assistant",

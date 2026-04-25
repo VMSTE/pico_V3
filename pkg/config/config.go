@@ -287,7 +287,7 @@ func (d *AgentDefaults) GetMaxMediaSize() int {
 	return DefaultMaxMediaSize
 }
 
-// GetToolFeedbackMaxArgsLength returns the max visible text length for tool feedback messages.
+// GetToolFeedbackMaxArgsLength returns the max visible text length for tool argument previews.
 func (d *AgentDefaults) GetToolFeedbackMaxArgsLength() int {
 	if d.ToolFeedback.MaxArgsLength > 0 {
 		return d.ToolFeedback.MaxArgsLength

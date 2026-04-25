@@ -901,6 +901,67 @@ func TestHandleListSessions_MessageCountUsesVisibleTranscript(t *testing.T) {
 	}
 }
 
+func TestHandleListSessions_DeduplicatesAssistantToolCallContentFromVisibleTranscript(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	dir := sessionsTestDir(t, configPath)
+	store, err := memory.NewJSONLStore(dir)
+	if err != nil {
+		t.Fatalf("NewJSONLStore() error = %v", err)
+	}
+
+	sessionKey := picoSessionPrefix + "list-deduped-tool-content"
+	for _, msg := range []providers.Message{
+		{Role: "user", Content: "check file"},
+		{
+			Role:    "assistant",
+			Content: "Read the file before replying.",
+			ToolCalls: []providers.ToolCall{
+				{
+					ID:   "call_1",
+					Type: "function",
+					Function: &providers.FunctionCall{
+						Name:      "read_file",
+						Arguments: `{"path":"README.md"}`,
+					},
+					ExtraContent: &providers.ExtraContent{
+						ToolFeedbackExplanation: "Read the file before replying.",
+					},
+				},
+			},
+		},
+		{Role: "tool", Content: "raw read_file result", ToolCallID: "call_1"},
+	} {
+		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+			t.Fatalf("AddFullMessage() error = %v", err)
+		}
+	}
+
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/sessions", nil)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var items []sessionListItem
+	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
+	}
+	if items[0].MessageCount != 2 {
+		t.Fatalf("items[0].MessageCount = %d, want 2", items[0].MessageCount)
+	}
+}
+
 func TestHandleGetSession_DoesNotDuplicateAssistantToolCallContent(t *testing.T) {
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()
@@ -956,16 +1017,13 @@ func TestHandleGetSession_DoesNotDuplicateAssistantToolCallContent(t *testing.T)
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if len(resp.Messages) != 3 {
-		t.Fatalf("len(resp.Messages) = %d, want 3", len(resp.Messages))
+	if len(resp.Messages) != 2 {
+		t.Fatalf("len(resp.Messages) = %d, want 2", len(resp.Messages))
 	}
 	if resp.Messages[0].Role != "user" || resp.Messages[0].Content != "check file" {
 		t.Fatalf("first message = %#v, want user/check file", resp.Messages[0])
 	}
-	if resp.Messages[1].Content != "Read the file before replying." {
-		t.Fatalf("assistant content = %#v, want preserved assistant content", resp.Messages[1])
-	}
-	toolCall := assertVisibleToolCallMessage(t, resp.Messages[2], "read_file")
+	toolCall := assertVisibleToolCallMessage(t, resp.Messages[1], "read_file")
 	if toolCall.ExtraContent == nil ||
 		toolCall.ExtraContent.ToolFeedbackExplanation != "Read the file before replying." {
 		t.Fatalf("tool call = %#v, want explanation", toolCall)
@@ -1097,8 +1155,8 @@ func TestHandleGetSession_PreservesMediaWhenAssistantToolCallContentDuplicatesSu
 	if resp.Messages[1].Role != "assistant" {
 		t.Fatalf("assistant message role = %q, want assistant", resp.Messages[1].Role)
 	}
-	if resp.Messages[1].Content != "Reviewing the generated screenshot." {
-		t.Fatalf("assistant content = %q, want preserved duplicated content with media", resp.Messages[1].Content)
+	if resp.Messages[1].Content != "" {
+		t.Fatalf("assistant content = %q, want duplicate content suppressed", resp.Messages[1].Content)
 	}
 	if len(resp.Messages[1].Media) != 1 || resp.Messages[1].Media[0] != "data:image/png;base64,abc123" {
 		t.Fatalf("assistant media = %#v, want preserved media", resp.Messages[1].Media)
@@ -1176,8 +1234,8 @@ func TestHandleGetSession_PreservesAttachmentsWhenAssistantToolCallContentDuplic
 	if resp.Messages[1].Role != "assistant" {
 		t.Fatalf("assistant message role = %q, want assistant", resp.Messages[1].Role)
 	}
-	if resp.Messages[1].Content != "Reviewing the generated report." {
-		t.Fatalf("assistant content = %q, want preserved duplicated content", resp.Messages[1].Content)
+	if resp.Messages[1].Content != "" {
+		t.Fatalf("assistant content = %q, want duplicate content suppressed", resp.Messages[1].Content)
 	}
 	if len(resp.Messages[1].Attachments) != 1 {
 		t.Fatalf("len(assistant.Attachments) = %d, want 1", len(resp.Messages[1].Attachments))
@@ -1256,13 +1314,12 @@ func TestHandleGetSession_UsesConfiguredToolFeedbackMaxArgsLength(t *testing.T) 
 		t.Fatalf("len(resp.Messages) = %d, want at least 2", len(resp.Messages))
 	}
 
-	wantPreview := utils.Truncate(explanation, 20)
 	wantArgsPreview := visibleAssistantToolArgsPreview(providers.ToolCall{
 		Function: &providers.FunctionCall{Arguments: argsJSON},
 	}, 20)
 	toolCall := assertVisibleToolCallMessage(t, resp.Messages[1], "read_file")
-	if toolCall.ExtraContent == nil || toolCall.ExtraContent.ToolFeedbackExplanation != wantPreview {
-		t.Fatalf("tool call = %#v, want preview %q", toolCall, wantPreview)
+	if toolCall.ExtraContent == nil || toolCall.ExtraContent.ToolFeedbackExplanation != explanation {
+		t.Fatalf("tool call = %#v, want full explanation %q", toolCall, explanation)
 	}
 	if toolCall.Function == nil || toolCall.Function.Arguments != wantArgsPreview {
 		t.Fatalf("tool call = %#v, want args preview %q", toolCall, wantArgsPreview)

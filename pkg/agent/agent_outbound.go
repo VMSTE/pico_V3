@@ -160,7 +160,14 @@ func (al *AgentLoop) publishPicoToolCallInterim(
 		return
 	}
 
-	if strings.TrimSpace(content) != "" {
+	visibleToolCalls := utils.BuildVisibleToolCalls(
+		toolCalls,
+		al.cfg.Agents.Defaults.GetToolFeedbackMaxArgsLength(),
+	)
+	duplicateToolCallContent := len(visibleToolCalls) > 0 &&
+		utils.ToolCallExplanationDuplicatesContent(content, toolCalls)
+
+	if strings.TrimSpace(content) != "" && !duplicateToolCallContent {
 		pubCtx, pubCancel := context.WithTimeout(ctx, 3*time.Second)
 		err := al.bus.PublishOutbound(pubCtx, outboundMessageForTurn(ts, content))
 		pubCancel()
@@ -175,10 +182,6 @@ func (al *AgentLoop) publishPicoToolCallInterim(
 		}
 	}
 
-	visibleToolCalls := utils.BuildVisibleToolCalls(
-		toolCalls,
-		al.cfg.Agents.Defaults.GetToolFeedbackMaxArgsLength(),
-	)
 	if len(visibleToolCalls) == 0 {
 		return
 	}

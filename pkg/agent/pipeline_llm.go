@@ -478,7 +478,6 @@ func (p *Pipeline) CallLLM(
 			exec.response,
 			tc,
 			exec.messages,
-			al.cfg.Agents.Defaults.GetToolFeedbackMaxArgsLength(),
 		)
 		extraContent := tc.ExtraContent
 		if strings.TrimSpace(toolFeedbackExplanation) != "" {

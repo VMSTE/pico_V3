@@ -86,7 +86,6 @@ toolLoop:
 							exec.response,
 							tc,
 							messages,
-							toolFeedbackMaxLen,
 						)
 						feedbackMsg := utils.FormatToolFeedbackMessage(
 							toolName,
@@ -368,7 +367,6 @@ toolLoop:
 				exec.response,
 				tc,
 				messages,
-				toolFeedbackMaxLen,
 			)
 			feedbackMsg := utils.FormatToolFeedbackMessage(
 				toolName,
