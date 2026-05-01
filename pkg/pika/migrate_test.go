@@ -1,7 +1,6 @@
 package pika
 
 import (
-	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
