@@ -180,8 +180,6 @@ type ScheduleConfig struct {
 
 // BaseToolsConfig defines master switch and per-tool toggles for BASE tools.
 // BRAIN tools (search_memory, registry_write, clarify) are always active.
-// Will be added to ToolsConfig as: BaseTools BaseToolsConfig `json:"base_tools"`
-// once config.go is patched per TZ-v2-0b. PIKA-V3.
 type BaseToolsConfig struct {
 	Enabled    bool `json:"enabled"`
 	Exec       bool `json:"exec"`
@@ -314,9 +312,7 @@ type ResolvedAgentConfig struct {
 
 // ResolveAgentConfig finds an agent by ID in Config.Agents.List and merges
 // Config.Agents.Defaults with the agent's overrides.
-//
-// Currently resolves only upstream AgentDefaults/AgentConfig fields.
-// Pika-specific fields will be resolved once config.go is extended.
+// PIKA-V3: Full resolution of all Pika-specific fields.
 func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 	d := c.Agents.Defaults
 
@@ -330,17 +326,39 @@ func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 		ContextWindow:  d.ContextWindow,
 		ContextManager: d.ContextManager,
 		Enabled:        true,
+
+		// PIKA-V3: paths from defaults
+		MemoryDBPath:     d.MemoryDBPath,
+		BaseToolsDir:     d.BaseToolsDir,
+		SkillsDir:        d.SkillsDir,
+		MaxToolsInPrompt: d.MaxToolsInPrompt,
+
+		// PIKA-V3: telemetry
+		TelemetryEnabled:       d.TelemetryEnabled,
+		TelemetryRetentionDays: d.TelemetryRetentionDays,
+
+		// PIKA-V3: retry/loop
+		MaxRetriesPerMessage:   d.MaxRetriesPerMessage,
+		ToolCallRetryEnabled:   d.ToolCallRetryEnabled,
+		LoopDetectionThreshold: d.LoopDetectionThreshold,
+
+		// PIKA-V3: debug/idle
+		PromptDebug:    d.PromptDebug,
+		IdleTimeoutMin: d.IdleTimeoutMin,
 	}
 
+	// Resolve pointer defaults
 	if d.Temperature != nil {
 		resolved.Temperature = *d.Temperature
 	}
+	if d.TopP != nil {
+		resolved.TopP = d.TopP // copy pointer
+	}
+	if d.TopK != nil {
+		resolved.TopK = d.TopK // copy pointer
+	}
 
-	// TODO(pika-v3): Once config.go AgentDefaults is extended, populate:
-	// resolved.MemoryDBPath = d.MemoryDBPath
-	// resolved.BaseToolsDir = d.BaseToolsDir
-	// resolved.SkillsDir = d.SkillsDir
-
+	// Find agent by ID
 	var agent *AgentConfig
 	for i := range c.Agents.List {
 		if c.Agents.List[i].ID == name {
@@ -353,23 +371,127 @@ func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 		return resolved
 	}
 
+	// --- Apply per-agent overrides ---
 	resolved.ID = agent.ID
 	if agent.Name != "" {
 		resolved.Name = agent.Name
 	}
-
 	if agent.Workspace != "" {
 		resolved.Workspace = agent.Workspace
 	}
-
 	if agent.Model != nil && agent.Model.Primary != "" {
 		resolved.ModelName = agent.Model.Primary
 	}
 
-	// TODO(pika-v3): Once config.go AgentConfig is extended, apply per-agent
-	// overrides for Temperature, TopP, TopK, PromptFile, Enabled,
-	// BootstrapFiles, Reasoning, Budget, OutputGate, Loop, MemoryBrief,
-	// Archive, Schedule, and role-specific fields.
+	// Pointer overrides: nil = inherit, non-nil = override (even if zero!)
+	if agent.Temperature != nil {
+		resolved.Temperature = *agent.Temperature
+	}
+	if agent.TopP != nil {
+		resolved.TopP = agent.TopP
+	}
+	if agent.TopK != nil {
+		resolved.TopK = agent.TopK
+	}
+	if agent.Enabled != nil {
+		resolved.Enabled = *agent.Enabled
+	}
+
+	// String overrides: "" = inherit
+	if agent.PromptFile != "" {
+		resolved.PromptFile = agent.PromptFile
+	}
+	if agent.BootstrapFiles != nil {
+		resolved.BootstrapFiles = agent.BootstrapFiles
+	}
+
+	// Nested struct overrides: nil = inherit/zero, non-nil = replace entire
+	if agent.Reasoning != nil {
+		resolved.Reasoning = *agent.Reasoning
+	}
+	if agent.Budget != nil {
+		resolved.Budget = *agent.Budget
+	}
+	if agent.OutputGate != nil {
+		resolved.OutputGate = *agent.OutputGate
+	}
+	if agent.Loop != nil {
+		resolved.Loop = *agent.Loop
+	}
+	if agent.MemoryBrief != nil {
+		resolved.MemoryBrief = *agent.MemoryBrief
+	}
+	if agent.Archive != nil {
+		resolved.Archive = *agent.Archive
+	}
+	if agent.Schedule != nil {
+		resolved.Schedule = *agent.Schedule
+	}
+
+	// Role-specific int/float: zero = inherit
+	if agent.SessionRotateThresholdPct != 0 {
+		resolved.SessionRotateThresholdPct = agent.SessionRotateThresholdPct
+	}
+	if agent.FocusStaleThresholdMsgs != 0 {
+		resolved.FocusStaleThresholdMsgs = agent.FocusStaleThresholdMsgs
+	}
+	if agent.HeartbeatIntervalSeconds != 0 {
+		resolved.HeartbeatIntervalSeconds = agent.HeartbeatIntervalSeconds
+	}
+	if agent.TokenEstimateMultiplier != 0 {
+		resolved.TokenEstimateMultiplier = agent.TokenEstimateMultiplier
+	}
+	if agent.CalibrationIntervalMin != 0 {
+		resolved.CalibrationIntervalMin = agent.CalibrationIntervalMin
+	}
+	if agent.BudgetCacheIntervalMin != 0 {
+		resolved.BudgetCacheIntervalMin = agent.BudgetCacheIntervalMin
+	}
+	if agent.BudgetSafetyMultiplier != 0 {
+		resolved.BudgetSafetyMultiplier = agent.BudgetSafetyMultiplier
+	}
+	if agent.MaxToolCalls != 0 {
+		resolved.MaxToolCalls = agent.MaxToolCalls
+	}
+	if agent.BuildPromptTimeoutMs != 0 {
+		resolved.BuildPromptTimeoutMs = agent.BuildPromptTimeoutMs
+	}
+	if agent.ReasoningGuidedRetrieval != nil {
+		resolved.ReasoningGuidedRetrieval = *agent.ReasoningGuidedRetrieval
+	}
+	if agent.ReasoningKeywordsMax != 0 {
+		resolved.ReasoningKeywordsMax = agent.ReasoningKeywordsMax
+	}
+	if agent.ReasoningDriftOverlapMin != 0 {
+		resolved.ReasoningDriftOverlapMin = agent.ReasoningDriftOverlapMin
+	}
+	if agent.TopicTriggers != nil {
+		resolved.TopicTriggers = agent.TopicTriggers
+	}
+	if agent.TriggerTokens != 0 {
+		resolved.TriggerTokens = agent.TriggerTokens
+	}
+	if agent.ChunkMaxTokens != 0 {
+		resolved.ChunkMaxTokens = agent.ChunkMaxTokens
+	}
+	if agent.TimeoutMs != 0 {
+		resolved.TimeoutMs = agent.TimeoutMs
+	}
+	if agent.SuspiciousTextRatio != 0 {
+		resolved.SuspiciousTextRatio = agent.SuspiciousTextRatio
+	}
+	if agent.SuspiciousSizeMultiplier != 0 {
+		resolved.SuspiciousSizeMultiplier = agent.SuspiciousSizeMultiplier
+	}
+	if agent.StartupAuditEnabled != nil {
+		resolved.StartupAuditEnabled = *agent.StartupAuditEnabled
+	}
+	if agent.ReauditOnListChanged != nil {
+		resolved.ReauditOnListChanged = *agent.ReauditOnListChanged
+	}
+	if agent.HashAlgorithm != "" {
+		resolved.HashAlgorithm = agent.HashAlgorithm
+	}
 
 	return resolved
 }
