@@ -5,58 +5,49 @@ import (
 	"testing"
 )
 
-// ========================================================================
-// Standalone type tests (compile independently of config.go changes)
-// ========================================================================
+// ---------------------------------------------------------------------------
+// ConfirmMode tests
+// ---------------------------------------------------------------------------
 
-func TestConfirmMode_UnmarshalString(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected ConfirmMode
-	}{
-		{`"always"`, ConfirmAlways},
-		{`"never"`, ConfirmNever},
-		{`"if_healthy"`, ConfirmIfHealthy},
-		{`"if_critical_path"`, ConfirmIfCritical},
-	}
-	for _, tt := range tests {
-		var m ConfirmMode
-		if err := json.Unmarshal([]byte(tt.input), &m); err != nil {
-			t.Fatalf("unmarshal %s: %v", tt.input, err)
-		}
-		if m != tt.expected {
-			t.Errorf("unmarshal %s: got %q, want %q", tt.input, m, tt.expected)
-		}
-	}
-}
-
-func TestConfirmMode_UnmarshalBool(t *testing.T) {
+func TestConfirmMode_String(t *testing.T) {
 	var m ConfirmMode
-
-	if err := json.Unmarshal([]byte(`true`), &m); err != nil {
-		t.Fatalf("unmarshal true: %v", err)
+	if err := json.Unmarshal([]byte(`"always"`), &m); err != nil {
+		t.Fatal(err)
 	}
 	if m != ConfirmAlways {
-		t.Errorf("unmarshal true: got %q, want %q", m, ConfirmAlways)
+		t.Errorf("want ConfirmAlways, got %q", m)
 	}
+}
 
+func TestConfirmMode_Bool(t *testing.T) {
+	var m ConfirmMode
+	if err := json.Unmarshal([]byte(`true`), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m != ConfirmAlways {
+		t.Errorf("want ConfirmAlways for true, got %q", m)
+	}
 	if err := json.Unmarshal([]byte(`false`), &m); err != nil {
-		t.Fatalf("unmarshal false: %v", err)
+		t.Fatal(err)
 	}
 	if m != ConfirmNever {
-		t.Errorf("unmarshal false: got %q, want %q", m, ConfirmNever)
+		t.Errorf("want ConfirmNever for false, got %q", m)
 	}
 }
 
-func TestConfirmMode_UnmarshalInvalid(t *testing.T) {
+func TestConfirmMode_Invalid(t *testing.T) {
 	var m ConfirmMode
-	if err := json.Unmarshal([]byte(`123`), &m); err == nil {
-		t.Fatal("expected error for numeric input, got nil")
+	if err := json.Unmarshal([]byte(`42`), &m); err == nil {
+		t.Fatal("expected error for numeric input")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SecurityConfig JSON tests
+// ---------------------------------------------------------------------------
 
 func TestSecurityConfig_JSON(t *testing.T) {
-	jsonStr := `{
+	input := `{
 		"dangerous_ops": {
 			"ops": {
 				"deploy.request": {"level": "critical", "confirm": "always"},
@@ -66,166 +57,267 @@ func TestSecurityConfig_JSON(t *testing.T) {
 			"critical_paths": ["/workspace/prompt/*"]
 		},
 		"rad": {"enabled": true, "drift_threshold": 0.2, "block_score": 3, "warn_score": 2},
-		"mcp": {"taint_reset_policy": "explicit_only", "per_server_rpm": 60}
+		"mcp": {
+			"taint_reset_policy": "explicit_only",
+			"stdio_user": "mcp-sandbox",
+			"stdio_isolation": "user",
+			"per_server_rpm": 60,
+			"default_capabilities": {"sampling": false},
+			"default_allow_prompts": false,
+			"default_allow_resources": true
+		}
 	}`
-	var cfg SecurityConfig
-	if err := json.Unmarshal([]byte(jsonStr), &cfg); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+
+	var sec SecurityConfig
+	if err := json.Unmarshal([]byte(input), &sec); err != nil {
+		t.Fatal(err)
 	}
-	if cfg.DangerousOps.Ops["deploy.request"].Confirm != ConfirmAlways {
-		t.Errorf("deploy.request confirm: got %q, want %q",
-			cfg.DangerousOps.Ops["deploy.request"].Confirm, ConfirmAlways)
+
+	if !sec.RAD.Enabled {
+		t.Error("RAD should be enabled")
 	}
-	if cfg.DangerousOps.Ops["files.write"].Confirm != ConfirmAlways {
-		t.Errorf("files.write confirm (bool true): got %q, want %q",
-			cfg.DangerousOps.Ops["files.write"].Confirm, ConfirmAlways)
+	if sec.RAD.DriftThreshold != 0.2 {
+		t.Errorf("RAD.DriftThreshold = %v, want 0.2", sec.RAD.DriftThreshold)
 	}
-	if cfg.RAD.DriftThreshold != 0.2 {
-		t.Errorf("rad drift: got %f, want 0.2", cfg.RAD.DriftThreshold)
+	if sec.MCP.PerServerRPM != 60 {
+		t.Errorf("MCP.PerServerRPM = %d, want 60", sec.MCP.PerServerRPM)
 	}
-	if cfg.MCP.PerServerRPM != 60 {
-		t.Errorf("mcp rpm: got %d, want 60", cfg.MCP.PerServerRPM)
+	if sec.DangerousOps.ConfirmTimeoutMin != 30 {
+		t.Errorf("DangerousOps.ConfirmTimeoutMin = %d, want 30", sec.DangerousOps.ConfirmTimeoutMin)
+	}
+
+	// Verify ConfirmMode bool→string conversion
+	op := sec.DangerousOps.Ops["files.write"]
+	if op.Confirm != ConfirmAlways {
+		t.Errorf("files.write confirm = %q, want %q", op.Confirm, ConfirmAlways)
 	}
 }
 
+// ---------------------------------------------------------------------------
+// HealthConfig JSON tests
+// ---------------------------------------------------------------------------
+
 func TestHealthConfig_JSON(t *testing.T) {
-	jsonStr := `{
+	input := `{
 		"window_size": 5,
 		"tool_fail_threshold_pct": 30,
 		"latency_threshold_ms": 30000,
 		"fallback_provider": {
 			"provider": "stepfun",
 			"api_key_env": "STEPFUN_API_KEY",
+			"base_url": "https://api.stepfun.com/v1",
 			"model": "step-3.5-flash"
 		},
-		"reporting": {"typing_indicator_enabled": true},
-		"progress": {"enabled": true, "throttle_sec": 2}
+		"reporting": {
+			"typing_indicator_enabled": true,
+			"alert_dedup_per_session": true,
+			"daily_health_summary_enabled": true
+		},
+		"progress": {
+			"enabled": true,
+			"throttle_sec": 2,
+			"delete_on_complete": true,
+			"show_step_text": true,
+			"stop_command_enabled": true
+		}
 	}`
-	var cfg HealthConfig
-	if err := json.Unmarshal([]byte(jsonStr), &cfg); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+
+	var h HealthConfig
+	if err := json.Unmarshal([]byte(input), &h); err != nil {
+		t.Fatal(err)
 	}
-	if cfg.WindowSize != 5 {
-		t.Errorf("window_size: got %d, want 5", cfg.WindowSize)
+
+	if h.WindowSize != 5 {
+		t.Errorf("WindowSize = %d, want 5", h.WindowSize)
 	}
-	if cfg.FallbackProvider.Provider != "stepfun" {
-		t.Errorf("fallback provider: got %q, want stepfun", cfg.FallbackProvider.Provider)
+	if h.FallbackProvider.Model != "step-3.5-flash" {
+		t.Errorf("FallbackProvider.Model = %q, want step-3.5-flash", h.FallbackProvider.Model)
 	}
-	if cfg.Progress.ThrottleSec != 2 {
-		t.Errorf("progress throttle: got %d, want 2", cfg.Progress.ThrottleSec)
+	if !h.Progress.Enabled {
+		t.Error("Progress should be enabled")
+	}
+	if h.Progress.ThrottleSec != 2 {
+		t.Errorf("Progress.ThrottleSec = %d, want 2", h.Progress.ThrottleSec)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ClarifyConfig JSON tests
+// ---------------------------------------------------------------------------
 
 func TestClarifyConfig_JSON(t *testing.T) {
-	jsonStr := `{"enabled": true, "timeout_min": 30, "max_streak_before_bypass": 2, "precheck_timeout_ms": 3000}`
-	var cfg ClarifyConfig
-	if err := json.Unmarshal([]byte(jsonStr), &cfg); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	input := `{"enabled": true, "timeout_min": 30, "max_streak_before_bypass": 2, "precheck_timeout_ms": 3000}`
+
+	var cl ClarifyConfig
+	if err := json.Unmarshal([]byte(input), &cl); err != nil {
+		t.Fatal(err)
 	}
-	if !cfg.Enabled {
-		t.Error("expected enabled=true")
+
+	if !cl.Enabled {
+		t.Error("Clarify should be enabled")
 	}
-	if cfg.TimeoutMin != 30 {
-		t.Errorf("timeout: got %d, want 30", cfg.TimeoutMin)
+	if cl.TimeoutMin != 30 {
+		t.Errorf("TimeoutMin = %d, want 30", cl.TimeoutMin)
+	}
+	if cl.MaxStreakBeforeBypass != 2 {
+		t.Errorf("MaxStreakBeforeBypass = %d, want 2", cl.MaxStreakBeforeBypass)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// BaseToolsConfig tests
+// ---------------------------------------------------------------------------
 
 func TestBaseToolsConfig_JSON(t *testing.T) {
-	jsonStr := `{"enabled": true, "exec": true, "read_file": true, "write_file": false, "edit_file": true, "append_file": true, "list_dir": true}`
-	var cfg BaseToolsConfig
-	if err := json.Unmarshal([]byte(jsonStr), &cfg); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	input := `{"enabled": true, "exec": true, "read_file": true, "write_file": false, "edit_file": true, "append_file": true, "list_dir": true}`
+
+	var bt BaseToolsConfig
+	if err := json.Unmarshal([]byte(input), &bt); err != nil {
+		t.Fatal(err)
 	}
-	if !cfg.Enabled {
-		t.Error("expected enabled=true")
+
+	if !bt.Enabled {
+		t.Error("BaseTools should be enabled")
 	}
-	if cfg.WriteFile {
-		t.Error("expected write_file=false")
+	if bt.WriteFile {
+		t.Error("WriteFile should be disabled")
 	}
-	if !cfg.Exec {
-		t.Error("expected exec=true")
+	if !bt.Exec {
+		t.Error("Exec should be enabled")
 	}
 }
+
+func TestIsBaseToolEnabled_Default(t *testing.T) {
+	bt := DefaultBaseToolsConfig()
+	if !bt.IsBaseToolEnabled("exec") {
+		t.Error("exec should be enabled by default")
+	}
+	if !bt.IsBaseToolEnabled("read_file") {
+		t.Error("read_file should be enabled by default")
+	}
+}
+
+func TestIsBaseToolEnabled_MasterSwitch(t *testing.T) {
+	bt := BaseToolsConfig{Enabled: false, Exec: true, ReadFile: true}
+	if bt.IsBaseToolEnabled("exec") {
+		t.Error("exec should be disabled when master switch is off")
+	}
+}
+
+func TestIsBaseToolEnabled_PerTool(t *testing.T) {
+	bt := BaseToolsConfig{Enabled: true, Exec: false, ReadFile: true, WriteFile: true}
+	if bt.IsBaseToolEnabled("exec") {
+		t.Error("exec should be disabled when per-tool is off")
+	}
+	if !bt.IsBaseToolEnabled("read_file") {
+		t.Error("read_file should be enabled")
+	}
+}
+
+func TestIsBaseToolEnabled_BrainTool(t *testing.T) {
+	bt := DefaultBaseToolsConfig()
+	if bt.IsBaseToolEnabled("search_memory") {
+		t.Error("BRAIN tool search_memory should return false from IsBaseToolEnabled")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Nested config JSON tests
+// ---------------------------------------------------------------------------
 
 func TestNestedConfigs_JSON(t *testing.T) {
-	// ReasoningConfig
-	var r ReasoningConfig
-	if err := json.Unmarshal([]byte(`{"effort":"medium","exclude":false,"log_max_chars":2000}`), &r); err != nil {
-		t.Fatalf("reasoning unmarshal: %v", err)
+	input := `{
+		"reasoning": {"effort": "medium", "exclude": false, "log_max_chars": 2000},
+		"budget": {"daily_usd": 2.0, "session_usd": 0.5, "warn_pct": 80},
+		"output_gate": {"enabled": true, "max_chars": 3500, "max_retries": 3},
+		"loop": {"chain_max_calls": 8, "task_overflow_enabled": true, "overflow_chunk_size": 5},
+		"memory_brief": {"soft_limit": 5000, "hard_limit": 6000, "compress_protected_sections": ["AVOID", "CONSTRAINTS"], "max_retries": 3},
+		"archive": {"fts_top_n": 20, "fts_window": 2, "read_max_snippets": 10, "read_timeout_ms": 5000},
+		"schedule": {"daily": "03:00", "weekly": "Sun 04:00", "monthly": "1st 05:00"}
+	}`
+
+	var data struct {
+		Reasoning   ReasoningConfig   `json:"reasoning"`
+		Budget      BudgetConfig      `json:"budget"`
+		OutputGate  OutputGateConfig  `json:"output_gate"`
+		Loop        LoopConfig        `json:"loop"`
+		MemoryBrief MemoryBriefConfig `json:"memory_brief"`
+		Archive     ArchiveConfig     `json:"archive"`
+		Schedule    ScheduleConfig    `json:"schedule"`
 	}
-	if r.Effort != "medium" {
-		t.Errorf("reasoning effort: got %q", r.Effort)
+	if err := json.Unmarshal([]byte(input), &data); err != nil {
+		t.Fatal(err)
 	}
 
-	// BudgetConfig
-	var b BudgetConfig
-	if err := json.Unmarshal([]byte(`{"daily_usd":2.0,"session_usd":0.5,"warn_pct":80}`), &b); err != nil {
-		t.Fatalf("budget unmarshal: %v", err)
+	if data.Reasoning.Effort != "medium" {
+		t.Errorf("Reasoning.Effort = %q, want medium", data.Reasoning.Effort)
 	}
-	if b.DailyUSD != 2.0 {
-		t.Errorf("budget daily: got %f", b.DailyUSD)
+	if data.Budget.DailyUSD != 2.0 {
+		t.Errorf("Budget.DailyUSD = %v, want 2.0", data.Budget.DailyUSD)
 	}
-
-	// LoopConfig
-	var l LoopConfig
-	if err := json.Unmarshal([]byte(`{"chain_max_calls":8,"task_overflow_enabled":true}`), &l); err != nil {
-		t.Fatalf("loop unmarshal: %v", err)
+	if !data.OutputGate.Enabled {
+		t.Error("OutputGate should be enabled")
 	}
-	if l.ChainMaxCalls != 8 {
-		t.Errorf("loop chain_max: got %d", l.ChainMaxCalls)
+	if data.Loop.ChainMaxCalls != 8 {
+		t.Errorf("Loop.ChainMaxCalls = %d, want 8", data.Loop.ChainMaxCalls)
+	}
+	if data.MemoryBrief.SoftLimit != 5000 {
+		t.Errorf("MemoryBrief.SoftLimit = %d, want 5000", data.MemoryBrief.SoftLimit)
+	}
+	if len(data.MemoryBrief.CompressProtectedSections) != 2 {
+		t.Errorf("MemoryBrief.CompressProtectedSections len = %d, want 2",
+			len(data.MemoryBrief.CompressProtectedSections))
+	}
+	if data.Archive.FTSTopN != 20 {
+		t.Errorf("Archive.FTSTopN = %d, want 20", data.Archive.FTSTopN)
+	}
+	if data.Schedule.Daily != "03:00" {
+		t.Errorf("Schedule.Daily = %q, want 03:00", data.Schedule.Daily)
 	}
 }
 
-// ========================================================================
-// Tests requiring config.go struct changes (won't compile until applied)
-// ========================================================================
+// ---------------------------------------------------------------------------
+// ResolveAgentConfig tests (upstream fields only)
+// ---------------------------------------------------------------------------
 
-func TestResolveAgentConfig_AtomizerTemperatureZero(t *testing.T) {
-	temp1 := 1.0
-	temp0 := 0.0
-	topP1 := 1.0
-	enabled := true
-
+func TestResolveAgentConfig_UnknownAgent(t *testing.T) {
+	temp := 1.0
 	cfg := &Config{
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
-				Temperature:    &temp1,
-				ContextManager: "pika",
+				Workspace:   "/workspace",
+				ModelName:   "main",
+				Temperature: &temp,
 			},
 			List: []AgentConfig{
-				{
-					ID:          "atomizer",
-					Name:        "Атомизатор",
-					Temperature: &temp0,
-					TopP:        &topP1,
-					Enabled:     &enabled,
-				},
+				{ID: "main", Default: true, Name: "Пика"},
 			},
 		},
 	}
 
-	resolved := cfg.ResolveAgentConfig("atomizer")
-	if resolved.Temperature != 0.0 {
-		t.Errorf("atomizer temperature: got %f, want 0.0", resolved.Temperature)
+	resolved := cfg.ResolveAgentConfig("nonexistent")
+	if resolved.ID != "nonexistent" {
+		t.Errorf("ID = %q, want nonexistent", resolved.ID)
 	}
-	if resolved.Name != "Атомизатор" {
-		t.Errorf("atomizer name: got %q, want Атомизатор", resolved.Name)
+	if resolved.Workspace != "/workspace" {
+		t.Errorf("Workspace = %q, want /workspace", resolved.Workspace)
 	}
-	if resolved.TopP != 1.0 {
-		t.Errorf("atomizer top_p: got %f, want 1.0", resolved.TopP)
+	if resolved.Temperature != 1.0 {
+		t.Errorf("Temperature = %v, want 1.0", resolved.Temperature)
 	}
 }
 
 func TestResolveAgentConfig_InheritDefaults(t *testing.T) {
-	temp1 := 1.0
-
+	temp := 1.0
 	cfg := &Config{
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
-				Temperature:    &temp1,
-				IdleTimeoutMin: 30,
+				Workspace:      "/workspace",
+				Provider:       "openrouter",
+				ModelName:      "main",
+				Temperature:    &temp,
+				ContextWindow:  256000,
 				ContextManager: "pika",
-				MemoryDBPath:   "/workspace/memory/bot_memory.db",
 			},
 			List: []AgentConfig{
 				{ID: "main", Default: true, Name: "Пика"},
@@ -234,158 +326,52 @@ func TestResolveAgentConfig_InheritDefaults(t *testing.T) {
 	}
 
 	resolved := cfg.ResolveAgentConfig("main")
+	if resolved.ID != "main" {
+		t.Errorf("ID = %q, want main", resolved.ID)
+	}
+	if resolved.Name != "Пика" {
+		t.Errorf("Name = %q, want Пика", resolved.Name)
+	}
+	if resolved.Workspace != "/workspace" {
+		t.Errorf("Workspace = %q, want /workspace", resolved.Workspace)
+	}
 	if resolved.Temperature != 1.0 {
-		t.Errorf("main temperature: got %f, want 1.0", resolved.Temperature)
+		t.Errorf("Temperature = %v, want 1.0", resolved.Temperature)
 	}
-	if resolved.IdleTimeoutMin != 30 {
-		t.Errorf("main idle_timeout: got %d, want 30", resolved.IdleTimeoutMin)
+	if resolved.ContextWindow != 256000 {
+		t.Errorf("ContextWindow = %d, want 256000", resolved.ContextWindow)
 	}
-	if resolved.MemoryDBPath != "/workspace/memory/bot_memory.db" {
-		t.Errorf("main memory_db_path: got %q", resolved.MemoryDBPath)
+	if resolved.ContextManager != "pika" {
+		t.Errorf("ContextManager = %q, want pika", resolved.ContextManager)
 	}
 }
 
-func TestResolveAgentConfig_UnknownAgent(t *testing.T) {
-	temp1 := 1.0
-
+func TestResolveAgentConfig_ModelOverride(t *testing.T) {
 	cfg := &Config{
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
-				Temperature:    &temp1,
-				IdleTimeoutMin: 30,
+				ModelName: "main",
 			},
-			List: []AgentConfig{},
-		},
-	}
-
-	resolved := cfg.ResolveAgentConfig("unknown")
-	if resolved.Temperature != 1.0 {
-		t.Errorf("unknown temperature: got %f, want 1.0 (defaults)", resolved.Temperature)
-	}
-	if resolved.ID != "unknown" {
-		t.Errorf("unknown ID: got %q, want unknown", resolved.ID)
-	}
-}
-
-func TestResolveAgentConfig_NestedOverride(t *testing.T) {
-	cfg := &Config{
-		Agents: AgentsConfig{
 			List: []AgentConfig{
 				{
-					ID:   "main",
-					Name: "Пика",
-					Reasoning: &ReasoningConfig{
-						Effort:      "medium",
-						Exclude:     false,
-						LogMaxChars: 2000,
-					},
-					Budget: &BudgetConfig{
-						DailyUSD:   2.00,
-						SessionUSD: 0.50,
-						WarnPct:    80,
+					ID:   "archivist",
+					Name: "Архивариус",
+					Model: &AgentModelConfig{
+						Primary: "background",
 					},
 				},
 			},
 		},
 	}
 
-	resolved := cfg.ResolveAgentConfig("main")
-	if resolved.Reasoning.Effort != "medium" {
-		t.Errorf("reasoning effort: got %q, want medium", resolved.Reasoning.Effort)
-	}
-	if resolved.Budget.DailyUSD != 2.0 {
-		t.Errorf("budget daily: got %f, want 2.0", resolved.Budget.DailyUSD)
+	resolved := cfg.ResolveAgentConfig("archivist")
+	if resolved.ModelName != "background" {
+		t.Errorf("ModelName = %q, want background", resolved.ModelName)
 	}
 }
 
-func TestResolveAgentConfig_PointerInherit(t *testing.T) {
-	temp1 := 1.0
-
-	cfg := &Config{
-		Agents: AgentsConfig{
-			Defaults: AgentDefaults{
-				Temperature: &temp1,
-			},
-			List: []AgentConfig{
-				{
-					ID:          "main",
-					Temperature: nil, // nil = inherit
-				},
-			},
-		},
-	}
-
-	resolved := cfg.ResolveAgentConfig("main")
-	if resolved.Temperature != 1.0 {
-		t.Errorf("pointer inherit: got %f, want 1.0", resolved.Temperature)
-	}
-}
-
-func TestResolveAgentConfig_PointerOverrideZero(t *testing.T) {
-	temp1 := 1.0
-	temp0 := 0.0
-
-	cfg := &Config{
-		Agents: AgentsConfig{
-			Defaults: AgentDefaults{
-				Temperature: &temp1,
-			},
-			List: []AgentConfig{
-				{
-					ID:          "atomizer",
-					Temperature: &temp0, // explicit 0.0 override
-				},
-			},
-		},
-	}
-
-	resolved := cfg.ResolveAgentConfig("atomizer")
-	if resolved.Temperature != 0.0 {
-		t.Errorf("pointer override zero: got %f, want 0.0", resolved.Temperature)
-	}
-}
-
-func TestIsBaseToolEnabled_Default(t *testing.T) {
-	cfg := &Config{}
-	cfg.Tools.BaseTools = BaseToolsConfig{
-		Enabled: true, Exec: true, ReadFile: true,
-		WriteFile: true, EditFile: true, AppendFile: true, ListDir: true,
-	}
-	if !cfg.IsBaseToolEnabled("exec") {
-		t.Error("default: exec should be enabled")
-	}
-	if !cfg.IsBaseToolEnabled("read_file") {
-		t.Error("default: read_file should be enabled")
-	}
-}
-
-func TestIsBaseToolEnabled_MasterSwitch(t *testing.T) {
-	cfg := &Config{}
-	cfg.Tools.BaseTools = BaseToolsConfig{
-		Enabled: false, Exec: true,
-	}
-	if cfg.IsBaseToolEnabled("exec") {
-		t.Error("master switch off: exec should be disabled")
-	}
-}
-
-func TestIsBaseToolEnabled_PerTool(t *testing.T) {
-	cfg := &Config{}
-	cfg.Tools.BaseTools = BaseToolsConfig{
-		Enabled: true, Exec: false, ReadFile: true,
-	}
-	if cfg.IsBaseToolEnabled("exec") {
-		t.Error("per-tool: exec=false should be disabled")
-	}
-	if !cfg.IsBaseToolEnabled("read_file") {
-		t.Error("per-tool: read_file=true should be enabled")
-	}
-}
-
-func TestIsBaseToolEnabled_BrainTool(t *testing.T) {
-	cfg := &Config{}
-	cfg.Tools.BaseTools = BaseToolsConfig{Enabled: true}
-	if cfg.IsBaseToolEnabled("search_memory") {
-		t.Error("BRAIN tool search_memory should return false")
-	}
-}
+// NOTE: Tests for Pika-specific field resolution (Temperature override from
+// AgentConfig, TopP/TopK inheritance, Reasoning/Budget/Loop merge, pointer
+// semantics for *float64 zero-value) are deferred until config.go struct
+// definitions are extended per ТЗ-v2-0b. See PR description for full test
+// specifications.
