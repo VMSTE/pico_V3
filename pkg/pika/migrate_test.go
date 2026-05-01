@@ -1,114 +1,85 @@
-// PIKA-V3: migrate_test.go — Tests for bot_memory.db schema migration
 package pika
 
 import (
+	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 )
 
-func tempDBPath(t *testing.T) string {
-	t.Helper()
-	return filepath.Join(t.TempDir(), "test_bot_memory.db")
-}
+// PIKA-V3: migrate_test.go — Tests for bot_memory.db schema migration
 
-// TestMigrateNewDB — new DB → version=1 + наличие ключевых таблиц/FTS/триггеров
 func TestMigrateNewDB(t *testing.T) {
-	db, err := Migrate(tempDBPath(t))
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+
+	db, err := Migrate(dbPath)
 	if err != nil {
 		t.Fatalf("Migrate failed: %v", err)
 	}
 	defer db.Close()
 
-	v, err := CurrentVersion(db)
+	// Check version == 1
+	ver, err := CurrentVersion(db)
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if v != 1 {
-		t.Fatalf("expected version 1, got %d", v)
+	if ver != 1 {
+		t.Fatalf("expected version 1, got %d", ver)
 	}
 
 	// Check key tables exist
-	expectedTables := []string{
-		"schema_version",
-		"messages",
-		"events",
-		"knowledge_atoms",
-		"messages_archive",
-		"events_archive",
-		"registry",
-		"request_log",
-		"reasoning_log",
-		"reasoning_log_archive",
-		"trace_spans",
-		"prompt_versions",
-		"prompt_snapshots",
-		"atom_usage",
-		"daily_metrics",
+	expected := map[string]bool{
+		"messages": false, "events": false, "knowledge_atoms": false,
+		"knowledge_fts": false, "messages_archive": false,
+		"events_archive": false, "events_archive_fts": false,
+		"registry": false, "request_log": false, "reasoning_log": false,
+		"reasoning_log_archive": false, "trace_spans": false,
+		"prompt_versions": false, "prompt_snapshots": false,
+		"atom_usage": false, "daily_metrics": false,
+		"schema_version": false,
 	}
-
 	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
 	if err != nil {
-		t.Fatalf("query sqlite_master: %v", err)
+		t.Fatalf("query tables: %v", err)
 	}
 	defer rows.Close()
-
-	tables := make(map[string]bool)
 	for rows.Next() {
 		var name string
-		if err := rows.Scan(&name); err != nil {
-			t.Fatalf("scan: %v", err)
+		if scanErr := rows.Scan(&name); scanErr != nil {
+			t.Fatalf("scan: %v", scanErr)
 		}
-		tables[name] = true
+		if _, ok := expected[name]; ok {
+			expected[name] = true
+		}
 	}
-
-	for _, tbl := range expectedTables {
-		if !tables[tbl] {
+	if rowsErr := rows.Err(); rowsErr != nil {
+		t.Fatalf("rows iteration: %v", rowsErr)
+	}
+	for tbl, found := range expected {
+		if !found {
 			t.Errorf("table %q not found", tbl)
 		}
 	}
 
-	// Check FTS5 virtual tables
-	expectedVirtual := []string{
-		"knowledge_fts",
-		"events_archive_fts",
-	}
-	for _, vt := range expectedVirtual {
-		var count int
-		err := db.QueryRow(
-			"SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", vt,
-		).Scan(&count)
-		if err != nil {
-			t.Fatalf("check virtual table %q: %v", vt, err)
+	// Check triggers (FTS5 sync)
+	triggers := []string{"katoms_ai", "katoms_ad", "katoms_au", "events_archive_ai"}
+	for _, trg := range triggers {
+		var cnt int
+		if qErr := db.QueryRow(
+			"SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name=?", trg,
+		).Scan(&cnt); qErr != nil {
+			t.Fatalf("check trigger %s: %v", trg, qErr)
 		}
-		if count == 0 {
-			t.Errorf("virtual table %q not found", vt)
-		}
-	}
-
-	// Check triggers
-	expectedTriggers := []string{
-		"katoms_ai",
-		"katoms_ad",
-		"katoms_au",
-		"events_archive_ai",
-	}
-	for _, tr := range expectedTriggers {
-		var count int
-		err := db.QueryRow(
-			"SELECT count(*) FROM sqlite_master WHERE type='trigger' AND name=?", tr,
-		).Scan(&count)
-		if err != nil {
-			t.Fatalf("check trigger %q: %v", tr, err)
-		}
-		if count == 0 {
-			t.Errorf("trigger %q not found", tr)
+		if cnt != 1 {
+			t.Errorf("trigger %q not found", trg)
 		}
 	}
 }
 
-// TestMigrateIdempotent — 2× Migrate on same DB, no error, version still 1
 func TestMigrateIdempotent(t *testing.T) {
-	dbPath := tempDBPath(t)
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
 
 	db1, err := Migrate(dbPath)
 	if err != nil {
@@ -122,68 +93,73 @@ func TestMigrateIdempotent(t *testing.T) {
 	}
 	defer db2.Close()
 
-	v, err := CurrentVersion(db2)
+	ver, err := CurrentVersion(db2)
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if v != 1 {
-		t.Fatalf("expected version 1 after double migrate, got %d", v)
+	if ver != 1 {
+		t.Fatalf("expected version 1 after second Migrate, got %d", ver)
 	}
 }
 
-// TestMigratePragmas — pragmas (wal + foreign_keys)
 func TestMigratePragmas(t *testing.T) {
-	db, err := Migrate(tempDBPath(t))
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+
+	db, err := Migrate(dbPath)
 	if err != nil {
 		t.Fatalf("Migrate failed: %v", err)
 	}
 	defer db.Close()
 
+	// WAL
 	var journalMode string
-	if err := db.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
-		t.Fatalf("PRAGMA journal_mode: %v", err)
+	if qErr := db.QueryRow("PRAGMA journal_mode").Scan(&journalMode); qErr != nil {
+		t.Fatalf("query journal_mode: %v", qErr)
 	}
 	if journalMode != "wal" {
-		t.Errorf("journal_mode = %q, want %q", journalMode, "wal")
+		t.Errorf("expected journal_mode=wal, got %q", journalMode)
 	}
 
+	// foreign_keys
 	var fk int
-	if err := db.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil {
-		t.Fatalf("PRAGMA foreign_keys: %v", err)
+	if qErr := db.QueryRow("PRAGMA foreign_keys").Scan(&fk); qErr != nil {
+		t.Fatalf("query foreign_keys: %v", qErr)
 	}
 	if fk != 1 {
-		t.Errorf("foreign_keys = %d, want 1", fk)
+		t.Errorf("expected foreign_keys=1, got %d", fk)
 	}
 }
 
-// TestFTS5Works — FTS5 реально работает (smoke-тест MATCH)
 func TestFTS5Works(t *testing.T) {
-	db, err := Migrate(tempDBPath(t))
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+
+	db, err := Migrate(dbPath)
 	if err != nil {
 		t.Fatalf("Migrate failed: %v", err)
 	}
 	defer db.Close()
 
-	// Insert a knowledge atom — trigger katoms_ai syncs to knowledge_fts
-	_, err = db.Exec(`
-		INSERT INTO knowledge_atoms
-			(atom_id, session_id, turn_id, category, summary, detail, tags)
-		VALUES
-			('T-1', 'sess-1', 1, 'pattern', 'test deploy pattern', 'deploy details here', '["deploy","docker"]')
-	`)
+	// Insert a knowledge atom
+	_, err = db.Exec(`INSERT INTO knowledge_atoms
+		(atom_id, session_id, turn_id, category, summary, detail, tags)
+		VALUES ('P-1', 'sess-1', 1, 'pattern', 'deploy OOM fix', 'Increased memory limit to 512MB', '["deploy","OOM"]')`)
 	if err != nil {
-		t.Fatalf("INSERT knowledge_atoms: %v", err)
+		t.Fatalf("insert atom: %v", err)
 	}
 
-	// FTS5 MATCH query via knowledge_fts
-	var rowid int
-	err = db.QueryRow(
+	// FTS5 MATCH query
+	var matchID int
+	if qErr := db.QueryRow(
 		"SELECT rowid FROM knowledge_fts WHERE knowledge_fts MATCH 'deploy'",
-	).Scan(&rowid)
-	if err != nil {
-		t.Fatalf("FTS5 MATCH query failed: %v", err)
+	).Scan(&matchID); qErr != nil {
+		t.Fatalf("FTS5 MATCH failed: %v", qErr)
 	}
-	if rowid == 0 {
-		t.Error("FTS5 returned rowid 0, expected > 0")
+	if matchID == 0 {
+		t.Error("FTS5 MATCH returned zero rowid")
 	}
+
+	// Cleanup: remove temp files
+	_ = os.RemoveAll(dir)
 }
