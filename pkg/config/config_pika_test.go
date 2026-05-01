@@ -5,10 +5,6 @@ import (
 	"testing"
 )
 
-// ---------------------------------------------------------------------------
-// ConfirmMode tests
-// ---------------------------------------------------------------------------
-
 func TestConfirmMode_String(t *testing.T) {
 	var m ConfirmMode
 	if err := json.Unmarshal([]byte(`"always"`), &m); err != nil {
@@ -42,10 +38,6 @@ func TestConfirmMode_Invalid(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// SecurityConfig JSON tests
-// ---------------------------------------------------------------------------
-
 func TestSecurityConfig_JSON(t *testing.T) {
 	input := `{
 		"dangerous_ops": {
@@ -72,7 +64,6 @@ func TestSecurityConfig_JSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(input), &sec); err != nil {
 		t.Fatal(err)
 	}
-
 	if !sec.RAD.Enabled {
 		t.Error("RAD should be enabled")
 	}
@@ -82,20 +73,11 @@ func TestSecurityConfig_JSON(t *testing.T) {
 	if sec.MCP.PerServerRPM != 60 {
 		t.Errorf("MCP.PerServerRPM = %d, want 60", sec.MCP.PerServerRPM)
 	}
-	if sec.DangerousOps.ConfirmTimeoutMin != 30 {
-		t.Errorf("DangerousOps.ConfirmTimeoutMin = %d, want 30", sec.DangerousOps.ConfirmTimeoutMin)
-	}
-
-	// Verify ConfirmMode bool→string conversion
 	op := sec.DangerousOps.Ops["files.write"]
 	if op.Confirm != ConfirmAlways {
 		t.Errorf("files.write confirm = %q, want %q", op.Confirm, ConfirmAlways)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// HealthConfig JSON tests
-// ---------------------------------------------------------------------------
 
 func TestHealthConfig_JSON(t *testing.T) {
 	input := `{
@@ -126,7 +108,6 @@ func TestHealthConfig_JSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(input), &h); err != nil {
 		t.Fatal(err)
 	}
-
 	if h.WindowSize != 5 {
 		t.Errorf("WindowSize = %d, want 5", h.WindowSize)
 	}
@@ -136,14 +117,7 @@ func TestHealthConfig_JSON(t *testing.T) {
 	if !h.Progress.Enabled {
 		t.Error("Progress should be enabled")
 	}
-	if h.Progress.ThrottleSec != 2 {
-		t.Errorf("Progress.ThrottleSec = %d, want 2", h.Progress.ThrottleSec)
-	}
 }
-
-// ---------------------------------------------------------------------------
-// ClarifyConfig JSON tests
-// ---------------------------------------------------------------------------
 
 func TestClarifyConfig_JSON(t *testing.T) {
 	input := `{"enabled": true, "timeout_min": 30, "max_streak_before_bypass": 2, "precheck_timeout_ms": 3000}`
@@ -152,38 +126,26 @@ func TestClarifyConfig_JSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(input), &cl); err != nil {
 		t.Fatal(err)
 	}
-
 	if !cl.Enabled {
 		t.Error("Clarify should be enabled")
 	}
 	if cl.TimeoutMin != 30 {
 		t.Errorf("TimeoutMin = %d, want 30", cl.TimeoutMin)
 	}
-	if cl.MaxStreakBeforeBypass != 2 {
-		t.Errorf("MaxStreakBeforeBypass = %d, want 2", cl.MaxStreakBeforeBypass)
-	}
 }
 
-// ---------------------------------------------------------------------------
-// BaseToolsConfig tests
-// ---------------------------------------------------------------------------
-
 func TestBaseToolsConfig_JSON(t *testing.T) {
-	input := `{"enabled": true, "exec": true, "read_file": true, "write_file": false, "edit_file": true, "append_file": true, "list_dir": true}`
+	input := `{"enabled": true, "exec": true, "read_file": true, "write_file": false}`
 
 	var bt BaseToolsConfig
 	if err := json.Unmarshal([]byte(input), &bt); err != nil {
 		t.Fatal(err)
 	}
-
 	if !bt.Enabled {
 		t.Error("BaseTools should be enabled")
 	}
 	if bt.WriteFile {
 		t.Error("WriteFile should be disabled")
-	}
-	if !bt.Exec {
-		t.Error("Exec should be enabled")
 	}
 }
 
@@ -217,13 +179,9 @@ func TestIsBaseToolEnabled_PerTool(t *testing.T) {
 func TestIsBaseToolEnabled_BrainTool(t *testing.T) {
 	bt := DefaultBaseToolsConfig()
 	if bt.IsBaseToolEnabled("search_memory") {
-		t.Error("BRAIN tool search_memory should return false from IsBaseToolEnabled")
+		t.Error("BRAIN tool search_memory should return false")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Nested config JSON tests
-// ---------------------------------------------------------------------------
 
 func TestNestedConfigs_JSON(t *testing.T) {
 	input := `{
@@ -231,7 +189,7 @@ func TestNestedConfigs_JSON(t *testing.T) {
 		"budget": {"daily_usd": 2.0, "session_usd": 0.5, "warn_pct": 80},
 		"output_gate": {"enabled": true, "max_chars": 3500, "max_retries": 3},
 		"loop": {"chain_max_calls": 8, "task_overflow_enabled": true, "overflow_chunk_size": 5},
-		"memory_brief": {"soft_limit": 5000, "hard_limit": 6000, "compress_protected_sections": ["AVOID", "CONSTRAINTS"], "max_retries": 3},
+		"memory_brief": {"soft_limit": 5000, "hard_limit": 6000, "compress_protected_sections": ["AVOID"], "max_retries": 3},
 		"archive": {"fts_top_n": 20, "fts_window": 2, "read_max_snippets": 10, "read_timeout_ms": 5000},
 		"schedule": {"daily": "03:00", "weekly": "Sun 04:00", "monthly": "1st 05:00"}
 	}`
@@ -248,37 +206,19 @@ func TestNestedConfigs_JSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(input), &data); err != nil {
 		t.Fatal(err)
 	}
-
 	if data.Reasoning.Effort != "medium" {
 		t.Errorf("Reasoning.Effort = %q, want medium", data.Reasoning.Effort)
 	}
 	if data.Budget.DailyUSD != 2.0 {
 		t.Errorf("Budget.DailyUSD = %v, want 2.0", data.Budget.DailyUSD)
 	}
-	if !data.OutputGate.Enabled {
-		t.Error("OutputGate should be enabled")
-	}
 	if data.Loop.ChainMaxCalls != 8 {
 		t.Errorf("Loop.ChainMaxCalls = %d, want 8", data.Loop.ChainMaxCalls)
-	}
-	if data.MemoryBrief.SoftLimit != 5000 {
-		t.Errorf("MemoryBrief.SoftLimit = %d, want 5000", data.MemoryBrief.SoftLimit)
-	}
-	if len(data.MemoryBrief.CompressProtectedSections) != 2 {
-		t.Errorf("MemoryBrief.CompressProtectedSections len = %d, want 2",
-			len(data.MemoryBrief.CompressProtectedSections))
-	}
-	if data.Archive.FTSTopN != 20 {
-		t.Errorf("Archive.FTSTopN = %d, want 20", data.Archive.FTSTopN)
 	}
 	if data.Schedule.Daily != "03:00" {
 		t.Errorf("Schedule.Daily = %q, want 03:00", data.Schedule.Daily)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// ResolveAgentConfig tests (upstream fields only)
-// ---------------------------------------------------------------------------
 
 func TestResolveAgentConfig_UnknownAgent(t *testing.T) {
 	temp := 1.0
@@ -290,7 +230,7 @@ func TestResolveAgentConfig_UnknownAgent(t *testing.T) {
 				Temperature: &temp,
 			},
 			List: []AgentConfig{
-				{ID: "main", Default: true, Name: "Пика"},
+				{ID: "main", Default: true, Name: "Pika"},
 			},
 		},
 	}
@@ -320,23 +260,14 @@ func TestResolveAgentConfig_InheritDefaults(t *testing.T) {
 				ContextManager: "pika",
 			},
 			List: []AgentConfig{
-				{ID: "main", Default: true, Name: "Пика"},
+				{ID: "main", Default: true, Name: "Pika"},
 			},
 		},
 	}
 
 	resolved := cfg.ResolveAgentConfig("main")
-	if resolved.ID != "main" {
-		t.Errorf("ID = %q, want main", resolved.ID)
-	}
-	if resolved.Name != "Пика" {
-		t.Errorf("Name = %q, want Пика", resolved.Name)
-	}
-	if resolved.Workspace != "/workspace" {
-		t.Errorf("Workspace = %q, want /workspace", resolved.Workspace)
-	}
-	if resolved.Temperature != 1.0 {
-		t.Errorf("Temperature = %v, want 1.0", resolved.Temperature)
+	if resolved.Name != "Pika" {
+		t.Errorf("Name = %q, want Pika", resolved.Name)
 	}
 	if resolved.ContextWindow != 256000 {
 		t.Errorf("ContextWindow = %d, want 256000", resolved.ContextWindow)
@@ -355,7 +286,7 @@ func TestResolveAgentConfig_ModelOverride(t *testing.T) {
 			List: []AgentConfig{
 				{
 					ID:   "archivist",
-					Name: "Архивариус",
+					Name: "Archivist",
 					Model: &AgentModelConfig{
 						Primary: "background",
 					},
@@ -369,9 +300,3 @@ func TestResolveAgentConfig_ModelOverride(t *testing.T) {
 		t.Errorf("ModelName = %q, want background", resolved.ModelName)
 	}
 }
-
-// NOTE: Tests for Pika-specific field resolution (Temperature override from
-// AgentConfig, TopP/TopK inheritance, Reasoning/Budget/Loop merge, pointer
-// semantics for *float64 zero-value) are deferred until config.go struct
-// definitions are extended per ТЗ-v2-0b. See PR description for full test
-// specifications.

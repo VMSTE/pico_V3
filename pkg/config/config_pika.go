@@ -1,11 +1,6 @@
 // PIKA-V3: Pika v3 config types, functions, and extensions.
-//
 // This file contains all new types for Pika v3 that do not exist in upstream
-// PicoClaw. Functions like ResolveAgentConfig and IsBaseToolEnabled currently
-// resolve only upstream-available fields. Once config.go struct definitions are
-// extended per ТЗ-v2-0b (adding fields to Config, AgentDefaults, AgentConfig,
-// ToolsConfig, ModelConfig), these functions will be updated to cover all
-// Pika-specific fields.
+// PicoClaw.
 
 package config
 
@@ -14,11 +9,7 @@ import (
 	"fmt"
 )
 
-// ===========================================================================
-// Cross-agent config types (will be top-level fields in Config struct)
-// ===========================================================================
-
-// PIKA-V3: ClarifyConfig — HITL clarification settings.
+// ClarifyConfig defines HITL clarification settings. PIKA-V3.
 type ClarifyConfig struct {
 	Enabled              bool `json:"enabled"`
 	TimeoutMin           int  `json:"timeout_min"`
@@ -26,39 +17,43 @@ type ClarifyConfig struct {
 	PrecheckTimeoutMs    int  `json:"precheck_timeout_ms"`
 }
 
-// PIKA-V3: SecurityConfig — security policy settings.
+// SecurityConfig defines security policy settings. PIKA-V3.
 type SecurityConfig struct {
 	DangerousOps DangerousOpsConfig `json:"dangerous_ops"`
 	RAD          RADConfig          `json:"rad"`
 	MCP          MCPSecurityConfig  `json:"mcp"`
 }
 
-// DangerousOpsConfig — dangerous operations confirmation policy.
+// DangerousOpsConfig defines dangerous operations confirmation policy.
 type DangerousOpsConfig struct {
 	Ops               map[string]DangerousOpEntry `json:"ops"`
 	ConfirmTimeoutMin int                         `json:"confirm_timeout_min"`
 	CriticalPaths     []string                    `json:"critical_paths"`
 }
 
-// DangerousOpEntry — single dangerous operation definition.
+// DangerousOpEntry defines a single dangerous operation.
 type DangerousOpEntry struct {
 	Level   string      `json:"level"`
 	Confirm ConfirmMode `json:"confirm"`
 }
 
-// ConfirmMode — typed confirmation policy.
-// JSON unmarshal: true → "always", false → "never", string → as-is.
+// ConfirmMode is a typed confirmation policy.
+// JSON unmarshal: true -> "always", false -> "never", string -> as-is.
 type ConfirmMode string
 
 const (
-	ConfirmAlways     ConfirmMode = "always"
-	ConfirmNever      ConfirmMode = "never"
-	ConfirmIfHealthy  ConfirmMode = "if_healthy"
+	// ConfirmAlways requires confirmation for every invocation.
+	ConfirmAlways ConfirmMode = "always"
+	// ConfirmNever skips confirmation entirely.
+	ConfirmNever ConfirmMode = "never"
+	// ConfirmIfHealthy confirms only when the system is healthy.
+	ConfirmIfHealthy ConfirmMode = "if_healthy"
+	// ConfirmIfCritical confirms only for critical-path operations.
 	ConfirmIfCritical ConfirmMode = "if_critical_path"
 )
 
 // UnmarshalJSON implements custom JSON unmarshal for ConfirmMode.
-// Accepts both string ("always") and bool (true → "always", false → "never").
+// Accepts both string ("always") and bool (true -> "always", false -> "never").
 func (m *ConfirmMode) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err == nil {
@@ -77,7 +72,7 @@ func (m *ConfirmMode) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("confirm: expected string or bool, got %s", data)
 }
 
-// RADConfig — Reasoning Anomaly Detector settings.
+// RADConfig defines Reasoning Anomaly Detector settings.
 type RADConfig struct {
 	Enabled        bool    `json:"enabled"`
 	DriftThreshold float64 `json:"drift_threshold"`
@@ -85,7 +80,7 @@ type RADConfig struct {
 	WarnScore      int     `json:"warn_score"`
 }
 
-// MCPSecurityConfig — MCP protocol security settings.
+// MCPSecurityConfig defines MCP protocol security settings.
 type MCPSecurityConfig struct {
 	TaintResetPolicy      string          `json:"taint_reset_policy"`
 	StdioUser             string          `json:"stdio_user"`
@@ -96,7 +91,7 @@ type MCPSecurityConfig struct {
 	DefaultAllowResources bool            `json:"default_allow_resources"`
 }
 
-// PIKA-V3: HealthConfig — system health monitoring settings.
+// HealthConfig defines system health monitoring settings. PIKA-V3.
 type HealthConfig struct {
 	WindowSize           int                    `json:"window_size"`
 	ToolFailThresholdPct int                    `json:"tool_fail_threshold_pct"`
@@ -106,7 +101,7 @@ type HealthConfig struct {
 	Progress             ProgressConfig         `json:"progress"`
 }
 
-// FallbackProviderConfig — fallback LLM provider settings.
+// FallbackProviderConfig defines fallback LLM provider settings.
 type FallbackProviderConfig struct {
 	Provider  string `json:"provider"`
 	APIKeyEnv string `json:"api_key_env"`
@@ -114,14 +109,14 @@ type FallbackProviderConfig struct {
 	Model     string `json:"model"`
 }
 
-// HealthReportingConfig — health reporting settings.
+// HealthReportingConfig defines health reporting settings.
 type HealthReportingConfig struct {
 	TypingIndicatorEnabled    bool `json:"typing_indicator_enabled"`
 	AlertDedupPerSession      bool `json:"alert_dedup_per_session"`
 	DailyHealthSummaryEnabled bool `json:"daily_health_summary_enabled"`
 }
 
-// ProgressConfig — progress notification settings.
+// ProgressConfig defines progress notification settings.
 type ProgressConfig struct {
 	Enabled            bool `json:"enabled"`
 	ThrottleSec        int  `json:"throttle_sec"`
@@ -130,32 +125,28 @@ type ProgressConfig struct {
 	StopCommandEnabled bool `json:"stop_command_enabled"`
 }
 
-// ===========================================================================
-// Per-agent nested config types
-// ===========================================================================
-
-// PIKA-V3: ReasoningConfig — per-agent reasoning settings.
+// ReasoningConfig defines per-agent reasoning settings. PIKA-V3.
 type ReasoningConfig struct {
 	Effort      string `json:"effort"`
 	Exclude     bool   `json:"exclude"`
 	LogMaxChars int    `json:"log_max_chars"`
 }
 
-// BudgetConfig — per-agent budget limits.
+// BudgetConfig defines per-agent budget limits.
 type BudgetConfig struct {
 	DailyUSD   float64 `json:"daily_usd"`
 	SessionUSD float64 `json:"session_usd"`
 	WarnPct    int     `json:"warn_pct"`
 }
 
-// OutputGateConfig — output length gate settings.
+// OutputGateConfig defines output length gate settings.
 type OutputGateConfig struct {
 	Enabled    bool `json:"enabled"`
 	MaxChars   int  `json:"max_chars"`
 	MaxRetries int  `json:"max_retries"`
 }
 
-// LoopConfig — agentic loop settings.
+// LoopConfig defines agentic loop settings.
 type LoopConfig struct {
 	ChainMaxCalls            int  `json:"chain_max_calls"`
 	TaskOverflowEnabled      bool `json:"task_overflow_enabled"`
@@ -164,7 +155,7 @@ type LoopConfig struct {
 	AvgTokensWindowSize      int  `json:"avg_tokens_window_size"`
 }
 
-// MemoryBriefConfig — Archivist memory brief settings.
+// MemoryBriefConfig defines Archivist memory brief settings.
 type MemoryBriefConfig struct {
 	SoftLimit                 int      `json:"soft_limit"`
 	HardLimit                 int      `json:"hard_limit"`
@@ -172,7 +163,7 @@ type MemoryBriefConfig struct {
 	MaxRetries                int      `json:"max_retries"`
 }
 
-// ArchiveConfig — cold archive read settings.
+// ArchiveConfig defines cold archive read settings.
 type ArchiveConfig struct {
 	FTSTopN         int `json:"fts_top_n"`
 	FTSWindow       int `json:"fts_window"`
@@ -180,22 +171,17 @@ type ArchiveConfig struct {
 	ReadTimeoutMs   int `json:"read_timeout_ms"`
 }
 
-// ScheduleConfig — periodic task schedule.
+// ScheduleConfig defines periodic task schedule.
 type ScheduleConfig struct {
 	Daily   string `json:"daily"`
 	Weekly  string `json:"weekly"`
 	Monthly string `json:"monthly"`
 }
 
-// ===========================================================================
-// BaseToolsConfig (D-TOOL-CLASS §4.1b)
-// ===========================================================================
-
-// PIKA-V3: BaseToolsConfig — master switch + per-tool toggles for BASE tools.
+// BaseToolsConfig defines master switch and per-tool toggles for BASE tools.
 // BRAIN tools (search_memory, registry_write, clarify) are always active.
-//
 // Will be added to ToolsConfig as: BaseTools BaseToolsConfig `json:"base_tools"`
-// once config.go is patched per ТЗ-v2-0b.
+// once config.go is patched per TZ-v2-0b. PIKA-V3.
 type BaseToolsConfig struct {
 	Enabled    bool `json:"enabled"`
 	Exec       bool `json:"exec"`
@@ -207,14 +193,7 @@ type BaseToolsConfig struct {
 }
 
 // IsBaseToolEnabled checks whether a specific BASE tool is enabled.
-// BRAIN tools (search_memory, registry_write, clarify) always return false —
-// they are always active via separate logic.
-//
-// After config.go is patched, add a convenience method on *Config:
-//
-//	func (c *Config) IsBaseToolEnabled(name string) bool {
-//	    return c.Tools.BaseTools.IsBaseToolEnabled(name)
-//	}
+// BRAIN tools always return false here.
 func (bt *BaseToolsConfig) IsBaseToolEnabled(name string) bool {
 	if !bt.Enabled {
 		return false
@@ -250,19 +229,14 @@ func DefaultBaseToolsConfig() BaseToolsConfig {
 	}
 }
 
-// ===========================================================================
-// ResolvedAgentConfig — flat resolved struct
-// ===========================================================================
-
-// PIKA-V3: ResolvedAgentConfig is the fully-resolved configuration for a
-// specific agent. Downstream consumers use this instead of reading AgentConfig
-// fields directly. All pointer types are resolved to value types.
+// ResolvedAgentConfig is the fully-resolved configuration for a specific agent.
+// Downstream consumers use this instead of reading AgentConfig fields directly.
+// All pointer types are resolved to value types. PIKA-V3.
 type ResolvedAgentConfig struct {
-	// Identity
 	ID   string `json:"id"`
 	Name string `json:"name"`
 
-	// From upstream AgentDefaults
+	// From upstream AgentDefaults.
 	Workspace      string  `json:"workspace"`
 	Provider       string  `json:"provider"`
 	ModelName      string  `json:"model_name"`
@@ -271,35 +245,35 @@ type ResolvedAgentConfig struct {
 	MaxTokens      int     `json:"max_tokens"`
 	ContextManager string  `json:"context_manager"`
 
-	// Pika-specific paths (populated after config.go patch)
+	// Pika-specific paths (populated after config.go patch).
 	MemoryDBPath string `json:"memory_db_path"`
 	BaseToolsDir string `json:"base_tools_dir"`
 	SkillsDir    string `json:"skills_dir"`
 
-	// Pika-specific model params
+	// Pika-specific model params.
 	MaxToolsInPrompt int      `json:"max_tools_in_prompt"`
 	TopP             *float64 `json:"top_p,omitempty"`
 	TopK             *int     `json:"top_k,omitempty"`
 
-	// Pika-specific telemetry
+	// Pika-specific telemetry.
 	TelemetryEnabled       bool `json:"telemetry_enabled"`
 	TelemetryRetentionDays int  `json:"telemetry_retention_days"`
 
-	// Pika-specific retry/loop
+	// Pika-specific retry/loop.
 	MaxRetriesPerMessage   int  `json:"max_retries_per_message"`
 	ToolCallRetryEnabled   bool `json:"tool_call_retry_enabled"`
 	LoopDetectionThreshold int  `json:"loop_detection_threshold"`
 
-	// Pika-specific debug/idle
+	// Pika-specific debug/idle.
 	PromptDebug    bool `json:"prompt_debug"`
 	IdleTimeoutMin int  `json:"idle_timeout_min"`
 
-	// Per-agent overrides
+	// Per-agent overrides.
 	PromptFile     string   `json:"prompt_file,omitempty"`
 	Enabled        bool     `json:"enabled"`
 	BootstrapFiles []string `json:"bootstrap_files,omitempty"`
 
-	// Nested configs
+	// Nested configs.
 	Reasoning   ReasoningConfig   `json:"reasoning"`
 	Budget      BudgetConfig      `json:"budget"`
 	OutputGate  OutputGateConfig  `json:"output_gate"`
@@ -308,7 +282,7 @@ type ResolvedAgentConfig struct {
 	Archive     ArchiveConfig     `json:"archive"`
 	Schedule    ScheduleConfig    `json:"schedule"`
 
-	// Role-specific: main agent
+	// Role-specific: main agent.
 	SessionRotateThresholdPct int     `json:"session_rotate_threshold_pct,omitempty"`
 	FocusStaleThresholdMsgs   int     `json:"focus_stale_threshold_msgs,omitempty"`
 	HeartbeatIntervalSeconds  int     `json:"heartbeat_interval_seconds,omitempty"`
@@ -317,7 +291,7 @@ type ResolvedAgentConfig struct {
 	BudgetCacheIntervalMin    int     `json:"budget_cache_interval_min,omitempty"`
 	BudgetSafetyMultiplier    float64 `json:"budget_safety_multiplier,omitempty"`
 
-	// Role-specific: archivist
+	// Role-specific: archivist.
 	MaxToolCalls             int      `json:"max_tool_calls,omitempty"`
 	BuildPromptTimeoutMs     int      `json:"build_prompt_timeout_ms,omitempty"`
 	ReasoningGuidedRetrieval bool     `json:"reasoning_guided_retrieval,omitempty"`
@@ -325,11 +299,11 @@ type ResolvedAgentConfig struct {
 	ReasoningDriftOverlapMin float64  `json:"reasoning_drift_overlap_min,omitempty"`
 	TopicTriggers            []string `json:"topic_triggers,omitempty"`
 
-	// Role-specific: atomizer
+	// Role-specific: atomizer.
 	TriggerTokens  int `json:"trigger_tokens,omitempty"`
 	ChunkMaxTokens int `json:"chunk_max_tokens,omitempty"`
 
-	// Role-specific: MCP Guard
+	// Role-specific: MCP Guard.
 	TimeoutMs                int     `json:"timeout_ms,omitempty"`
 	SuspiciousTextRatio      float64 `json:"suspicious_text_ratio,omitempty"`
 	SuspiciousSizeMultiplier float64 `json:"suspicious_size_multiplier,omitempty"`
@@ -338,29 +312,14 @@ type ResolvedAgentConfig struct {
 	HashAlgorithm            string  `json:"hash_algorithm,omitempty"`
 }
 
-// ===========================================================================
-// ResolveAgentConfig — merge defaults + per-agent overrides
-// ===========================================================================
-
 // ResolveAgentConfig finds an agent by ID in Config.Agents.List and merges
 // Config.Agents.Defaults with the agent's overrides.
 //
-// Merge rules:
-//   - Pointer fields (*float64, *bool, etc.): nil = inherit, non-nil = override.
-//     temperature: 0.0 is preserved as override (pointer semantics).
-//   - Value fields (int, string, float64): zero = inherit, non-zero = override.
-//   - Slices ([]string): nil = inherit, non-nil (even empty) = override.
-//   - Nested struct pointers: nil = use defaults, non-nil = replace entirely.
-//
-// If the agent is not found, returns a copy of defaults.
-//
-// NOTE: Currently resolves only upstream AgentDefaults/AgentConfig fields.
-// Pika-specific fields (MemoryDBPath, TopP, Reasoning, Budget, etc.) will be
-// resolved once config.go struct definitions are extended per ТЗ-v2-0b.
+// Currently resolves only upstream AgentDefaults/AgentConfig fields.
+// Pika-specific fields will be resolved once config.go is extended.
 func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 	d := c.Agents.Defaults
 
-	// Start with upstream defaults
 	resolved := ResolvedAgentConfig{
 		ID:             name,
 		Name:           name,
@@ -373,7 +332,6 @@ func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 		Enabled:        true,
 	}
 
-	// Resolve Temperature from pointer
 	if d.Temperature != nil {
 		resolved.Temperature = *d.Temperature
 	}
@@ -382,18 +340,7 @@ func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 	// resolved.MemoryDBPath = d.MemoryDBPath
 	// resolved.BaseToolsDir = d.BaseToolsDir
 	// resolved.SkillsDir = d.SkillsDir
-	// resolved.MaxToolsInPrompt = d.MaxToolsInPrompt
-	// resolved.TopP = d.TopP
-	// resolved.TopK = d.TopK
-	// resolved.TelemetryEnabled = d.TelemetryEnabled
-	// resolved.TelemetryRetentionDays = d.TelemetryRetentionDays
-	// resolved.MaxRetriesPerMessage = d.MaxRetriesPerMessage
-	// resolved.ToolCallRetryEnabled = d.ToolCallRetryEnabled
-	// resolved.LoopDetectionThreshold = d.LoopDetectionThreshold
-	// resolved.PromptDebug = d.PromptDebug
-	// resolved.IdleTimeoutMin = d.IdleTimeoutMin
 
-	// Find agent by ID
 	var agent *AgentConfig
 	for i := range c.Agents.List {
 		if c.Agents.List[i].ID == name {
@@ -406,18 +353,15 @@ func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 		return resolved
 	}
 
-	// Apply agent identity
 	resolved.ID = agent.ID
 	if agent.Name != "" {
 		resolved.Name = agent.Name
 	}
 
-	// Override workspace
 	if agent.Workspace != "" {
 		resolved.Workspace = agent.Workspace
 	}
 
-	// Override model
 	if agent.Model != nil && agent.Model.Primary != "" {
 		resolved.ModelName = agent.Model.Primary
 	}
