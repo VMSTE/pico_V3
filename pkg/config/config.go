@@ -33,19 +33,24 @@ func init() {
 type Config struct {
 	// Config schema version for migration.
 	Version   int             `json:"version"             yaml:"-"`
-	Isolation IsolationConfig `json:"isolation,omitempty" yaml:"-"`
+	Isolation IsolationConfig `json:"isolation,omitempty" yaml:"-"` // DEPRECATED: upstream legacy, будет удалено
 	Agents    AgentsConfig    `json:"agents"              yaml:"-"`
-	Session   SessionConfig   `json:"session,omitempty"   yaml:"-"`
+	Session   SessionConfig   `json:"session,omitempty"   yaml:"-"` // DEPRECATED: upstream legacy, будет удалено
 	Channels  ChannelsConfig  `json:"channel_list"        yaml:"channel_list"`
 	ModelList SecureModelList `json:"model_list"          yaml:"model_list"` // New model-centric provider configuration
 	Gateway   GatewayConfig   `json:"gateway"             yaml:"-"`
 	Hooks     HooksConfig     `json:"hooks,omitempty"     yaml:"-"`
 	Tools     ToolsConfig     `json:"tools"               yaml:",inline"`
 	Heartbeat HeartbeatConfig `json:"heartbeat"           yaml:"-"`
-	Devices   DevicesConfig   `json:"devices"             yaml:"-"`
-	Voice     VoiceConfig     `json:"voice"               yaml:"-"`
+	Devices   DevicesConfig   `json:"devices"             yaml:"-"` // DEPRECATED: upstream legacy, будет удалено
+	Voice     VoiceConfig     `json:"voice"               yaml:"-"` // DEPRECATED: upstream legacy, будет удалено
 	// BuildInfo contains build-time version information
 	BuildInfo BuildInfo `json:"build_info,omitempty" yaml:"-"`
+
+	// PIKA-V3: cross-agent configs
+	Clarify  ClarifyConfig  `json:"clarify,omitempty"  yaml:"-"`
+	Security SecurityConfig `json:"security,omitempty" yaml:"-"`
+	Health   HealthConfig   `json:"health,omitempty"   yaml:"-"`
 
 	// cache for sensitive values and compiled regex (computed once)
 	sensitiveCache *SensitiveDataCache
@@ -192,6 +197,44 @@ type AgentConfig struct {
 	Model     *AgentModelConfig `json:"model,omitempty"`
 	Skills    []string          `json:"skills,omitempty"`
 	Subagents *SubagentsConfig  `json:"subagents,omitempty"`
+
+	// PIKA-V3: per-agent overrides (pointer = nil means inherit from defaults)
+	Temperature    *float64          `json:"temperature,omitempty"`
+	TopP           *float64          `json:"top_p,omitempty"`
+	TopK           *int              `json:"top_k,omitempty"`
+	Enabled        *bool             `json:"enabled,omitempty"`
+	PromptFile     string            `json:"prompt_file,omitempty"`
+	BootstrapFiles []string          `json:"bootstrap_files,omitempty"`
+	Reasoning      *ReasoningConfig  `json:"reasoning,omitempty"`
+	Budget         *BudgetConfig     `json:"budget,omitempty"`
+	OutputGate     *OutputGateConfig `json:"output_gate,omitempty"`
+	Loop           *LoopConfig       `json:"loop,omitempty"`
+	MemoryBrief    *MemoryBriefConfig `json:"memory_brief,omitempty"`
+	Archive        *ArchiveConfig    `json:"archive,omitempty"`
+	Schedule       *ScheduleConfig   `json:"schedule,omitempty"`
+
+	// PIKA-V3: role-specific fields (zero = inherit from defaults)
+	SessionRotateThresholdPct int      `json:"session_rotate_threshold_pct,omitempty"`
+	FocusStaleThresholdMsgs   int      `json:"focus_stale_threshold_msgs,omitempty"`
+	HeartbeatIntervalSeconds  int      `json:"heartbeat_interval_seconds,omitempty"`
+	TokenEstimateMultiplier   float64  `json:"token_estimate_multiplier,omitempty"`
+	CalibrationIntervalMin    int      `json:"calibration_interval_min,omitempty"`
+	BudgetCacheIntervalMin    int      `json:"budget_cache_interval_min,omitempty"`
+	BudgetSafetyMultiplier    float64  `json:"budget_safety_multiplier,omitempty"`
+	MaxToolCalls              int      `json:"max_tool_calls,omitempty"`
+	BuildPromptTimeoutMs      int      `json:"build_prompt_timeout_ms,omitempty"`
+	ReasoningGuidedRetrieval  *bool    `json:"reasoning_guided_retrieval,omitempty"`
+	ReasoningKeywordsMax      int      `json:"reasoning_keywords_max,omitempty"`
+	ReasoningDriftOverlapMin  float64  `json:"reasoning_drift_overlap_min,omitempty"`
+	TopicTriggers             []string `json:"topic_triggers,omitempty"`
+	TriggerTokens             int      `json:"trigger_tokens,omitempty"`
+	ChunkMaxTokens            int      `json:"chunk_max_tokens,omitempty"`
+	TimeoutMs                 int      `json:"timeout_ms,omitempty"`
+	SuspiciousTextRatio       float64  `json:"suspicious_text_ratio,omitempty"`
+	SuspiciousSizeMultiplier  float64  `json:"suspicious_size_multiplier,omitempty"`
+	StartupAuditEnabled       *bool    `json:"startup_audit_enabled,omitempty"`
+	ReauditOnListChanged      *bool    `json:"reaudit_on_list_changed,omitempty"`
+	HashAlgorithm             string   `json:"hash_algorithm,omitempty"`
 }
 
 type SubagentsConfig struct {
@@ -276,6 +319,21 @@ type AgentDefaults struct {
 	SplitOnMarker             bool               `json:"split_on_marker"                  env:"PICOCLAW_AGENTS_DEFAULTS_SPLIT_ON_MARKER"` // split messages on <|[SPLIT]|> marker
 	ContextManager            string             `json:"context_manager,omitempty"        env:"PICOCLAW_AGENTS_DEFAULTS_CONTEXT_MANAGER"`
 	ContextManagerConfig      json.RawMessage    `json:"context_manager_config,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_CONTEXT_MANAGER_CONFIG"`
+
+	// PIKA-V3 defaults:
+	MemoryDBPath           string   `json:"memory_db_path,omitempty"           env:"PICOCLAW_AGENTS_DEFAULTS_MEMORY_DB_PATH"`
+	BaseToolsDir           string   `json:"base_tools_dir,omitempty"           env:"PICOCLAW_AGENTS_DEFAULTS_BASE_TOOLS_DIR"`
+	SkillsDir              string   `json:"skills_dir,omitempty"               env:"PICOCLAW_AGENTS_DEFAULTS_SKILLS_DIR"`
+	MaxToolsInPrompt       int      `json:"max_tools_in_prompt,omitempty"      env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOOLS_IN_PROMPT"`
+	TopP                   *float64 `json:"top_p,omitempty"                    env:"PICOCLAW_AGENTS_DEFAULTS_TOP_P"`
+	TopK                   *int     `json:"top_k,omitempty"                    env:"PICOCLAW_AGENTS_DEFAULTS_TOP_K"`
+	TelemetryEnabled       bool     `json:"telemetry_enabled,omitempty"        env:"PICOCLAW_AGENTS_DEFAULTS_TELEMETRY_ENABLED"`
+	TelemetryRetentionDays int      `json:"telemetry_retention_days,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_TELEMETRY_RETENTION_DAYS"`
+	MaxRetriesPerMessage   int      `json:"max_retries_per_message,omitempty"  env:"PICOCLAW_AGENTS_DEFAULTS_MAX_RETRIES_PER_MESSAGE"`
+	ToolCallRetryEnabled   bool     `json:"tool_call_retry_enabled,omitempty"  env:"PICOCLAW_AGENTS_DEFAULTS_TOOL_CALL_RETRY_ENABLED"`
+	LoopDetectionThreshold int      `json:"loop_detection_threshold,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_LOOP_DETECTION_THRESHOLD"`
+	PromptDebug            bool     `json:"prompt_debug,omitempty"             env:"PICOCLAW_AGENTS_DEFAULTS_PROMPT_DEBUG"`
+	IdleTimeoutMin         int      `json:"idle_timeout_min,omitempty"         env:"PICOCLAW_AGENTS_DEFAULTS_IDLE_TIMEOUT_MIN"`
 }
 
 const DefaultMaxMediaSize = 20 * 1024 * 1024 // 20 MB
@@ -546,6 +604,9 @@ type ModelConfig struct {
 	APIBase   string   `json:"api_base,omitempty"`  // API endpoint URL
 	Proxy     string   `json:"proxy,omitempty"`     // HTTP proxy URL
 	Fallbacks []string `json:"fallbacks,omitempty"` // Fallback model names for failover
+
+	// PIKA-V3: env var name for API key resolve
+	APIKeyEnv string `json:"api_key_env,omitempty"`
 
 	// Special providers (CLI-based, OAuth, etc.)
 	AuthMethod  string `json:"auth_method,omitempty"`  // Authentication method: oauth, token
@@ -832,6 +893,9 @@ type ToolsConfig struct {
 	Subagent        ToolConfig         `json:"subagent"          yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SUBAGENT_"`
 	WebFetch        ToolConfig         `json:"web_fetch"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_WEB_FETCH_"`
 	WriteFile       ToolConfig         `json:"write_file"        yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_WRITE_FILE_"`
+
+	// PIKA-V3: BASE tool master switch
+	BaseTools BaseToolsConfig `json:"base_tools" yaml:"-"`
 }
 
 // IsFilterSensitiveDataEnabled returns true if sensitive data filtering is enabled
@@ -977,6 +1041,25 @@ func (c *MCPConfig) GetMaxInlineTextChars() int {
 	return DefaultMCPMaxInlineTextChars
 }
 
+// loadConfig decodes JSON data into a Config, preserving defaults for missing fields.
+// Moved from migration.go as part of PIKA-V3 Phase 2.
+func loadConfig(data []byte) (*Config, error) {
+	cfg := DefaultConfig()
+	var tmp Config
+	if err := decodeJSONWithDiagnostics(data, &tmp, "config.json"); err != nil {
+		return nil, err
+	}
+	if len(tmp.ModelList) > 0 {
+		cfg.ModelList = nil
+	}
+	if err := decodeJSONWithDiagnostics(data, cfg, "config.json"); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// LoadConfig loads and validates the configuration from the given path.
+// PIKA-V3: Migration switch removed. Only CurrentVersion (3) is supported.
 func LoadConfig(path string) (*Config, error) {
 	updateResolver(filepath.Dir(path))
 
@@ -1006,199 +1089,27 @@ func LoadConfig(path string) (*Config, error) {
 		return DefaultConfig(), nil
 	}
 
-	// Load config based on detected version
-	var cfg *Config
-	switch versionInfo.Version {
-	case 0:
-		logger.InfoF(
-			"config migrate start",
-			map[string]any{"from": versionInfo.Version, "to": CurrentVersion},
-		)
-		if err = validateLegacyConfigDiagnostics(data); err != nil {
-			logger.ErrorCF(
-				"config",
-				formatDiagnosticLogMessage("Failed to load config", err),
-				map[string]any{"path": path},
-			)
-			return nil, err
-		}
-
-		var m map[string]any
-		m, err = loadConfigMap(path)
-		if err != nil {
-			logger.ErrorCF(
-				"config",
-				formatDiagnosticLogMessage("Failed to load config", err),
-				map[string]any{"path": path},
-			)
-			return nil, err
-		}
-
-		migrateErr := migrateV0ToV1(m)
-		if migrateErr != nil {
-			return nil, fmt.Errorf("V0→V1 migration failed: %w", migrateErr)
-		}
-		migrateErr = migrateV1ToV2(m)
-		if migrateErr != nil {
-			return nil, fmt.Errorf("V1→V2 migration failed: %w", migrateErr)
-		}
-		migrateErr = migrateV2ToV3(m)
-		if migrateErr != nil {
-			return nil, fmt.Errorf("V2→V3 migration failed: %w", migrateErr)
-		}
-
-		var migrated []byte
-		migrated, err = json.Marshal(m)
-		if err != nil {
-			return nil, err
-		}
-
-		cfg, err = loadConfig(migrated)
-		if err != nil {
-			return nil, err
-		}
-
-		err = makeBackup(path)
-		if err != nil {
-			return nil, err
-		}
-
-		defer func(cfg *Config) {
-			_ = SaveConfig(path, cfg)
-		}(cfg)
-	case 1:
-		// V1→V3 migration: rename channels→channel_list, infer Enabled, migrate channel configs
-		logger.InfoF(
-			"config migrate start",
-			map[string]any{"from": versionInfo.Version, "to": CurrentVersion},
-		)
-		if err = validateLegacyConfigDiagnostics(data); err != nil {
-			logger.ErrorCF(
-				"config",
-				formatDiagnosticLogMessage("Failed to load config", err),
-				map[string]any{"path": path},
-			)
-			return nil, err
-		}
-
-		var m map[string]any
-		m, err = loadConfigMap(path)
-		if err != nil {
-			logger.ErrorCF(
-				"config",
-				formatDiagnosticLogMessage("Failed to load config", err),
-				map[string]any{"path": path},
-			)
-			return nil, err
-		}
-
-		migrateErr := migrateV1ToV2(m)
-		if migrateErr != nil {
-			return nil, fmt.Errorf("V1→V2 migration failed: %w", migrateErr)
-		}
-		migrateErr = migrateV2ToV3(m)
-		if migrateErr != nil {
-			return nil, fmt.Errorf("V2→V3 migration failed: %w", migrateErr)
-		}
-
-		var migrated []byte
-		migrated, err = json.Marshal(m)
-		if err != nil {
-			return nil, err
-		}
-
-		cfg, err = loadConfig(migrated)
-		if err != nil {
-			return nil, err
-		}
-
-		err = makeBackup(path)
-		if err != nil {
-			return nil, err
-		}
-
-		defer func(cfg *Config) {
-			_ = SaveConfig(path, cfg)
-		}(cfg)
-		logger.InfoF(
-			"config migrate success",
-			map[string]any{"from": versionInfo.Version, "to": CurrentVersion},
-		)
-	case 2:
-		// V2→V3 migration: rename channels→channel_list, convert flat→nested
-		logger.InfoF(
-			"config migrate start",
-			map[string]any{"from": versionInfo.Version, "to": CurrentVersion},
-		)
-		if err = validateLegacyConfigDiagnostics(data); err != nil {
-			logger.ErrorCF(
-				"config",
-				formatDiagnosticLogMessage("Failed to load config", err),
-				map[string]any{"path": path},
-			)
-			return nil, err
-		}
-		var m map[string]any
-		m, err = loadConfigMap(path)
-		if err != nil {
-			logger.ErrorCF(
-				"config",
-				formatDiagnosticLogMessage("Failed to load config", err),
-				map[string]any{"path": path},
-			)
-			return nil, err
-		}
-		migrateErr := migrateV2ToV3(m)
-		if migrateErr != nil {
-			return nil, fmt.Errorf("V2→V3 migration failed: %w", migrateErr)
-		}
-
-		var migrated []byte
-		migrated, err = json.Marshal(m)
-		if err != nil {
-			return nil, err
-		}
-
-		cfg, err = loadConfig(migrated)
-		if err != nil {
-			return nil, err
-		}
-
-		err = makeBackup(path)
-		if err != nil {
-			return nil, err
-		}
-
-		defer func(cfg *Config) {
-			_ = SaveConfig(path, cfg)
-		}(cfg)
-		logger.InfoF(
-			"config migrate success",
-			map[string]any{"from": versionInfo.Version, "to": CurrentVersion},
-		)
-	case CurrentVersion:
-		// Current version
-		cfg, err = loadConfig(data)
-		if err != nil {
-			logger.ErrorCF(
-				"config",
-				formatDiagnosticLogMessage("Failed to load config", err),
-				map[string]any{"path": path},
-			)
-			return nil, err
-		}
-		// Load security configuration
-		secPath := securityPath(path)
-		err = loadSecurityConfig(cfg, secPath)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("failed to load security config: %w", err)
-		}
-
-	default:
-		return nil, fmt.Errorf("unsupported config version: %d", versionInfo.Version)
+	// PIKA-V3: Only support current version, no migration
+	if versionInfo.Version != CurrentVersion {
+		return nil, fmt.Errorf("unsupported config version %d (expected %d)", versionInfo.Version, CurrentVersion)
 	}
 
-	applyLegacyBindingsMigration(data, cfg)
+	cfg, err := loadConfig(data)
+	if err != nil {
+		logger.ErrorCF(
+			"config",
+			formatDiagnosticLogMessage("Failed to load config", err),
+			map[string]any{"path": path},
+		)
+		return nil, err
+	}
+
+	// Load security configuration
+	secPath := securityPath(path)
+	err = loadSecurityConfig(cfg, secPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("failed to load security config: %w", err)
+	}
 
 	gatewayHostBeforeEnv := cfg.Gateway.Host
 
@@ -1206,6 +1117,26 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 	applySkillsRegistryEnvCompat(cfg)
+
+	// PIKA-V3: Resolve APIKeyEnv → APIKeys for models that use env-based keys
+	for _, m := range cfg.ModelList {
+		if m.APIKeyEnv != "" && len(m.APIKeys.Values()) == 0 {
+			key := os.Getenv(m.APIKeyEnv)
+			if key != "" {
+				m.APIKeys = SimpleSecureStrings(key)
+			} else {
+				logger.Warn(fmt.Sprintf(
+					"model %q: api_key_env=%q but env var is empty",
+					m.ModelName, m.APIKeyEnv,
+				))
+			}
+		}
+	}
+
+	// PIKA-V3: Set ContextManager default
+	if cfg.Agents.Defaults.ContextManager == "" {
+		cfg.Agents.Defaults.ContextManager = "pika"
+	}
 
 	if err = InitChannelList(cfg.Channels); err != nil {
 		return nil, err
@@ -1572,4 +1503,9 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 	default:
 		return true
 	}
+}
+
+// IsBaseToolEnabled delegates to ToolsConfig.BaseTools. PIKA-V3.
+func (c *Config) IsBaseToolEnabled(name string) bool {
+	return c.Tools.BaseTools.IsBaseToolEnabled(name)
 }
