@@ -614,7 +614,7 @@ func TestLoadConfig_WebPreferNativeCanBeDisabled(t *testing.T) {
 func TestLoadConfig_SyntaxErrorReportsLineAndColumn(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	raw := "{\n \"version\": 3,\n \"tools\": {\n \"web\": {\n \"enabled\": true,,\n \"format\": \"markdown\"\n }\n }\n}\n"
+	raw := "{\n  \"version\": 3,\n  \"tools\": {\n    \"web\": {\n      \"enabled\": true,,\n      \"format\": \"markdown\"\n    }\n  }\n}\n"
 	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -636,7 +636,7 @@ func TestLoadConfig_SyntaxErrorReportsLineAndColumn(t *testing.T) {
 func TestLoadConfig_TypeErrorReportsFieldPath(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	raw := "{\n \"version\": 3,\n \"tools\": {\n \"web\": {\n \"fetch_limit_bytes\": \"oops\"\n }\n }\n}\n"
+	raw := "{\n  \"version\": 3,\n  \"tools\": {\n    \"web\": {\n      \"fetch_limit_bytes\": \"oops\"\n    }\n  }\n}\n"
 	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
