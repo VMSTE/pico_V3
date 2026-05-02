@@ -957,15 +957,19 @@ func TestFlexibleStringSlice_UnmarshalText(t *testing.T) {
 		expected []string
 	}{
 		{"English commas only", "123,456,789", []string{"123", "456", "789"}},
-		{"Chinese commas only", "123\uff0c456\uff0c789", []string{"123", "456", "789"}},
-		{"Mixed English and Chinese commas", "123,456\uff0c789", []string{"123", "456", "789"}},
+		{"Chinese commas only", "123，456，789", []string{"123", "456", "789"}},
+		{"Mixed English and Chinese commas", "123,456，789", []string{"123", "456", "789"}},
 		{"Single value", "123", []string{"123"}},
 		{"Values with whitespace", " 123 , 456 , 789 ", []string{"123", "456", "789"}},
 		{"Empty string", "", nil},
 		{"Only commas - English", ",,", []string{}},
-		{"Only commas - Chinese", "\uff0c\uff0c", []string{}},
-		{"Mixed commas with empty parts", "123,,456\uff0c\uff0c789", []string{"123", "456", "789"}},
-		{"Complex mixed values", "user1@example.com\uff0cuser2@test.com, admin@domain.org", []string{"user1@example.com", "user2@test.com", "admin@domain.org"}},
+		{"Only commas - Chinese", "，，", []string{}},
+		{"Mixed commas with empty parts", "123,,456，，789", []string{"123", "456", "789"}},
+		{
+			"Complex mixed values",
+			"user1@example.com，user2@test.com, admin@domain.org",
+			[]string{"user1@example.com", "user2@test.com", "admin@domain.org"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
