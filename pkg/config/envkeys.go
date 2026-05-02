@@ -41,16 +41,14 @@ const (
 	// EnvGatewayHost overrides the host address for the gateway server.
 	// Default: "localhost"
 	EnvGatewayHost = "PICOCLAW_GATEWAY_HOST"
-)
 
-// PIKA-V3: Pika-specific environment variable keys.
-// These override the upstream PICOCLAW_* equivalents where applicable.
-const (
-	EnvPikaHome         = "PIKA_HOME"
-	EnvPikaConfig       = "PIKA_CONFIG"
+	// PIKA-V3: Pika-specific environment variable keys.
+	// These override the upstream PICOCLAW_* equivalents where applicable.
+	EnvPikaHome          = "PIKA_HOME"
+	EnvPikaConfig        = "PIKA_CONFIG"
 	EnvPikaBuiltinSkills = "PIKA_BUILTIN_SKILLS"
-	EnvPikaBinary       = "PIKA_BINARY"
-	EnvPikaDBPath       = "PIKA_DB_PATH"
+	EnvPikaBinary        = "PIKA_BINARY"
+	EnvPikaDBPath        = "PIKA_DB_PATH"
 )
 
 func GetHome() string {
