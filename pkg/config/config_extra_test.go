@@ -133,7 +133,8 @@ func TestLoadConfig_NoSealWithoutPassphrase(t *testing.T) {
 	}
 	raw, _ := os.ReadFile(configPath)
 	if strings.Contains(string(raw), "SEALED{") {
-		t.Fatal("found SEALED in config file when passphrase was not set \u2014 api_key must not be sealed without passphrase")
+		t.Fatal("found SEALED in config file when passphrase was not set" +
+			" \u2014 api_key must not be sealed without passphrase")
 	}
 }
 
