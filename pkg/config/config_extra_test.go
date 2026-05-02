@@ -120,7 +120,11 @@ func TestLoadConfig_NoSealWithoutPassphrase(t *testing.T) {
 	mustSetupSSHKey(t)
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version":3,"model_list":[{"model_name":"test","model":"openai/gpt-4","api_key":"sk-plaintext"}]}`), 0o600); err != nil {
+	noSealJSON := `{"version":3,"model_list":[` +
+		`{"model_name":"test","model":"openai/gpt-4","api_key":"sk-plaintext"}]}`
+	if err := os.WriteFile(
+		configPath, []byte(noSealJSON), 0o600,
+	); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 	_, err := LoadConfig(configPath)
@@ -129,7 +133,7 @@ func TestLoadConfig_NoSealWithoutPassphrase(t *testing.T) {
 	}
 	raw, _ := os.ReadFile(configPath)
 	if strings.Contains(string(raw), "SEALED{") {
-		t.Fatal("found SEALED in config file when passphrase was not set — api_key must not be sealed without passphrase")
+		t.Fatal("found SEALED in config file when passphrase was not set \u2014 api_key must not be sealed without passphrase")
 	}
 }
 
@@ -222,7 +226,7 @@ func TestLoadConfig_MixedKeys_NoPassphrase(t *testing.T) {
 	encValue := apiKeysRaw[0].(string)
 	assert.NotEmpty(t, encValue)
 	mixed, _ := json.Marshal(map[string]any{
-		"version":    CurrentVersion,
+		"version": CurrentVersion,
 		"model_list": []map[string]any{
 			{"model_name": "enc", "model": "openai/gpt-4", "api_key": encValue},
 			{"model_name": "plain", "model": "openai/gpt-4", "api_key": "sk-plain"},
@@ -274,7 +278,7 @@ func TestLoadConfig_UsesPassphraseProvider(t *testing.T) {
 		t.Fatalf("Encrypt() error: %v", err)
 	}
 	raw, _ := json.Marshal(map[string]any{
-		"version":    CurrentVersion,
+		"version": CurrentVersion,
 		"model_list": []map[string]any{
 			{"model_name": "test", "model": "openai/gpt-4", "api_key": encrypted},
 		},
@@ -605,12 +609,18 @@ func TestMakeBackup_SameDateSuffix(t *testing.T) {
 	configBak, _ := filepath.Glob(filepath.Join(dir, "config.json.bak.*"))
 	secBak, _ := filepath.Glob(filepath.Join(dir, SecurityConfigFile+".bak.*"))
 	if len(configBak) != 1 || len(secBak) != 1 {
-		t.Fatalf("expected exactly 1 config and 1 security backup, got %d and %d", len(configBak), len(secBak))
+		t.Fatalf(
+			"expected exactly 1 config and 1 security backup, got %d and %d",
+			len(configBak), len(secBak),
+		)
 	}
 	confSuffix := filepath.Ext(configBak[0])
 	secSuffix := filepath.Ext(secBak[0])
 	if confSuffix != secSuffix {
-		t.Errorf("backup suffixes differ: config=%s, security=%s", confSuffix, secSuffix)
+		t.Errorf(
+			"backup suffixes differ: config=%s, security=%s",
+			confSuffix, secSuffix,
+		)
 	}
 }
 
