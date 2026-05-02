@@ -560,7 +560,8 @@ func TestDefaultConfig_ToolFeedbackDisabled(t *testing.T) {
 func TestLoadConfig_ToolFeedbackDefaultsFalseWhenUnset(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version":3,"agents":{"defaults":{"workspace":"./workspace"}}}`), 0o600); err != nil {
+	cfgJSON := `{"version":3,"agents":{"defaults":{"workspace":"./workspace"}}}`
+	if err := os.WriteFile(configPath, []byte(cfgJSON), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 	cfg, err := LoadConfig(configPath)
