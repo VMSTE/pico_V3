@@ -172,14 +172,14 @@ func TestLoadConfig_MCPMaxInlineTextChars(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
 	raw := `{
-		"version": 3,
-		"tools": {
-			"mcp": {
-				"enabled": true,
-				"max_inline_text_chars": 2048
-			}
+	"version": 3,
+	"tools": {
+		"mcp": {
+			"enabled": true,
+			"max_inline_text_chars": 2048
 		}
-	}`
+	}
+}`
 	if err := os.WriteFile(configPath, []byte(raw), 0o644); err != nil {
 		t.Fatalf("WriteFile(configPath): %v", err)
 	}
@@ -206,12 +206,15 @@ func TestConfig_BackwardCompat_NoAgentsList(t *testing.T) {
 	}`
 
 	cfg := DefaultConfig()
+	defaultAgentCount := len(cfg.Agents.List)
 	if err := json.Unmarshal([]byte(jsonData), cfg); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	if len(cfg.Agents.List) != 0 {
-		t.Errorf("agents.list should be empty for backward compat, got %d", len(cfg.Agents.List))
+	// When JSON omits agents.list, DefaultConfig() defaults are preserved.
+	if len(cfg.Agents.List) != defaultAgentCount {
+		t.Errorf("agents.list should preserve defaults for backward compat, got %d, want %d",
+			len(cfg.Agents.List), defaultAgentCount)
 	}
 }
 
@@ -611,7 +614,7 @@ func TestLoadConfig_WebPreferNativeCanBeDisabled(t *testing.T) {
 func TestLoadConfig_SyntaxErrorReportsLineAndColumn(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	raw := "{\n  \"version\": 3,\n  \"tools\": {\n    \"web\": {\n      \"enabled\": true,,\n      \"format\": \"markdown\"\n    }\n  }\n}\n"
+	raw := "{\n \"version\": 3,\n \"tools\": {\n \"web\": {\n \"enabled\": true,,\n \"format\": \"markdown\"\n }\n }\n}\n"
 	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -633,7 +636,7 @@ func TestLoadConfig_SyntaxErrorReportsLineAndColumn(t *testing.T) {
 func TestLoadConfig_TypeErrorReportsFieldPath(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	raw := "{\n  \"version\": 3,\n  \"tools\": {\n    \"web\": {\n      \"fetch_limit_bytes\": \"oops\"\n    }\n  }\n}\n"
+	raw := "{\n \"version\": 3,\n \"tools\": {\n \"web\": {\n \"fetch_limit_bytes\": \"oops\"\n }\n }\n}\n"
 	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -658,7 +661,7 @@ func TestLoadConfig_TypeErrorReportsFieldPath(t *testing.T) {
 func TestLoadConfig_UnknownFieldsReportsExactPaths(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	raw := "{\n  \"version\": 3,\n  \"tools\": {\n    \"weeb\": {\n      \"enabled\": true\n    },\n    \"web\": {\n      \"fatch_limit_bytes\": 123\n    }\n  }\n}\n"
+	raw := "{\n \"version\": 3,\n \"tools\": {\n \"weeb\": {\n \"enabled\": true\n },\n \"web\": {\n \"fatch_limit_bytes\": 123\n }\n }\n}\n"
 	if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -779,10 +782,10 @@ func TestLoadConfig_WebToolsProxy(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 	configJSON := `{
-  "version": 3,
-  "agents": {"defaults":{"workspace":"./workspace","model":"gpt4","max_tokens":8192,"max_tool_iterations":20}},
-  "model_list": [{"model_name":"gpt4","model":"openai/gpt-5.4","api_key":"x"}],
-  "tools": {"web":{"proxy":"http://127.0.0.1:7890"}}
+	"version": 3,
+	"agents": {"defaults":{"workspace":"./workspace","model_name":"gpt4","max_tokens":8192,"max_tool_iterations":20}},
+	"model_list": [{"model_name":"gpt4","model":"openai/gpt-5.4","api_keys":["x"]}],
+	"tools": {"web":{"proxy":"http://127.0.0.1:7890"}}
 }`
 	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
 		t.Fatalf("os.WriteFile() error: %v", err)
@@ -800,31 +803,31 @@ func TestLoadConfig_HooksProcessConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 	configJSON := `{
-  "version": 3,
-  "hooks": {
-    "processes": {
-      "review-gate": {
-        "enabled": true,
-        "transport": "stdio",
-        "command": ["uvx", "picoclaw-hook-reviewer"],
-        "dir": "/tmp/hooks",
-        "env": {
-          "HOOK_MODE": "rewrite"
-        },
-        "observe": ["turn_start", "turn_end"],
-        "intercept": ["before_tool", "approve_tool"]
-      }
-    },
-    "builtins": {
-      "audit": {
-        "enabled": true,
-        "priority": 5,
-        "config": {
-          "label": "audit"
-        }
-      }
-    }
-  }
+	"version": 3,
+	"hooks": {
+		"processes": {
+			"review-gate": {
+				"enabled": true,
+				"transport": "stdio",
+				"command": ["uvx", "picoclaw-hook-reviewer"],
+				"dir": "/tmp/hooks",
+				"env": {
+					"HOOK_MODE": "rewrite"
+				},
+				"observe": ["turn_start", "turn_end"],
+				"intercept": ["before_tool", "approve_tool"]
+			}
+		},
+		"builtins": {
+			"audit": {
+				"enabled": true,
+				"priority": 5,
+				"config": {
+					"label": "audit"
+				}
+			}
+		}
+	}
 }`
 	if err := os.WriteFile(configPath, []byte(configJSON), 0o600); err != nil {
 		t.Fatalf("os.WriteFile() error: %v", err)
@@ -957,17 +960,17 @@ func TestFlexibleStringSlice_UnmarshalText(t *testing.T) {
 		expected []string
 	}{
 		{"English commas only", "123,456,789", []string{"123", "456", "789"}},
-		{"Chinese commas only", "123，456，789", []string{"123", "456", "789"}},
-		{"Mixed English and Chinese commas", "123,456，789", []string{"123", "456", "789"}},
+		{"Chinese commas only", "123\uff0c456\uff0c789", []string{"123", "456", "789"}},
+		{"Mixed English and Chinese commas", "123,456\uff0c789", []string{"123", "456", "789"}},
 		{"Single value", "123", []string{"123"}},
 		{"Values with whitespace", " 123 , 456 , 789 ", []string{"123", "456", "789"}},
 		{"Empty string", "", nil},
 		{"Only commas - English", ",,", []string{}},
-		{"Only commas - Chinese", "，，", []string{}},
-		{"Mixed commas with empty parts", "123,,456，，789", []string{"123", "456", "789"}},
+		{"Only commas - Chinese", "\uff0c\uff0c", []string{}},
+		{"Mixed commas with empty parts", "123,,456\uff0c\uff0c789", []string{"123", "456", "789"}},
 		{
 			"Complex mixed values",
-			"user1@example.com，user2@test.com, admin@domain.org",
+			"user1@example.com\uff0cuser2@test.com, admin@domain.org",
 			[]string{"user1@example.com", "user2@test.com", "admin@domain.org"},
 		},
 	}
