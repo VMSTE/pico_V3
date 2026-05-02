@@ -13,6 +13,18 @@ import (
 	"github.com/sipeed/picoclaw/pkg/credential"
 )
 
+func mustMarshal(v any) RawNode {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return RawNode(data)
+}
+
+func SimpleSecureString(val string) SecureString {
+	return *NewSecureString(val)
+}
+
 func TestLoadConfig_TelegramPlaceholderTextAcceptsSingleString(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
@@ -117,7 +129,7 @@ func TestLoadConfig_NoSealWithoutPassphrase(t *testing.T) {
 	}
 	raw, _ := os.ReadFile(configPath)
 	if strings.Contains(string(raw), "SEALED{") {
-		t.Fatal("found SEALED in config file when passphrase was not set \u2014 api_key must not be sealed without passphrase")
+		t.Fatal("found SEALED in config file when passphrase was not set — api_key must not be sealed without passphrase")
 	}
 }
 
@@ -239,7 +251,7 @@ func TestSaveConfig_UsesPassphraseProvider(t *testing.T) {
 	cfg.ModelList = []*ModelConfig{
 		{ModelName: "test", Model: "openai/gpt-4", APIKeys: SimpleSecureStrings("sk-1234567890abcdef")},
 	}
-	cfg.PassphraseProvider = credential.PassphraseProvider{Passphrase: "test-passphrase"}
+	t.Setenv("PICOCLAW_KEY_PASSPHRASE", "test-passphrase")
 	if err := SaveConfig(path, cfg); err != nil {
 		t.Fatalf("SaveConfig() error: %v", err)
 	}
@@ -257,7 +269,7 @@ func TestLoadConfig_UsesPassphraseProvider(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	passphrase := "test-passphrase"
-	encrypted, err := credential.Encrypt("sk-1234567890abcdef", passphrase)
+	encrypted, err := credential.Encrypt(passphrase, "", "sk-1234567890abcdef")
 	if err != nil {
 		t.Fatalf("Encrypt() error: %v", err)
 	}
