@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -453,6 +454,7 @@ func (bm *BotMemory) recoverStaleSpans(ctx context.Context) error {
 	return nil
 }
 
+// PIKA-V3: Bug 5 fix — removed msg_index from messages_archive INSERT (column does not exist in DDL)
 func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turnIDs []int) error {
 	if len(turnIDs) == 0 { return nil }
 	tx, err := bm.db.BeginTx(ctx, nil)
@@ -460,20 +462,20 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 	defer tx.Rollback()
 	ph := placeholders(len(turnIDs)); args := inArgs(sid, turnIDs)
 	// messages -> messages_archive
-	mRows, err := tx.QueryContext(ctx, `SELECT id,session_id,turn_id,ts,role,content,tokens,msg_index,metadata FROM messages WHERE session_id=? AND turn_id IN (`+ph+`) ORDER BY id`, args...)
+	mRows, err := tx.QueryContext(ctx, `SELECT id,session_id,turn_id,ts,role,content,tokens,metadata FROM messages WHERE session_id=? AND turn_id IN (`+ph+`) ORDER BY id`, args...)
 	if err != nil { return fmt.Errorf("pika/botmemory: archive select msgs: %w", err) }
 	for mRows.Next() {
 		var id int64; var sessID string; var turnID, tokens int; var ts, role string
-		var content, meta sql.NullString; var mi sql.NullInt64
-		if err := mRows.Scan(&id, &sessID, &turnID, &ts, &role, &content, &tokens, &mi, &meta); err != nil {
+		var content, meta sql.NullString
+		if err := mRows.Scan(&id, &sessID, &turnID, &ts, &role, &content, &tokens, &meta); err != nil {
 			mRows.Close(); return fmt.Errorf("pika/botmemory: archive scan msg: %w", err)
 		}
 		pay := msgArchivePayload{Content: content.String}
 		if meta.Valid { pay.Metadata = json.RawMessage(meta.String) }
 		j, _ := json.Marshal(pay)
 		blob := bm.compress(j)
-		_, err = tx.ExecContext(ctx, `INSERT INTO messages_archive (id,session_id,turn_id,ts,role,tokens,msg_index,blob) VALUES(?,?,?,?,?,?,?,?)`,
-			id, sessID, turnID, ts, role, tokens, mi, blob)
+		_, err = tx.ExecContext(ctx, `INSERT INTO messages_archive (id,session_id,turn_id,ts,role,tokens,blob) VALUES(?,?,?,?,?,?,?)`,
+			id, sessID, turnID, ts, role, tokens, blob)
 		if err != nil { mRows.Close(); return fmt.Errorf("pika/botmemory: archive insert msg: %w", err) }
 	}
 	mRows.Close()
@@ -550,21 +552,33 @@ func (bm *BotMemory) SearchEventsArchiveFTS(ctx context.Context, q string, limit
 	return out, rows.Err()
 }
 
-func (bm *BotMemory) UpsertPromptVersion(ctx context.Context, component, hash, body string) error {
-	_, err := bm.db.ExecContext(ctx, `INSERT OR IGNORE INTO prompt_versions (component,hash,body) VALUES(?,?,?)`, component, hash, body)
-	if err != nil { return fmt.Errorf("pika/botmemory: upsert prompt version: %w", err) }
-	return nil
+// PIKA-V3: Bug 2 fix — UpsertPromptVersion now matches DDL prompt_versions columns
+func (bm *BotMemory) UpsertPromptVersion(ctx context.Context, component string, version int, hash, content, desc string) (string, error) {
+	promptID := component + "/v" + strconv.Itoa(version)
+	_, err := bm.db.ExecContext(ctx, `INSERT OR IGNORE INTO prompt_versions (prompt_id,component,version,hash,content,change_description) VALUES(?,?,?,?,?,?)`,
+		promptID, component, version, hash, content, strOrNil(desc))
+	if err != nil { return "", fmt.Errorf("pika/botmemory: upsert prompt version: %w", err) }
+	return promptID, nil
 }
 
-func (bm *BotMemory) InsertPromptSnapshot(ctx context.Context, sessionID string, turnID int, component, hash string) error {
-	_, err := bm.db.ExecContext(ctx, `INSERT INTO prompt_snapshots (session_id,turn_id,component,prompt_hash) VALUES(?,?,?,?)`, sessionID, turnID, component, hash)
+// PIKA-V3: Bug 3 fix — InsertPromptSnapshot now matches DDL prompt_snapshots columns
+func (bm *BotMemory) InsertPromptSnapshot(ctx context.Context, snapshotID, traceID, sessionID string, turnID int, coreID, ctxID, briefHash string, tokens map[string]int, fullHash, preview string, buildMs int) error {
+	_, err := bm.db.ExecContext(ctx,
+		`INSERT INTO prompt_snapshots (snapshot_id,trace_id,session_id,turn_id,core_prompt_id,context_prompt_id,brief_hash,core_tokens,context_tokens,brief_tokens,trail_tokens,plan_tokens,full_prompt_hash,full_prompt_preview,build_duration_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		snapshotID, traceID, sessionID, turnID,
+		strOrNil(coreID), strOrNil(ctxID), strOrNil(briefHash),
+		tokens["core"], tokens["context"], tokens["brief"], tokens["trail"], tokens["plan"],
+		strOrNil(fullHash), strOrNil(preview), buildMs)
 	if err != nil { return fmt.Errorf("pika/botmemory: insert snapshot: %w", err) }
 	return nil
 }
 
-func (bm *BotMemory) InsertAtomUsage(ctx context.Context, sessionID string, turnID int, atomID, component string, included bool) error {
-	var inc int; if included { inc = 1 }
-	_, err := bm.db.ExecContext(ctx, `INSERT INTO atom_usage (session_id,turn_id,atom_id,component,included) VALUES(?,?,?,?,?)`, sessionID, turnID, atomID, component, inc)
+// PIKA-V3: Bug 4 fix — InsertAtomUsage now matches DDL atom_usage columns
+func (bm *BotMemory) InsertAtomUsage(ctx context.Context, atomID, traceID string, turnID int, usedIn string, position, promptTokens *int, toolAfter, toolResult, archSpanID string) error {
+	_, err := bm.db.ExecContext(ctx,
+		`INSERT INTO atom_usage (atom_id,trace_id,turn_id,used_in,position_in_prompt,prompt_tokens,invoked_tool_after,invoked_tool_result,archivarius_span_id) VALUES(?,?,?,?,?,?,?,?,?)`,
+		atomID, traceID, turnID, usedIn, position, promptTokens,
+		strOrNil(toolAfter), strOrNil(toolResult), strOrNil(archSpanID))
 	if err != nil { return fmt.Errorf("pika/botmemory: insert atom usage: %w", err) }
 	return nil
 }
