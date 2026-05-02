@@ -229,7 +229,8 @@ func TestInsertSpanAndRecover(t *testing.T) {
 	var status, errType, errMsg string
 	err = db.QueryRow(
 		`SELECT status, error_type, error_message
-		FROM trace_spans WHERE span_id='stale-1'`).Scan(&status, &errType, &errMsg)
+		FROM trace_spans WHERE span_id='stale-1'`).Scan(
+		&status, &errType, &errMsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +238,8 @@ func TestInsertSpanAndRecover(t *testing.T) {
 		t.Errorf("status = %q, want error", status)
 	}
 	if errType != "crash_recovery" {
-		t.Errorf("error_type = %q, want crash_recovery", errType)
+		t.Errorf(
+			"error_type = %q, want crash_recovery", errType)
 	}
 }
 
@@ -247,7 +249,8 @@ func TestInsertAndCompleteSpan(t *testing.T) {
 	importTime := parseSQLiteTime("2025-06-01 12:00:00")
 	err := bm.InsertSpan(ctx, TraceSpanRow{
 		SpanID: "sp1", TraceID: "t1", Component: "llm",
-		Operation: "generate", StartedAt: importTime, Status: "ok",
+		Operation: "generate", StartedAt: importTime,
+		Status: "ok",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -257,7 +260,9 @@ func TestInsertAndCompleteSpan(t *testing.T) {
 		t.Fatal(err)
 	}
 	var status string
-	bm.db.QueryRow(`SELECT status FROM trace_spans WHERE span_id='sp1'`).Scan(&status)
+	bm.db.QueryRow(
+		`SELECT status FROM trace_spans WHERE span_id='sp1'`,
+	).Scan(&status)
 	if status != "ok" {
 		t.Errorf("status = %q, want ok", status)
 	}
@@ -293,7 +298,8 @@ func TestArchiveAndDeleteTurns(t *testing.T) {
 		t.Fatalf("ReadArchivedMessage: %v", err)
 	}
 	if content != "hello" {
-		t.Errorf("archived content = %q, want hello", content)
+		t.Errorf(
+			"archived content = %q, want hello", content)
 	}
 	_ = meta
 }
@@ -309,45 +315,53 @@ func TestArchiveTransactionRollback(t *testing.T) {
 		Type: "msg", Summary: "evt",
 		SessionID: "s1", TurnID: 1,
 	})
-	// Pre-insert conflicting row in events_archive to force PK violation
+	// Pre-insert conflicting row in events_archive
 	evts, _ := bm.GetEventsByTurns(ctx, "s1", []int{1})
 	if len(evts) == 0 {
 		t.Fatal("no events")
 	}
 	bm.db.ExecContext(ctx,
 		`INSERT INTO events_archive
-		(id,session_id,turn_id,ts,type,outcome,summary,tags,blob)
-		VALUES(?,?,?,datetime('now'),'x','','',NULL,NULL)`,
+		(id,session_id,turn_id,ts,type,outcome,
+		summary,tags,blob)
+		VALUES(?,?,?,datetime('now'),
+		'x','','',NULL,NULL)`,
 		evts[0].ID, "s1", 1)
 	// Archive should fail due to PK conflict
-	err := bm.ArchiveAndDeleteTurns(ctx, "s1", []int{1})
+	err := bm.ArchiveAndDeleteTurns(
+		ctx, "s1", []int{1})
 	if err == nil {
 		t.Fatal("expected error from PK conflict")
 	}
 	// Hot data should still be intact (TX rolled back)
 	msgs, _ := bm.GetMessages(ctx, "s1")
 	if len(msgs) != 1 {
-		t.Errorf("hot messages = %d, want 1 (rollback failed)", len(msgs))
+		t.Errorf(
+			"hot messages = %d, want 1 (rollback failed)",
+			len(msgs))
 	}
 	if msgs[0].Content != "keep me" {
 		t.Errorf("content = %q", msgs[0].Content)
 	}
 }
 
-// PIKA-V3: Tests updated to match DDL-correct signatures (bugs 2-4)
+// PIKA-V3: Tests updated to match DDL-correct signatures
 func TestPromptVersionsAndSnapshots(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
-	promptID, err := bm.UpsertPromptVersion(ctx, "CORE", 1,
+	promptID, err := bm.UpsertPromptVersion(
+		ctx, "CORE", 1,
 		"abc123", "You are a helpful assistant.", "initial")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if promptID != "CORE/v1" {
-		t.Errorf("promptID = %q, want CORE/v1", promptID)
+		t.Errorf(
+			"promptID = %q, want CORE/v1", promptID)
 	}
 	// Idempotent
-	_, err = bm.UpsertPromptVersion(ctx, "CORE", 1,
+	_, err = bm.UpsertPromptVersion(
+		ctx, "CORE", 1,
 		"abc123", "You are a helpful assistant.", "initial")
 	if err != nil {
 		t.Fatal(err)
@@ -368,7 +382,7 @@ func TestPromptVersionsAndSnapshots(t *testing.T) {
 func TestAtomUsage(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
-	// Need atoms in knowledge_atoms for FK constraint
+	// Need atoms for FK constraint
 	bm.InsertAtom(ctx, KnowledgeAtomRow{
 		AtomID: "P-1", SessionID: "s1", TurnID: 1,
 		Category: "pattern", Summary: "test",
@@ -394,7 +408,8 @@ func TestAtomUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	bm.db.QueryRow(`SELECT COUNT(*) FROM atom_usage`).Scan(&count)
+	bm.db.QueryRow(
+		`SELECT COUNT(*) FROM atom_usage`).Scan(&count)
 	if count != 2 {
 		t.Errorf("count = %d, want 2", count)
 	}
@@ -441,7 +456,8 @@ func TestUpdateAtomConfidence(t *testing.T) {
 		Category: "decision", Summary: "use redis",
 		Confidence: 0.7, Polarity: "positive",
 	})
-	hist := json.RawMessage(`{"turn":2,"delta":0.1,"reason":"confirmed"}`)
+	hist := json.RawMessage(
+		`{"turn":2,"delta":0.1,"reason":"confirmed"}`)
 	err := bm.UpdateAtomConfidence(ctx, "D-1", 0.8, hist)
 	if err != nil {
 		t.Fatal(err)
@@ -449,11 +465,104 @@ func TestUpdateAtomConfidence(t *testing.T) {
 	var conf float64
 	var history string
 	bm.db.QueryRow(
-		`SELECT confidence, history FROM knowledge_atoms WHERE atom_id='D-1'`).Scan(&conf, &history)
+		`SELECT confidence, history
+		FROM knowledge_atoms
+		WHERE atom_id='D-1'`).Scan(&conf, &history)
 	if conf != 0.8 {
 		t.Errorf("confidence = %f, want 0.8", conf)
 	}
 	if history == "" || history == "[]" {
 		t.Error("history should contain entry")
+	}
+}
+
+// PIKA-V3: ТЗ-v2-1a-fix7 — FTS search test
+func TestInsertAndQueryKnowledgeFTS(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
+		AtomID:     "P-1",
+		SessionID:  "s1",
+		TurnID:     1,
+		Category:   "pattern",
+		Summary:    "docker OOM restart observed",
+		Confidence: 0.8,
+		Polarity:   "negative",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// FTS should find by keyword
+	results, err := bm.QueryKnowledgeFTS(
+		ctx, "OOM", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf(
+			"expected 1 result, got %d", len(results))
+	}
+	if results[0].AtomID != "P-1" {
+		t.Errorf(
+			"atom_id = %q, want P-1",
+			results[0].AtomID)
+	}
+	if results[0].Summary !=
+		"docker OOM restart observed" {
+		t.Errorf(
+			"summary = %q, want "+
+				"'docker OOM restart observed'",
+			results[0].Summary,
+		)
+	}
+}
+
+// PIKA-V3: ТЗ-v2-1a-fix7 — RequestLog insert test
+func TestInsertRequestLog(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+	mi := 0
+	cp := 1
+	id, err := bm.InsertRequestLog(ctx, RequestLogRow{
+		SessionID:          "s1",
+		MsgIndex:           &mi,
+		Direction:          "chat",
+		Component:          "main",
+		Model:              "step-3.5-flash",
+		PromptTokens:       100,
+		CompletionTokens:   50,
+		CachedTokens:       10,
+		ReasoningTokens:    20,
+		ToolCallsRequested: 1,
+		ToolCallsSuccess:   1,
+		CostUSD:            0.002,
+		ResponseMs:         350,
+		TaskTag:            "general",
+		ChainID:            "chain-1",
+		ChainPosition:      &cp,
+		PlanDetected:       1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id == 0 {
+		t.Error("expected non-zero id")
+	}
+	// Verify row exists
+	var model string
+	var cost float64
+	err = bm.db.QueryRow(
+		`SELECT model, cost_usd
+		FROM request_log WHERE id=?`,
+		id,
+	).Scan(&model, &cost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model != "step-3.5-flash" {
+		t.Errorf("model = %q", model)
+	}
+	if cost != 0.002 {
+		t.Errorf("cost = %f, want 0.002", cost)
 	}
 }
