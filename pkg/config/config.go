@@ -1138,6 +1138,11 @@ func LoadConfig(path string) (*Config, error) {
 		cfg.Agents.Defaults.ContextManager = "pika"
 	}
 
+	// PIKA-V3: Validate required Pika fields
+	if cfg.Agents.Defaults.MemoryDBPath == "" {
+		return nil, fmt.Errorf("pika: agents.defaults.memory_db_path is required")
+	}
+
 	if err = InitChannelList(cfg.Channels); err != nil {
 		return nil, err
 	}
