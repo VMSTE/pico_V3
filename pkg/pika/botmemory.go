@@ -477,7 +477,9 @@ func (bm *BotMemory) QueryKnowledgeFTS(ctx context.Context, q string, limit int)
 }
 
 // UpdateAtomConfidence updates confidence and appends a history entry for an atom.
-func (bm *BotMemory) UpdateAtomConfidence(ctx context.Context, atomID string, conf float64, hist json.RawMessage) error {
+func (bm *BotMemory) UpdateAtomConfidence(
+	ctx context.Context, atomID string, conf float64, hist json.RawMessage,
+) error {
 	_, err := bm.db.ExecContext(ctx,
 		`UPDATE knowledge_atoms
 		SET confidence=?, history=json_insert(COALESCE(history,'[]'),'$[#]',json(?)),
