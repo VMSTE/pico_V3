@@ -80,30 +80,6 @@ func migrateLegacyAgentDefaultsModel(m map[string]any) {
 	delete(defaults, "model")
 }
 
-// loadConfigV1 loads a version 1 config (current schema)
-func loadConfig(data []byte) (*Config, error) {
-	cfg := DefaultConfig()
-
-	// Pre-scan the JSON to check how many model_list entries the user provided.
-	// Go's JSON decoder reuses existing slice backing-array elements rather than
-	// zero-initializing them, so fields absent from the user's JSON (e.g. api_base)
-	// would silently inherit values from the DefaultConfig template at the same
-	// index position. We only reset cfg.ModelList when the user actually provides
-	// entries; when count is 0 we keep DefaultConfig's built-in list as fallback.
-	var tmp Config
-	if err := decodeJSONWithDiagnostics(data, &tmp, "config.json"); err != nil {
-		return nil, err
-	}
-	if len(tmp.ModelList) > 0 {
-		cfg.ModelList = nil
-	}
-
-	if err := decodeJSONWithDiagnostics(data, cfg, "config.json"); err != nil {
-		return nil, err
-	}
-	return cfg, nil
-}
-
 func mergeAPIKeys(apiKey string, apiKeys []string) []string {
 	seen := make(map[string]struct{})
 	var all []string
