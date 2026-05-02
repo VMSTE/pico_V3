@@ -52,7 +52,7 @@ func TestLoadConfig_TelegramPlaceholderTextAcceptsSingleString(t *testing.T) {
 	"heartbeat": {},
 	"devices": {},
 	"voice": {}
-	}`
+}`
 	if err := os.WriteFile(configPath, []byte(data), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestSaveConfig_MixedKeys(t *testing.T) {
 		t.Fatalf("ReadFile(security) error: %v", err)
 	}
 	var secYAML map[string]any
-	if err := yaml.Unmarshal(secData, &secYAML); err != nil {
+	if err = yaml.Unmarshal(secData, &secYAML); err != nil {
 		t.Fatalf("YAML unmarshal security file: %v", err)
 	}
 	ml, ok := secYAML["model_list"].(map[string]any)
@@ -565,87 +565,60 @@ func TestResolveGatewayLogLevel_UsesEnvOverrideAndNormalizesInvalid(
 	}
 }
 
-func TestLoadConfig_AppliesLegacyClawHubRegistryEnvOverrides(
-	t *testing.T,
-) {
-	dir := t.TempDir()
-	configPath := filepath.Join(dir, "config.json")
-	raw := `{"version":3,"tools":{"skills":{"registries":{` +
-		`"clawhub":{"enabled":true}}}}}`
-	if err := os.WriteFile(
-		configPath, []byte(raw), 0o600,
-	); err != nil {
-		t.Fatalf("WriteFile() error: %v", err)
+func TestLoadConfig_AppliesRegistryEnvOverrides(t *testing.T) {
+	tests := []struct {
+		name       string
+		registry   string
+		baseURLEnv string
+		baseURL    string
+		tokenEnv   string
+		token      string
+	}{
+		{
+			name:       "clawhub",
+			registry:   "clawhub",
+			baseURLEnv: "PICOCLAW_CLAWHUB_BASE_URL",
+			baseURL:    "https://custom-clawhub.example.com",
+			tokenEnv:   "PICOCLAW_CLAWHUB_AUTH_TOKEN",
+			token:      "custom-auth-token",
+		},
+		{
+			name:       "github",
+			registry:   "github",
+			baseURLEnv: "PICOCLAW_GITHUB_BASE_URL",
+			baseURL:    "https://custom-github.example.com",
+			tokenEnv:   "PICOCLAW_GITHUB_AUTH_TOKEN",
+			token:      "custom-github-token",
+		},
 	}
-	t.Setenv(
-		"PICOCLAW_CLAWHUB_BASE_URL",
-		"https://custom-clawhub.example.com",
-	)
-	t.Setenv("PICOCLAW_CLAWHUB_AUTH_TOKEN", "custom-auth-token")
-	cfg, err := LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error: %v", err)
-	}
-	clawhub, ok := cfg.Tools.Skills.Registries.Get("clawhub")
-	if !ok {
-		t.Fatal("clawhub registry not found in config")
-	}
-	if clawhub.BaseURL != "https://custom-clawhub.example.com" {
-		t.Errorf(
-			"clawhub BaseURL = %q, want %q",
-			clawhub.BaseURL,
-			"https://custom-clawhub.example.com",
-		)
-	}
-	if clawhub.AuthToken.String() != "custom-auth-token" {
-		t.Errorf(
-			"clawhub AuthToken = %q, want %q",
-			clawhub.AuthToken.String(), "custom-auth-token",
-		)
-	}
-}
-
-func TestLoadConfig_AppliesGitHubRegistryEnvOverrides(
-	t *testing.T,
-) {
-	dir := t.TempDir()
-	configPath := filepath.Join(dir, "config.json")
-	raw := `{"version":3,"tools":{"skills":{"registries":{` +
-		`"github":{"enabled":true}}}}}`
-	if err := os.WriteFile(
-		configPath, []byte(raw), 0o600,
-	); err != nil {
-		t.Fatalf("WriteFile() error: %v", err)
-	}
-	t.Setenv(
-		"PICOCLAW_GITHUB_BASE_URL",
-		"https://custom-github.example.com",
-	)
-	t.Setenv(
-		"PICOCLAW_GITHUB_AUTH_TOKEN",
-		"custom-github-token",
-	)
-	cfg, err := LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error: %v", err)
-	}
-	github, ok := cfg.Tools.Skills.Registries.Get("github")
-	if !ok {
-		t.Fatal("github registry not found in config")
-	}
-	if github.BaseURL != "https://custom-github.example.com" {
-		t.Errorf(
-			"github BaseURL = %q, want %q",
-			github.BaseURL,
-			"https://custom-github.example.com",
-		)
-	}
-	if github.AuthToken.String() != "custom-github-token" {
-		t.Errorf(
-			"github AuthToken = %q, want %q",
-			github.AuthToken.String(),
-			"custom-github-token",
-		)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			configPath := filepath.Join(dir, "config.json")
+			raw := `{"version":3,"tools":{"skills":{"registries":{"` +
+				tt.registry + `":{"enabled":true}}}}}`
+			if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
+				t.Fatalf("WriteFile() error: %v", err)
+			}
+			t.Setenv(tt.baseURLEnv, tt.baseURL)
+			t.Setenv(tt.tokenEnv, tt.token)
+			cfg, err := LoadConfig(configPath)
+			if err != nil {
+				t.Fatalf("LoadConfig() error: %v", err)
+			}
+			reg, ok := cfg.Tools.Skills.Registries.Get(tt.registry)
+			if !ok {
+				t.Fatalf("%s registry not found in config", tt.registry)
+			}
+			if reg.BaseURL != tt.baseURL {
+				t.Errorf("%s BaseURL = %q, want %q",
+					tt.registry, reg.BaseURL, tt.baseURL)
+			}
+			if reg.AuthToken.String() != tt.token {
+				t.Errorf("%s AuthToken = %q, want %q",
+					tt.registry, reg.AuthToken.String(), tt.token)
+			}
+		})
 	}
 }
 
