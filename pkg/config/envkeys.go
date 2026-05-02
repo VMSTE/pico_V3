@@ -43,7 +43,32 @@ const (
 	EnvGatewayHost = "PICOCLAW_GATEWAY_HOST"
 )
 
+// PIKA-V3: Pika-specific environment variable keys.
+// These take priority over PICOCLAW_* equivalents where applicable.
+const (
+	// EnvPikaHome overrides the base directory for all Pika data.
+	// Takes priority over PICOCLAW_HOME in GetHome().
+	EnvPikaHome = "PIKA_HOME"
+
+	// EnvPikaConfig overrides the full path to the Pika config file.
+	EnvPikaConfig = "PIKA_CONFIG"
+
+	// EnvPikaBuiltinSkills overrides the directory for Pika built-in skills.
+	EnvPikaBuiltinSkills = "PIKA_BUILTIN_SKILLS"
+
+	// EnvPikaBinary overrides the path to the Pika executable.
+	EnvPikaBinary = "PIKA_BINARY"
+
+	// EnvPikaDBPath overrides the path to bot_memory.db.
+	EnvPikaDBPath = "PIKA_DB_PATH"
+)
+
 func GetHome() string {
+	// PIKA-V3: Pika-specific env has priority
+	if pikaHome := os.Getenv(EnvPikaHome); pikaHome != "" {
+		return pikaHome
+	}
+	// Fallback to upstream
 	homePath, _ := os.UserHomeDir()
 	if picoclawHome := os.Getenv(EnvHome); picoclawHome != "" {
 		homePath = picoclawHome
