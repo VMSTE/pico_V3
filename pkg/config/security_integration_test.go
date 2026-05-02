@@ -46,7 +46,7 @@ func TestSecurityConfigIntegration(t *testing.T) {
 		// Create config.json with direct security values using the current schema.
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 2,
+  "version": 3,
   "model_list": [
     {
       "model_name": "test-model",
@@ -55,10 +55,13 @@ func TestSecurityConfigIntegration(t *testing.T) {
       "api_keys": ["sk-from-config-json-direct"]
     }
   ],
-  "channels": {
+  "channel_list": {
     "telegram": {
+      "type": "telegram",
       "enabled": true,
-      "token": "token-from-config-json-direct"
+      "settings": {
+        "token": "token-from-config-json-direct"
+      }
     }
   },
   "tools": {
@@ -132,7 +135,7 @@ func TestSecurityConfigWithAPIKeysArray(t *testing.T) {
 		// Create config with APIKeys array
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
+  "version": 3,
   "model_list": [
     {
       "model_name": "multi-key-model",
@@ -202,61 +205,89 @@ func TestAllSecurityKeysAccessible(t *testing.T) {
 		// Create config.json without sensitive values (they'll be in .security.yml)
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
+  "version": 3,
   "model_list": [
     {
       "model_name": "test-model-1",
       "model": "openai/test-model-1"
     }
   ],
-  "channels": {
+  "channel_list": {
     "telegram": {
+      "type": "telegram",
       "enabled": true
     },
     "feishu": {
+      "type": "feishu",
       "enabled": true,
-      "app_id": "test_app_id"
+      "settings": {
+        "app_id": "test_app_id"
+      }
     },
     "discord": {
+      "type": "discord",
       "enabled": true
     },
     "dingtalk": {
+      "type": "dingtalk",
       "enabled": true,
-      "client_id": "test_client_id"
+      "settings": {
+        "client_id": "test_client_id"
+      }
     },
     "slack": {
+      "type": "slack",
       "enabled": true
     },
     "matrix": {
+      "type": "matrix",
       "enabled": true,
-      "homeserver": "https://matrix.org",
-      "user_id": "@test:matrix.org"
+      "settings": {
+        "homeserver": "https://matrix.org",
+        "user_id": "@test:matrix.org"
+      }
     },
     "line": {
+      "type": "line",
       "enabled": true,
-      "webhook_host": "localhost",
-      "webhook_port": 8080,
-      "webhook_path": "/webhook"
+      "settings": {
+        "webhook_host": "localhost",
+        "webhook_port": 8080,
+        "webhook_path": "/webhook"
+      }
     },
     "onebot": {
+      "type": "onebot",
       "enabled": true,
-      "ws_url": "ws://localhost:8080"
+      "settings": {
+        "ws_url": "ws://localhost:8080"
+      }
     },
     "wecom": {
+      "type": "wecom",
       "enabled": true,
-      "bot_id": "test_wecom_bot_id"
+      "settings": {
+        "bot_id": "test_wecom_bot_id"
+      }
     },
     "pico": {
+      "type": "pico",
       "enabled": true
     },
     "irc": {
+      "type": "irc",
       "enabled": true,
-      "server": "irc.example.com",
-      "nick": "testbot"
+      "settings": {
+        "server": "irc.example.com",
+        "nick": "testbot"
+      }
     },
     "qq": {
+      "type": "qq",
       "enabled": true,
-      "app_id": "test_qq_app_id"
+      "settings": {
+        "app_id": "test_qq_app_id"
+      }
     }
   },
   "tools": {
@@ -481,7 +512,7 @@ skills:
 
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
+  "version": 3,
   "tools": {
     "skills": {
       "registries": {
@@ -523,7 +554,7 @@ skills:
 
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
+  "version": 3,
   "tools": {
     "skills": {
       "registries": {
@@ -565,7 +596,7 @@ skills:
 
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
+  "version": 3,
   "tools": {
     "skills": {
       "registries": {
@@ -601,7 +632,7 @@ skills:
 
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
+  "version": 3,
   "tools": {
     "skills": {
       "registries": {
