@@ -7,7 +7,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // ClarifyConfig defines HITL clarification settings. PIKA-V3.
@@ -495,29 +494,4 @@ func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 	}
 
 	return resolved
-}
-
-// PIKA-V3: mergeAPIKeys moved from migration.go (legacy cleanup).
-// Used by multikey_test.go for API key deduplication tests.
-func mergeAPIKeys(apiKey string, apiKeys []string) []string {
-	seen := make(map[string]struct{})
-	var all []string
-
-	if k := strings.TrimSpace(apiKey); k != "" {
-		if _, exists := seen[k]; !exists {
-			seen[k] = struct{}{}
-			all = append(all, k)
-		}
-	}
-
-	for _, k := range apiKeys {
-		if trimmed := strings.TrimSpace(k); trimmed != "" {
-			if _, exists := seen[trimmed]; !exists {
-				seen[trimmed] = struct{}{}
-				all = append(all, trimmed)
-			}
-		}
-	}
-
-	return all
 }
