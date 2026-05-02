@@ -13,14 +13,6 @@ import (
 	"github.com/sipeed/picoclaw/pkg/credential"
 )
 
-func mustMarshal(v any) RawNode {
-	data, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return RawNode(data)
-}
-
 func SimpleSecureString(val string) SecureString {
 	return *NewSecureString(val)
 }
@@ -158,7 +150,6 @@ func TestLoadConfig_FileRefNotSealed(t *testing.T) {
 	mustSetupSSHKey(t)
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	// Create the referenced key file so file:// can be resolved.
 	const keyContent = "sk-from-file-ref"
 	if err := os.WriteFile(
 		filepath.Join(dir, "api.key"),
@@ -176,7 +167,6 @@ func TestLoadConfig_FileRefNotSealed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error: %v", err)
 	}
-	// file:// references are resolved to their content by LoadConfig.
 	if cfg.ModelList[0].APIKey() != keyContent {
 		t.Fatalf(
 			"APIKey() = %q, want %q",
@@ -189,7 +179,6 @@ func TestSaveConfig_MixedKeys(t *testing.T) {
 	mustSetupSSHKey(t)
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	// Create api.key for file:// reference resolution during reload.
 	const fileKeyContent = "sk-from-file"
 	if err := os.WriteFile(
 		filepath.Join(dir, "api.key"),
@@ -217,8 +206,6 @@ func TestSaveConfig_MixedKeys(t *testing.T) {
 	if strings.Contains(string(raw), "sk-secret") {
 		t.Fatal("plaintext API key found in saved file")
 	}
-	// In v3 SecureStrings are omitted from JSON (omitzero); keys live in
-	// .security.yml. Verify round-trip via reload.
 	reloaded, err := LoadConfig(configPath)
 	if err != nil {
 		t.Fatalf("LoadConfig() error: %v", err)
@@ -235,7 +222,6 @@ func TestSaveConfig_MixedKeys(t *testing.T) {
 			reloaded.ModelList[1].APIKey(), fileKeyContent,
 		)
 	}
-	// Verify security YAML structure uses toNameIndex keys.
 	secPath := filepath.Join(dir, SecurityConfigFile)
 	secData, err := os.ReadFile(secPath)
 	if err != nil {
@@ -252,7 +238,6 @@ func TestSaveConfig_MixedKeys(t *testing.T) {
 			secYAML["model_list"],
 		)
 	}
-	// toNameIndex creates "name:index" keys.
 	encEntry, ok := ml["enc:0"].(map[string]any)
 	if !ok {
 		t.Fatalf(
@@ -294,7 +279,6 @@ func TestLoadConfig_MixedKeys_NoPassphrase(t *testing.T) {
 	mustSetupSSHKey(t)
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	// Create api.key for file:// resolution.
 	const fileKeyContent = "sk-from-file"
 	if err := os.WriteFile(
 		filepath.Join(dir, "api.key"),
@@ -302,8 +286,6 @@ func TestLoadConfig_MixedKeys_NoPassphrase(t *testing.T) {
 	); err != nil {
 		t.Fatalf("WriteFile(api.key) error: %v", err)
 	}
-	// Save config — no passphrase set, so values stored in plaintext
-	// in security YAML.
 	cfg := DefaultConfig()
 	cfg.ModelList = []*ModelConfig{
 		{
@@ -315,7 +297,6 @@ func TestLoadConfig_MixedKeys_NoPassphrase(t *testing.T) {
 	if err := SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error: %v", err)
 	}
-	// Read security YAML to extract the stored value.
 	secPath := filepath.Join(dir, SecurityConfigFile)
 	secData, err := os.ReadFile(secPath)
 	if err != nil {
@@ -351,7 +332,6 @@ func TestLoadConfig_MixedKeys_NoPassphrase(t *testing.T) {
 		)
 	}
 	assert.NotEmpty(t, storedValue)
-	// Build new JSON with mixed key types.
 	mixed, _ := json.Marshal(map[string]any{
 		"version": CurrentVersion,
 		"model_list": []map[string]any{
@@ -374,8 +354,6 @@ func TestLoadConfig_MixedKeys_NoPassphrase(t *testing.T) {
 	})
 	os.WriteFile(configPath, mixed, 0o600)
 	os.Remove(secPath)
-	// Load without passphrase — stored value is plaintext (no
-	// passphrase was set during save), so it resolves as-is.
 	loaded, err := LoadConfig(configPath)
 	assert.NoError(t, err)
 	assert.Equal(t, "sk-secret", loaded.ModelList[0].APIKey())
@@ -409,8 +387,6 @@ func TestSaveConfig_UsesPassphraseProvider(t *testing.T) {
 	if strings.Contains(string(raw), "sk-1234567890abcdef") {
 		t.Fatal("plaintext API key found in saved JSON file")
 	}
-	// In v3, encrypted keys are stored in .security.yml with enc://
-	// prefix (api_keys are omitted from JSON via omitzero).
 	secPath := filepath.Join(dir, SecurityConfigFile)
 	secData, err := os.ReadFile(secPath)
 	if err != nil {
@@ -492,9 +468,6 @@ func TestConfigLogLevelEmpty(t *testing.T) {
 }
 
 func TestResolveGatewayLogLevel(t *testing.T) {
-	// LoadConfig stores log_level as-is from JSON — no normalization.
-	// Only valid lowercase levels are tested; upstream does not
-	// lowercase or replace unknown values.
 	tests := []struct {
 		name     string
 		cfgLevel string
@@ -530,8 +503,6 @@ func TestResolveGatewayLogLevel(t *testing.T) {
 func TestResolveGatewayLogLevel_UsesEnvOverrideAndNormalizesInvalid(
 	t *testing.T,
 ) {
-	// Env override is applied by env.Parse; upstream does not
-	// normalize the value. Only valid lowercase levels are tested.
 	tests := []struct {
 		name     string
 		envLevel string
@@ -743,9 +714,6 @@ func TestFilterSensitiveData_MultipleKeys(t *testing.T) {
 }
 
 func TestFilterSensitiveData_AllTokenTypes(t *testing.T) {
-	// SensitiveDataReplacer covers model API keys and web tool API keys.
-	// Channel tokens (telegram, discord, slack) are NOT inspected by the
-	// replacer — only model_list + web tool keys are collected.
 	cfg := DefaultConfig()
 	cfg.ModelList = []*ModelConfig{
 		{
@@ -788,7 +756,6 @@ func TestMakeBackup_WithDateSuffix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("makeBackup() error: %v", err)
 	}
-	// makeBackup creates path + ".YYYYMMDD.bak"
 	matches, _ := filepath.Glob(
 		filepath.Join(dir, "config.json.*.bak"),
 	)
