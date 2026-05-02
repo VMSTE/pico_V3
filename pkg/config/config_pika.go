@@ -11,10 +11,10 @@ import (
 
 // ClarifyConfig defines HITL clarification settings. PIKA-V3.
 type ClarifyConfig struct {
-	Enabled              bool `json:"enabled"`
-	TimeoutMin           int  `json:"timeout_min"`
+	Enabled               bool `json:"enabled"`
+	TimeoutMin            int  `json:"timeout_min"`
 	MaxStreakBeforeBypass int  `json:"max_streak_before_bypass"`
-	PrecheckTimeoutMs    int  `json:"precheck_timeout_ms"`
+	PrecheckTimeoutMs     int  `json:"precheck_timeout_ms"`
 }
 
 // SecurityConfig defines security policy settings. PIKA-V3.

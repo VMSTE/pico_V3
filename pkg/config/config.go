@@ -199,19 +199,19 @@ type AgentConfig struct {
 	Subagents *SubagentsConfig  `json:"subagents,omitempty"`
 
 	// PIKA-V3: per-agent overrides (pointer = nil means inherit from defaults)
-	Temperature    *float64          `json:"temperature,omitempty"`
-	TopP           *float64          `json:"top_p,omitempty"`
-	TopK           *int              `json:"top_k,omitempty"`
-	Enabled        *bool             `json:"enabled,omitempty"`
-	PromptFile     string            `json:"prompt_file,omitempty"`
-	BootstrapFiles []string          `json:"bootstrap_files,omitempty"`
-	Reasoning      *ReasoningConfig  `json:"reasoning,omitempty"`
-	Budget         *BudgetConfig     `json:"budget,omitempty"`
-	OutputGate     *OutputGateConfig `json:"output_gate,omitempty"`
-	Loop           *LoopConfig       `json:"loop,omitempty"`
+	Temperature    *float64           `json:"temperature,omitempty"`
+	TopP           *float64           `json:"top_p,omitempty"`
+	TopK           *int               `json:"top_k,omitempty"`
+	Enabled        *bool              `json:"enabled,omitempty"`
+	PromptFile     string             `json:"prompt_file,omitempty"`
+	BootstrapFiles []string           `json:"bootstrap_files,omitempty"`
+	Reasoning      *ReasoningConfig   `json:"reasoning,omitempty"`
+	Budget         *BudgetConfig      `json:"budget,omitempty"`
+	OutputGate     *OutputGateConfig  `json:"output_gate,omitempty"`
+	Loop           *LoopConfig        `json:"loop,omitempty"`
 	MemoryBrief    *MemoryBriefConfig `json:"memory_brief,omitempty"`
-	Archive        *ArchiveConfig    `json:"archive,omitempty"`
-	Schedule       *ScheduleConfig   `json:"schedule,omitempty"`
+	Archive        *ArchiveConfig     `json:"archive,omitempty"`
+	Schedule       *ScheduleConfig    `json:"schedule,omitempty"`
 
 	// PIKA-V3: role-specific fields (zero = inherit from defaults)
 	SessionRotateThresholdPct int      `json:"session_rotate_threshold_pct,omitempty"`
