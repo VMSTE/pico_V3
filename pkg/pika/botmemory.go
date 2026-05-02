@@ -388,7 +388,11 @@ func (bm *BotMemory) GetEventsByTurns(ctx context.Context, sid string, tids []in
 		var e EventRow
 		var ts string
 		var outcome, tags, data sql.NullString
-		if err := rows.Scan(&e.ID, &ts, &e.Type, &e.Summary, &outcome, &tags, &data, &e.SessionID, &e.TurnID); err != nil {
+		err := rows.Scan(
+			&e.ID, &ts, &e.Type, &e.Summary, &outcome,
+			&tags, &data, &e.SessionID, &e.TurnID,
+		)
+		if err != nil {
 			return nil, fmt.Errorf("pika/botmemory: scan event: %w", err)
 		}
 		e.Ts = parseSQLiteTime(ts)
@@ -732,7 +736,7 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 	if err != nil {
 		return fmt.Errorf("pika/botmemory: begin archive tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 	ph := placeholders(len(turnIDs))
 	args := inArgs(sid, turnIDs)
 	// messages -> messages_archive
@@ -743,6 +747,7 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 	if err != nil {
 		return fmt.Errorf("pika/botmemory: archive select msgs: %w", err)
 	}
+	defer mRows.Close()
 	for mRows.Next() {
 		var id int64
 		var sessID string
@@ -751,7 +756,6 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 		var content, meta sql.NullString
 		scanErr := mRows.Scan(&id, &sessID, &turnID, &ts, &role, &content, &tokens, &meta)
 		if scanErr != nil {
-			mRows.Close()
 			return fmt.Errorf("pika/botmemory: archive scan msg: %w", scanErr)
 		}
 		pay := msgArchivePayload{Content: content.String}
@@ -765,11 +769,12 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 			VALUES(?,?,?,?,?,?,?)`,
 			id, sessID, turnID, ts, role, tokens, blob)
 		if err != nil {
-			mRows.Close()
 			return fmt.Errorf("pika/botmemory: archive insert msg: %w", err)
 		}
 	}
-	mRows.Close()
+	if err := mRows.Err(); err != nil {
+		return fmt.Errorf("pika/botmemory: archive iter msgs: %w", err)
+	}
 	// events -> events_archive
 	eRows, err := tx.QueryContext(ctx,
 		`SELECT id,ts,type,summary,outcome,tags,data,session_id,turn_id
@@ -777,6 +782,7 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 	if err != nil {
 		return fmt.Errorf("pika/botmemory: archive select evts: %w", err)
 	}
+	defer eRows.Close()
 	for eRows.Next() {
 		var id int64
 		var ts, typ, summary string
@@ -785,7 +791,6 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 		var turnID int
 		scanErr := eRows.Scan(&id, &ts, &typ, &summary, &outcome, &tags, &data, &sessID, &turnID)
 		if scanErr != nil {
-			eRows.Close()
 			return fmt.Errorf("pika/botmemory: archive scan evt: %w", scanErr)
 		}
 		var blob []byte
@@ -797,11 +802,12 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 			VALUES(?,?,?,?,?,?,?,?,?)`,
 			id, sessID, turnID, ts, typ, outcome.String, summary, tags.String, blob)
 		if err != nil {
-			eRows.Close()
 			return fmt.Errorf("pika/botmemory: archive insert evt: %w", err)
 		}
 	}
-	eRows.Close()
+	if err := eRows.Err(); err != nil {
+		return fmt.Errorf("pika/botmemory: archive iter evts: %w", err)
+	}
 	// reasoning_log -> reasoning_log_archive
 	rRows, err := tx.QueryContext(ctx,
 		`SELECT id,session_id,turn_id,ts,task,mode,reasoning_text,
@@ -811,6 +817,7 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 	if err != nil {
 		return fmt.Errorf("pika/botmemory: archive select reas: %w", err)
 	}
+	defer rRows.Close()
 	for rRows.Next() {
 		var id int64
 		var sessID string
@@ -824,7 +831,6 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 		var mi sql.NullInt64
 		scanErr := rRows.Scan(&id, &sessID, &turnID, &ts, &task, &mode, &rText, &rTokens, &pc, &tc, &cpct, &rk, &mi)
 		if scanErr != nil {
-			rRows.Close()
 			return fmt.Errorf("pika/botmemory: archive scan reas: %w", scanErr)
 		}
 		pay := reasoningArchivePayload{ReasoningText: rText.String}
@@ -848,11 +854,12 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 			id, sessID, turnID, ts, task.String, mode.String,
 			rTokens, cval, rk.String, mi, blob)
 		if err != nil {
-			rRows.Close()
 			return fmt.Errorf("pika/botmemory: archive insert reas: %w", err)
 		}
 	}
-	rRows.Close()
+	if err := rRows.Err(); err != nil {
+		return fmt.Errorf("pika/botmemory: archive iter reas: %w", err)
+	}
 	// Delete hot data
 	for _, tbl := range []string{"messages", "events", "reasoning_log"} {
 		_, err = tx.ExecContext(ctx,
