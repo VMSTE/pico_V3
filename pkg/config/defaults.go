@@ -40,6 +40,21 @@ func DefaultConfig() *Config {
 					SeparateMessages: false,
 				},
 				SplitOnMarker: false,
+				// PIKA-V3 defaults:
+				MemoryDBPath:           filepath.Join(workspacePath, "memory", "bot_memory.db"),
+				BaseToolsDir:           filepath.Join(workspacePath, "tools"),
+				SkillsDir:              filepath.Join(workspacePath, "skills"),
+				MaxToolsInPrompt:       40,
+				TelemetryEnabled:       true,
+				TelemetryRetentionDays: 30,
+				MaxRetriesPerMessage:   3,
+				ToolCallRetryEnabled:   true,
+				LoopDetectionThreshold: 3,
+				IdleTimeoutMin:         30,
+				ContextManager:         "pika", // upstream field, our default
+			},
+			List: []AgentConfig{
+				{ID: "main", Default: true, Name: "Pika"},
 			},
 		},
 		Session: SessionConfig{
@@ -59,7 +74,7 @@ func DefaultConfig() *Config {
 			// Add your API key to the model you want to use
 			// ============================================
 
-			// Zhipu AI (智谱) - https://open.bigmodel.cn/usercenter/apikeys
+			// Zhipu AI - https://open.bigmodel.cn/usercenter/apikeys
 			{
 				ModelName: "glm-4.7",
 				Provider:  "zhipu",
@@ -107,7 +122,7 @@ func DefaultConfig() *Config {
 				APIBase:   "https://generativelanguage.googleapis.com/v1beta",
 			},
 
-			// Qwen (通义千问) - https://dashscope.console.aliyun.com/apiKey
+			// Qwen - https://dashscope.console.aliyun.com/apiKey
 			{
 				ModelName: "qwen-plus",
 				Provider:  "qwen",
@@ -115,7 +130,7 @@ func DefaultConfig() *Config {
 				APIBase:   "https://dashscope.aliyuncs.com/compatible-mode/v1",
 			},
 
-			// Moonshot (月之暗面) - https://platform.moonshot.cn/console/api-keys
+			// Moonshot - https://platform.moonshot.cn/console/api-keys
 			{
 				ModelName: "moonshot-v1-8k",
 				Provider:  "moonshot",
@@ -169,7 +184,7 @@ func DefaultConfig() *Config {
 				APIBase:   "https://api.vivgrid.com/v1",
 			},
 
-			// Volcengine (火山引擎) - https://console.volcengine.com/ark
+			// Volcengine - https://console.volcengine.com/ark
 			{
 				ModelName: "ark-code-latest",
 				Provider:  "volcengine",
@@ -183,7 +198,7 @@ func DefaultConfig() *Config {
 				APIBase:   "https://ark.cn-beijing.volces.com/api/v3",
 			},
 
-			// ShengsuanYun (神算云)
+			// ShengsuanYun
 			{
 				ModelName: "deepseek-v3",
 				Provider:  "shengsuanyun",
@@ -255,7 +270,7 @@ func DefaultConfig() *Config {
 				APIBase:   "https://api.longcat.chat/openai",
 			},
 
-			// ModelScope (魔搭社区) - https://modelscope.cn/my/tokens
+			// ModelScope - https://modelscope.cn/my/tokens
 			{
 				ModelName: "modelscope-qwen",
 				Provider:  "modelscope",
@@ -456,6 +471,11 @@ func DefaultConfig() *Config {
 			WriteFile: ToolConfig{
 				Enabled: true,
 			},
+			// PIKA-V3: base tools
+			BaseTools: BaseToolsConfig{
+				Enabled: true, Exec: true, ReadFile: true,
+				WriteFile: true, EditFile: true, AppendFile: true, ListDir: true,
+			},
 		},
 		Heartbeat: HeartbeatConfig{
 			Enabled:  true,
@@ -477,6 +497,37 @@ func DefaultConfig() *Config {
 			BuildTime: BuildTime,
 			GoVersion: GoVersion,
 		},
+		// PIKA-V3: cross-agent configs
+		Clarify: ClarifyConfig{
+			Enabled: true, TimeoutMin: 30,
+			MaxStreakBeforeBypass: 2, PrecheckTimeoutMs: 3000,
+		},
+		Security: SecurityConfig{
+			DangerousOps: DangerousOpsConfig{ConfirmTimeoutMin: 30},
+			RAD:          RADConfig{Enabled: true, DriftThreshold: 0.2, BlockScore: 3, WarnScore: 2},
+			MCP: MCPSecurityConfig{
+				TaintResetPolicy: "explicit_only", StdioUser: "mcp-sandbox",
+				StdioIsolation: "user", PerServerRPM: 60,
+				DefaultCapabilities: map[string]bool{
+					"sampling": false, "roots": false, "elicitation": false,
+				},
+				DefaultAllowResources: true,
+			},
+		},
+		Health: HealthConfig{
+			WindowSize: 5, ToolFailThresholdPct: 30, LatencyThresholdMs: 30000,
+			FallbackProvider: FallbackProviderConfig{
+				Provider: "stepfun", APIKeyEnv: "STEPFUN_API_KEY", Model: "step-3.5-flash",
+			},
+			Reporting: HealthReportingConfig{
+				TypingIndicatorEnabled: true, AlertDedupPerSession: true,
+				DailyHealthSummaryEnabled: true,
+			},
+			Progress: ProgressConfig{
+				Enabled: true, ThrottleSec: 2, DeleteOnComplete: true,
+				ShowStepText: true, StopCommandEnabled: true,
+			},
+		},
 	}
 }
 
@@ -489,7 +540,7 @@ func defaultChannels() ChannelsConfig {
 		},
 		"telegram": map[string]any{
 			"typing":      map[string]any{"enabled": true},
-			"placeholder": map[string]any{"enabled": true, "text": []string{"Thinking... 💭"}},
+			"placeholder": map[string]any{"enabled": true, "text": []string{"Thinking..."}},
 			"settings": map[string]any{
 				"streaming":       map[string]any{"enabled": true, "throttle_seconds": 3, "min_growth_chars": 200},
 				"use_markdown_v2": false,
@@ -507,7 +558,7 @@ func defaultChannels() ChannelsConfig {
 		"slack":    map[string]any{},
 		"matrix": map[string]any{
 			"group_trigger": map[string]any{"mention_only": true},
-			"placeholder":   map[string]any{"enabled": true, "text": []string{"Thinking... 💭"}},
+			"placeholder":   map[string]any{"enabled": true, "text": []string{"Thinking..."}},
 			"settings": map[string]any{
 				"homeserver":     "https://matrix.org",
 				"join_on_invite": true,

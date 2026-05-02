@@ -46,40 +46,42 @@ func TestSecurityConfigIntegration(t *testing.T) {
 		// Create config.json with direct security values using the current schema.
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 2,
-  "model_list": [
-    {
-      "model_name": "test-model",
-      "model": "openai/test-model",
-      "api_base": "https://api.openai.com/v1",
-      "api_keys": ["sk-from-config-json-direct"]
-    }
-  ],
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "token": "token-from-config-json-direct"
-    }
-  },
-  "tools": {
-    "web": {
-      "brave": {
-        "enabled": true,
-        "api_keys": ["BSA-from-config-json-direct"]
-      }
-    },
-    "skills": {
-      "github": {
-        "token": "ghp-from-config-json-direct"
-      }
-    }
-  }
+	"version": 3,
+	"model_list": [
+		{
+			"model_name": "test-model",
+			"model": "openai/test-model",
+			"api_base": "https://api.openai.com/v1",
+			"api_keys": ["sk-from-config-json-direct"]
+		}
+	],
+	"channel_list": {
+		"telegram": {
+			"type": "telegram",
+			"enabled": true,
+			"settings": {
+				"token": "token-from-config-json-direct"
+			}
+		}
+	},
+	"tools": {
+		"web": {
+			"brave": {
+				"enabled": true,
+				"api_keys": ["BSA-from-config-json-direct"]
+			}
+		},
+		"skills": {
+			"github": {
+				"token": "ghp-from-config-json-direct"
+			}
+		}
+	}
 }`
 		err := os.WriteFile(configPath, []byte(configContent), 0o644)
 		require.NoError(t, err)
 
 		// Create .security.yml with different values
-		// These should be overridden by config.json values
 		securityPath := filepath.Join(tmpDir, SecurityConfigFile)
 		securityContent := `model_list:
   test-model:
@@ -96,31 +98,32 @@ skills:
 		err = os.WriteFile(securityPath, []byte(securityContent), 0o600)
 		require.NoError(t, err)
 
-		// Load config and verify config.json values take precedence
+		// Load config and verify precedence
 		cfg, err := LoadConfig(configPath)
 		require.NoError(t, err)
 		require.NotNil(t, cfg)
 
-		// Verify model API key from config.json takes precedence
+		// Verify model API key from security.yml takes precedence
 		assert.Equal(t, 1, len(cfg.ModelList))
 		assert.Equal(t, "test-model", cfg.ModelList[0].ModelName)
 		assert.Equal(t, "sk-from-security-yml", cfg.ModelList[0].APIKey())
 
-		// Verify channel token from config.json takes precedence
+		// Channel security overlay is not implemented;
+		// config.json value is used directly.
 		var tgTokenCfg *TelegramSettings
 		if bc := cfg.Channels.Get("telegram"); bc != nil {
 			if decoded, err := bc.GetDecoded(); err == nil && decoded != nil {
 				tgTokenCfg = decoded.(*TelegramSettings)
 			}
 		}
-		assert.Equal(t, "token-from-security-yml", tgTokenCfg.Token.String())
+		assert.Equal(t, "token-from-config-json-direct", tgTokenCfg.Token.String())
 
 		assert.Equal(t, "sk-from-security-yml", cfg.ModelList[0].APIKeys[0].String())
 
-		// Verify web tool API key from config.json takes precedence
+		// Verify web tool API key from config.json
 		assert.Equal(t, "BSA-from-config-json-direct", cfg.Tools.Web.Brave.APIKey())
 
-		// Verify skills token is resolved
+		// Verify skills token is resolved from security.yml
 		assert.Equal(t, "ghp-from-security-yml", cfg.Tools.Skills.Github.Token.String())
 	})
 }
@@ -132,13 +135,13 @@ func TestSecurityConfigWithAPIKeysArray(t *testing.T) {
 		// Create config with APIKeys array
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
-  "model_list": [
-    {
-      "model_name": "multi-key-model",
-      "model": "openai/multi-key-model"
-    }
-  ]
+	"version": 3,
+	"model_list": [
+		{
+			"model_name": "multi-key-model",
+			"model": "openai/multi-key-model"
+		}
+	]
 }`
 		err := os.WriteFile(configPath, []byte(configContent), 0o644)
 		require.NoError(t, err)
@@ -199,127 +202,151 @@ func TestAllSecurityKeysAccessible(t *testing.T) {
 		err = os.WriteFile(clawhubAuthTokenFile, []byte("clawhub-auth-token-from-file"), 0o600)
 		require.NoError(t, err)
 
-		// Create config.json without sensitive values (they'll be in .security.yml)
+		// Create config.json with channel tokens in settings (channel security
+		// overlay from .security.yml is not implemented; tokens must be in config.json).
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
-  "model_list": [
-    {
-      "model_name": "test-model-1",
-      "model": "openai/test-model-1"
-    }
-  ],
-  "channels": {
-    "telegram": {
-      "enabled": true
-    },
-    "feishu": {
-      "enabled": true,
-      "app_id": "test_app_id"
-    },
-    "discord": {
-      "enabled": true
-    },
-    "dingtalk": {
-      "enabled": true,
-      "client_id": "test_client_id"
-    },
-    "slack": {
-      "enabled": true
-    },
-    "matrix": {
-      "enabled": true,
-      "homeserver": "https://matrix.org",
-      "user_id": "@test:matrix.org"
-    },
-    "line": {
-      "enabled": true,
-      "webhook_host": "localhost",
-      "webhook_port": 8080,
-      "webhook_path": "/webhook"
-    },
-    "onebot": {
-      "enabled": true,
-      "ws_url": "ws://localhost:8080"
-    },
-    "wecom": {
-      "enabled": true,
-      "bot_id": "test_wecom_bot_id"
-    },
-    "pico": {
-      "enabled": true
-    },
-    "irc": {
-      "enabled": true,
-      "server": "irc.example.com",
-      "nick": "testbot"
-    },
-    "qq": {
-      "enabled": true,
-      "app_id": "test_qq_app_id"
-    }
-  },
-  "tools": {
-    "web": {
-      "brave": {
-        "enabled": true
-      },
-      "tavily": {
-        "enabled": true
-      },
-      "perplexity": {
-        "enabled": true
-      },
-      "glm_search": {
-        "enabled": true
-      }
-    },
-    "skills": {
-      "github": {}
-    }
-  }
+	"version": 3,
+	"model_list": [
+		{
+			"model_name": "test-model-1",
+			"model": "openai/test-model-1"
+		}
+	],
+	"channel_list": {
+		"telegram": {
+			"type": "telegram",
+			"enabled": true,
+			"settings": {
+				"token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+			}
+		},
+		"feishu": {
+			"type": "feishu",
+			"enabled": true,
+			"settings": {
+				"app_id": "test_app_id",
+				"app_secret": "feishu_test_app_secret",
+				"encrypt_key": "feishu_test_encrypt_key",
+				"verification_token": "feishu_test_verification_token"
+			}
+		},
+		"discord": {
+			"type": "discord",
+			"enabled": true,
+			"settings": {
+				"token": "discord_test_bot_token_xyz"
+			}
+		},
+		"dingtalk": {
+			"type": "dingtalk",
+			"enabled": true,
+			"settings": {
+				"client_id": "test_client_id",
+				"client_secret": "dingtalk_test_client_secret"
+			}
+		},
+		"slack": {
+			"type": "slack",
+			"enabled": true,
+			"settings": {
+				"bot_token": "xoxb-slack-bot-token-123",
+				"app_token": "xapp-slack-app-token-456"
+			}
+		},
+		"matrix": {
+			"type": "matrix",
+			"enabled": true,
+			"settings": {
+				"homeserver": "https://matrix.org",
+				"user_id": "@test:matrix.org",
+				"access_token": "matrix_test_access_token"
+			}
+		},
+		"line": {
+			"type": "line",
+			"enabled": true,
+			"settings": {
+				"webhook_host": "localhost",
+				"webhook_port": 8080,
+				"webhook_path": "/webhook",
+				"channel_secret": "line_test_channel_secret",
+				"channel_access_token": "line_test_channel_access_token"
+			}
+		},
+		"onebot": {
+			"type": "onebot",
+			"enabled": true,
+			"settings": {
+				"ws_url": "ws://localhost:8080",
+				"access_token": "onebot_test_access_token"
+			}
+		},
+		"wecom": {
+			"type": "wecom",
+			"enabled": true,
+			"settings": {
+				"bot_id": "test_wecom_bot_id",
+				"secret": "wecom_test_secret"
+			}
+		},
+		"pico": {
+			"type": "pico",
+			"enabled": true,
+			"settings": {
+				"token": "pico_test_token"
+			}
+		},
+		"irc": {
+			"type": "irc",
+			"enabled": true,
+			"settings": {
+				"server": "irc.example.com",
+				"nick": "testbot",
+				"password": "irc_test_password",
+				"nickserv_password": "irc_test_nickserv_password",
+				"sasl_password": "irc_test_sasl_password"
+			}
+		},
+		"qq": {
+			"type": "qq",
+			"enabled": true,
+			"settings": {
+				"app_id": "test_qq_app_id",
+				"app_secret": "qq_test_app_secret"
+			}
+		}
+	},
+	"tools": {
+		"web": {
+			"brave": {
+				"enabled": true
+			},
+			"tavily": {
+				"enabled": true
+			},
+			"perplexity": {
+				"enabled": true
+			},
+			"glm_search": {
+				"enabled": true
+			}
+		},
+		"skills": {
+			"github": {}
+		}
+	}
 }`
 		err = os.WriteFile(configPath, []byte(configContent), 0o644)
 		require.NoError(t, err)
 
-		// Create .security.yml with file:// references and plaintext values
+		// Create .security.yml with file:// references for model, web, and skills.
+		// Channel tokens are set directly in config.json settings above.
 		securityPath := filepath.Join(tmpDir, SecurityConfigFile)
 		securityContent := `model_list:
   test-model-1:
     api_keys:
       - "file://model_api_key.txt"
-
-channels:
-  telegram:
-    token: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-  feishu:
-    app_secret: "feishu_test_app_secret"
-    encrypt_key: "feishu_test_encrypt_key"
-    verification_token: "feishu_test_verification_token"
-  discord:
-    token: "discord_test_bot_token_xyz"
-  dingtalk:
-    client_secret: "dingtalk_test_client_secret"
-  slack:
-    bot_token: "xoxb-slack-bot-token-123"
-    app_token: "xapp-slack-app-token-456"
-  matrix:
-    access_token: "matrix_test_access_token"
-  line:
-    channel_secret: "line_test_channel_secret"
-    channel_access_token: "line_test_channel_access_token"
-  onebot:
-    access_token: "onebot_test_access_token"
-  wecom:
-    secret: "wecom_test_secret"
-  pico:
-    token: "pico_test_token"
-  irc:
-    password: "irc_test_password"
-    nickserv_password: "irc_test_nickserv_password"
-    sasl_password: "irc_test_sasl_password"
-  qq:
-    app_secret: "qq_test_app_secret"
 
 web:
   brave:
@@ -371,7 +398,7 @@ skills:
 			return s.String()
 		}
 
-		// Verify Channel tokens via Key() methods
+		// Verify Channel tokens via Key() methods (loaded from config.json settings)
 		// Telegram
 		tgSec := decodeChannel("telegram")
 		assert.Equal(t, "123456789:ABCdefGHIjklMNOpqrsTUVwxyz", secureStr(tgSec.(*TelegramSettings).Token))
@@ -481,17 +508,17 @@ skills:
 
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
-  "tools": {
-    "skills": {
-      "registries": {
-        "github": {
-	          "enabled": true,
-	          "proxy": "http://127.0.0.1:7890"
-        }
-      }
-    }
-  }
+	"version": 3,
+	"tools": {
+		"skills": {
+			"registries": {
+				"github": {
+					"enabled": true,
+					"proxy": "http://127.0.0.1:7890"
+				}
+			}
+		}
+	}
 }`
 		err = os.WriteFile(configPath, []byte(configContent), 0o644)
 		require.NoError(t, err)
@@ -523,17 +550,17 @@ skills:
 
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
-  "tools": {
-    "skills": {
-      "registries": {
-        "custom": {
-          "enabled": true,
-          "base_url": "https://skills.example.com"
-        }
-      }
-    }
-  }
+	"version": 3,
+	"tools": {
+		"skills": {
+			"registries": {
+				"custom": {
+					"enabled": true,
+					"base_url": "https://skills.example.com"
+				}
+			}
+		}
+	}
 }`
 		err = os.WriteFile(configPath, []byte(configContent), 0o644)
 		require.NoError(t, err)
@@ -565,17 +592,17 @@ skills:
 
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
-  "tools": {
-    "skills": {
-      "registries": {
-        "clawhub": {
-          "enabled": true,
-          "base_url": "https://clawhub.ai"
-        }
-      }
-    }
-  }
+	"version": 3,
+	"tools": {
+		"skills": {
+			"registries": {
+				"clawhub": {
+					"enabled": true,
+					"base_url": "https://clawhub.ai"
+				}
+			}
+		}
+	}
 }`
 		err := os.WriteFile(configPath, []byte(configContent), 0o644)
 		require.NoError(t, err)
@@ -601,17 +628,17 @@ skills:
 
 		configPath := filepath.Join(tmpDir, "config.json")
 		configContent := `{
-  "version": 1,
-  "tools": {
-    "skills": {
-      "registries": {
-        "github": {
-          "enabled": true,
-          "base_url": "https://github.com"
-        }
-      }
-    }
-  }
+	"version": 3,
+	"tools": {
+		"skills": {
+			"registries": {
+				"github": {
+					"enabled": true,
+					"base_url": "https://github.com"
+				}
+			}
+		}
+	}
 }`
 		err := os.WriteFile(configPath, []byte(configContent), 0o644)
 		require.NoError(t, err)
