@@ -322,7 +322,7 @@ func TestLoadConfig_MixedKeys_NoPassphrase(t *testing.T) {
 		t.Fatalf("ReadFile(security) error: %v", err)
 	}
 	var secYAML map[string]any
-	if err := yaml.Unmarshal(secData, &secYAML); err != nil {
+	if err = yaml.Unmarshal(secData, &secYAML); err != nil {
 		t.Fatalf("YAML unmarshal: %v", err)
 	}
 	ml, ok := secYAML["model_list"].(map[string]any)
