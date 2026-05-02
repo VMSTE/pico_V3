@@ -579,7 +579,8 @@ func TestLoadConfig_ToolFeedbackDefaultsFalseWhenUnset(t *testing.T) {
 func TestLoadConfig_WebPreferNativeDefaultsTrueWhenUnset(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version":3,"tools":{"web":{"enabled":true}}}`), 0o600); err != nil {
+	cfgJSON := `{"version":3,"tools":{"web":{"enabled":true}}}`
+	if err := os.WriteFile(configPath, []byte(cfgJSON), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 	cfg, err := LoadConfig(configPath)
@@ -665,7 +666,8 @@ func TestLoadConfig_UnknownFieldsReportsExactPaths(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown field error, got nil")
 	}
-	if !strings.Contains(err.Error(), "tools.weeb") || !strings.Contains(err.Error(), "tools.web.fatch_limit_bytes") {
+	if !strings.Contains(err.Error(), "tools.weeb") ||
+		!strings.Contains(err.Error(), "tools.web.fatch_limit_bytes") {
 		t.Fatalf("expected exact unknown field paths, got %q", err.Error())
 	}
 }
@@ -744,7 +746,8 @@ func TestDefaultConfig_LogLevel(t *testing.T) {
 func TestLoadConfig_ExecAllowRemoteDefaultsTrueWhenUnset(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version":3,"tools":{"exec":{"enable_deny_patterns":true}}}`), 0o600); err != nil {
+	cfgJSON := `{"version":3,"tools":{"exec":{"enable_deny_patterns":true}}}`
+	if err := os.WriteFile(configPath, []byte(cfgJSON), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 	cfg, err := LoadConfig(configPath)
@@ -759,7 +762,8 @@ func TestLoadConfig_ExecAllowRemoteDefaultsTrueWhenUnset(t *testing.T) {
 func TestLoadConfig_CronAllowCommandDefaultsTrueWhenUnset(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(configPath, []byte(`{"version":3,"tools":{"cron":{"exec_timeout_minutes":5}}}`), 0o600); err != nil {
+	cfgJSON := `{"version":3,"tools":{"cron":{"exec_timeout_minutes":5}}}`
+	if err := os.WriteFile(configPath, []byte(cfgJSON), 0o600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 	cfg, err := LoadConfig(configPath)
