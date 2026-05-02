@@ -711,7 +711,10 @@ func (bm *BotMemory) InsertSpan(ctx context.Context, s TraceSpanRow) error {
 }
 
 // CompleteSpan marks a trace span as completed with status and optional output/error.
-func (bm *BotMemory) CompleteSpan(ctx context.Context, spanID, status string, outputData json.RawMessage, errType, errMsg string) error {
+func (bm *BotMemory) CompleteSpan(
+	ctx context.Context, spanID, status string,
+	outputData json.RawMessage, errType, errMsg string,
+) error {
 	_, err := bm.db.ExecContext(ctx,
 		`UPDATE trace_spans SET completed_at=CURRENT_TIMESTAMP,
 		status=?, output_data=?, error_type=?, error_message=?
@@ -735,7 +738,8 @@ func (bm *BotMemory) recoverStaleSpans(ctx context.Context) error {
 	return nil
 }
 
-// ArchiveAndDeleteTurns archives messages+events+reasoning for turnIDs into *_archive tables, then deletes from hot. Single TX.
+// ArchiveAndDeleteTurns archives messages+events+reasoning for turnIDs
+// into *_archive tables, then deletes from hot. Single TX.
 func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turnIDs []int) error {
 	if len(turnIDs) == 0 {
 		return nil
@@ -928,7 +932,10 @@ func (bm *BotMemory) SearchEventsArchiveFTS(ctx context.Context, q string, limit
 }
 
 // UpsertPromptVersion inserts or ignores a prompt version record.
-func (bm *BotMemory) UpsertPromptVersion(ctx context.Context, component string, version int, hash, content, desc string) (string, error) {
+func (bm *BotMemory) UpsertPromptVersion(
+	ctx context.Context, component string, version int,
+	hash, content, desc string,
+) (string, error) {
 	promptID := component + "/v" + strconv.Itoa(version)
 	_, err := bm.db.ExecContext(ctx,
 		`INSERT OR IGNORE INTO prompt_versions
@@ -942,7 +949,11 @@ func (bm *BotMemory) UpsertPromptVersion(ctx context.Context, component string, 
 }
 
 // InsertPromptSnapshot records a prompt composition snapshot for a trace.
-func (bm *BotMemory) InsertPromptSnapshot(ctx context.Context, snapshotID, traceID, sessionID string, turnID int, coreID, ctxID, briefHash string, tokens map[string]int, fullHash, preview string, buildMs int) error {
+func (bm *BotMemory) InsertPromptSnapshot(
+	ctx context.Context, snapshotID, traceID, sessionID string,
+	turnID int, coreID, ctxID, briefHash string,
+	tokens map[string]int, fullHash, preview string, buildMs int,
+) error {
 	_, err := bm.db.ExecContext(ctx,
 		`INSERT INTO prompt_snapshots
 		(snapshot_id,trace_id,session_id,turn_id,
@@ -962,7 +973,11 @@ func (bm *BotMemory) InsertPromptSnapshot(ctx context.Context, snapshotID, trace
 }
 
 // InsertAtomUsage records usage of a knowledge atom in a prompt.
-func (bm *BotMemory) InsertAtomUsage(ctx context.Context, atomID, traceID string, turnID int, usedIn string, position, promptTokens *int, toolAfter, toolResult, archSpanID string) error {
+func (bm *BotMemory) InsertAtomUsage(
+	ctx context.Context, atomID, traceID string, turnID int,
+	usedIn string, position, promptTokens *int,
+	toolAfter, toolResult, archSpanID string,
+) error {
 	_, err := bm.db.ExecContext(ctx,
 		`INSERT INTO atom_usage
 		(atom_id,trace_id,turn_id,used_in,position_in_prompt,
