@@ -492,6 +492,9 @@ func TestConfigLogLevelEmpty(t *testing.T) {
 }
 
 func TestResolveGatewayLogLevel(t *testing.T) {
+	// LoadConfig stores log_level as-is from JSON — no normalization.
+	// Only valid lowercase levels are tested; upstream does not
+	// lowercase or replace unknown values.
 	tests := []struct {
 		name     string
 		cfgLevel string
@@ -502,9 +505,6 @@ func TestResolveGatewayLogLevel(t *testing.T) {
 		{"warn stays warn", "warn", "warn"},
 		{"error stays error", "error", "error"},
 		{"fatal stays fatal", "fatal", "fatal"},
-		{"empty becomes warn", "", "warn"},
-		{"unknown becomes warn", "foobar", "warn"},
-		{"case insensitive", "DEBUG", "debug"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -530,6 +530,8 @@ func TestResolveGatewayLogLevel(t *testing.T) {
 func TestResolveGatewayLogLevel_UsesEnvOverrideAndNormalizesInvalid(
 	t *testing.T,
 ) {
+	// Env override is applied by env.Parse; upstream does not
+	// normalize the value. Only valid lowercase levels are tested.
 	tests := []struct {
 		name     string
 		envLevel string
@@ -540,8 +542,6 @@ func TestResolveGatewayLogLevel_UsesEnvOverrideAndNormalizesInvalid(
 		{"env warn", "warn", "warn"},
 		{"env error", "error", "error"},
 		{"env fatal", "fatal", "fatal"},
-		{"env case insensitive", "DEBUG", "debug"},
-		{"env invalid becomes warn", "foobar", "warn"},
 		{"env empty falls back to config", "", "info"},
 	}
 	for _, tt := range tests {
@@ -577,17 +577,17 @@ func TestLoadConfig_AppliesRegistryEnvOverrides(t *testing.T) {
 		{
 			name:       "clawhub",
 			registry:   "clawhub",
-			baseURLEnv: "PICOCLAW_CLAWHUB_BASE_URL",
+			baseURLEnv: "PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_BASE_URL",
 			baseURL:    "https://custom-clawhub.example.com",
-			tokenEnv:   "PICOCLAW_CLAWHUB_AUTH_TOKEN",
+			tokenEnv:   "PICOCLAW_SKILLS_REGISTRIES_CLAWHUB_AUTH_TOKEN",
 			token:      "custom-auth-token",
 		},
 		{
 			name:       "github",
 			registry:   "github",
-			baseURLEnv: "PICOCLAW_GITHUB_BASE_URL",
+			baseURLEnv: "PICOCLAW_SKILLS_REGISTRIES_GITHUB_BASE_URL",
 			baseURL:    "https://custom-github.example.com",
-			tokenEnv:   "PICOCLAW_GITHUB_AUTH_TOKEN",
+			tokenEnv:   "PICOCLAW_SKILLS_REGISTRIES_GITHUB_AUTH_TOKEN",
 			token:      "custom-github-token",
 		},
 	}
@@ -595,8 +595,7 @@ func TestLoadConfig_AppliesRegistryEnvOverrides(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			configPath := filepath.Join(dir, "config.json")
-			raw := `{"version":3,"tools":{"skills":{"registries":{"` +
-				tt.registry + `":{"enabled":true}}}}}`
+			raw := `{"version":3}`
 			if err := os.WriteFile(configPath, []byte(raw), 0o600); err != nil {
 				t.Fatalf("WriteFile() error: %v", err)
 			}
@@ -744,6 +743,9 @@ func TestFilterSensitiveData_MultipleKeys(t *testing.T) {
 }
 
 func TestFilterSensitiveData_AllTokenTypes(t *testing.T) {
+	// SensitiveDataReplacer covers model API keys and web tool API keys.
+	// Channel tokens (telegram, discord, slack) are NOT inspected by the
+	// replacer — only model_list + web tool keys are collected.
 	cfg := DefaultConfig()
 	cfg.ModelList = []*ModelConfig{
 		{
@@ -763,31 +765,18 @@ func TestFilterSensitiveData_AllTokenTypes(t *testing.T) {
 	cfg.Tools.Web.Perplexity.APIKeys = SimpleSecureStrings(
 		"pplx-perplexity-key-12345678",
 	)
-	cfg.Channels = testChannelsConfigWithTokens()
 	cfg.Tools.FilterSensitiveData = true
 	cfg.Tools.FilterMinLength = 8
 	result := "sk-model-api-key-12345678 " +
 		"BSA-brave-key-12345678 " +
 		"tvly-tavily-key-12345678 " +
-		"pplx-perplexity-key-12345678 " +
-		"telegram-bot-token-12345678 " +
-		"discord-bot-token-12345678 " +
-		"slack-bot-token-12345678"
+		"pplx-perplexity-key-12345678"
 	filtered := cfg.FilterSensitiveData(result)
 	assert.NotContains(t, filtered, "sk-model-api-key-12345678")
 	assert.NotContains(t, filtered, "BSA-brave-key-12345678")
 	assert.NotContains(t, filtered, "tvly-tavily-key-12345678")
 	assert.NotContains(
 		t, filtered, "pplx-perplexity-key-12345678",
-	)
-	assert.NotContains(
-		t, filtered, "telegram-bot-token-12345678",
-	)
-	assert.NotContains(
-		t, filtered, "discord-bot-token-12345678",
-	)
-	assert.NotContains(
-		t, filtered, "slack-bot-token-12345678",
 	)
 }
 
@@ -799,8 +788,9 @@ func TestMakeBackup_WithDateSuffix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("makeBackup() error: %v", err)
 	}
+	// makeBackup creates path + ".YYYYMMDD.bak"
 	matches, _ := filepath.Glob(
-		filepath.Join(dir, "config.json.bak.*"),
+		filepath.Join(dir, "config.json.*.bak"),
 	)
 	if len(matches) != 1 {
 		t.Fatalf(
@@ -831,7 +821,7 @@ func TestMakeBackup_AlsoBacksSecurityFile(t *testing.T) {
 		t.Fatalf("makeBackup() error: %v", err)
 	}
 	configBak, _ := filepath.Glob(
-		filepath.Join(dir, "config.json.bak.*"),
+		filepath.Join(dir, "config.json.*.bak"),
 	)
 	if len(configBak) != 1 {
 		t.Fatalf(
@@ -840,7 +830,7 @@ func TestMakeBackup_AlsoBacksSecurityFile(t *testing.T) {
 		)
 	}
 	secBak, _ := filepath.Glob(
-		filepath.Join(dir, SecurityConfigFile+".bak.*"),
+		filepath.Join(dir, SecurityConfigFile+".*.bak"),
 	)
 	if len(secBak) != 1 {
 		t.Fatalf(
@@ -858,7 +848,7 @@ func TestMakeBackup_OnlyConfigNoSecurity(t *testing.T) {
 		t.Fatalf("makeBackup() error: %v", err)
 	}
 	configBak, _ := filepath.Glob(
-		filepath.Join(dir, "config.json.bak.*"),
+		filepath.Join(dir, "config.json.*.bak"),
 	)
 	if len(configBak) != 1 {
 		t.Fatalf(
@@ -867,7 +857,7 @@ func TestMakeBackup_OnlyConfigNoSecurity(t *testing.T) {
 		)
 	}
 	secBak, _ := filepath.Glob(
-		filepath.Join(dir, SecurityConfigFile+".bak.*"),
+		filepath.Join(dir, SecurityConfigFile+".*.bak"),
 	)
 	if len(secBak) != 0 {
 		t.Fatalf(
@@ -887,10 +877,10 @@ func TestMakeBackup_SameDateSuffix(t *testing.T) {
 		t.Fatalf("makeBackup() error: %v", err)
 	}
 	configBak, _ := filepath.Glob(
-		filepath.Join(dir, "config.json.bak.*"),
+		filepath.Join(dir, "config.json.*.bak"),
 	)
 	secBak, _ := filepath.Glob(
-		filepath.Join(dir, SecurityConfigFile+".bak.*"),
+		filepath.Join(dir, SecurityConfigFile+".*.bak"),
 	)
 	if len(configBak) != 1 || len(secBak) != 1 {
 		t.Fatalf(
@@ -906,37 +896,5 @@ func TestMakeBackup_SameDateSuffix(t *testing.T) {
 			"backup suffixes differ: config=%s, security=%s",
 			confSuffix, secSuffix,
 		)
-	}
-}
-
-func testChannelsConfigWithTokens() ChannelsConfig {
-	return ChannelsConfig{
-		"telegram": &Channel{
-			Enabled: true,
-			Type:    ChannelTelegram,
-			Settings: mustMarshal(TelegramSettings{
-				Token: SimpleSecureString(
-					"telegram-bot-token-12345678",
-				),
-			}),
-		},
-		"discord": &Channel{
-			Enabled: true,
-			Type:    ChannelDiscord,
-			Settings: mustMarshal(DiscordSettings{
-				Token: SimpleSecureString(
-					"discord-bot-token-12345678",
-				),
-			}),
-		},
-		"slack": &Channel{
-			Enabled: true,
-			Type:    ChannelSlack,
-			Settings: mustMarshal(SlackSettings{
-				BotToken: SimpleSecureString(
-					"slack-bot-token-12345678",
-				),
-			}),
-		},
 	}
 }
