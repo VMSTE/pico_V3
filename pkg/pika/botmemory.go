@@ -198,8 +198,8 @@ func placeholders(n int) string {
 	return strings.Repeat("?,", n-1) + "?"
 }
 
-func inArgs(sid string, ids []int) []interface{} {
-	a := make([]interface{}, 0, 1+len(ids))
+func inArgs(sid string, ids []int) []any {
+	a := make([]any, 0, 1+len(ids))
 	a = append(a, sid)
 	for _, id := range ids {
 		a = append(a, id)
@@ -212,14 +212,14 @@ func parseSQLiteTime(s string) time.Time {
 	return t
 }
 
-func jsonArg(j json.RawMessage) interface{} {
+func jsonArg(j json.RawMessage) any {
 	if j == nil {
 		return nil
 	}
 	return string(j)
 }
 
-func strOrNil(s string) interface{} {
+func strOrNil(s string) any {
 	if s == "" {
 		return nil
 	}
@@ -444,8 +444,14 @@ func (bm *BotMemory) QueryKnowledgeFTS(ctx context.Context, q string, limit int)
 		var se, sm sql.NullInt64
 		var det, tg, st, hi sql.NullString
 		var ca, ua string
-		if err := rows.Scan(&a.ID, &a.AtomID, &a.SessionID, &a.TurnID, &se, &sm, &a.Category, &a.Summary, &det, &a.Confidence, &a.Polarity, &a.Verified, &tg, &st, &hi, &ca, &ua); err != nil {
-			return nil, fmt.Errorf("pika/botmemory: scan atom: %w", err)
+		scanErr := rows.Scan(
+			&a.ID, &a.AtomID, &a.SessionID, &a.TurnID,
+			&se, &sm, &a.Category, &a.Summary, &det,
+			&a.Confidence, &a.Polarity, &a.Verified,
+			&tg, &st, &hi, &ca, &ua,
+		)
+		if scanErr != nil {
+			return nil, fmt.Errorf("pika/botmemory: scan atom: %w", scanErr)
 		}
 		if se.Valid {
 			a.SourceEventID = &se.Int64
@@ -772,8 +778,8 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 			return fmt.Errorf("pika/botmemory: archive insert msg: %w", err)
 		}
 	}
-	if err := mRows.Err(); err != nil {
-		return fmt.Errorf("pika/botmemory: archive iter msgs: %w", err)
+	if rowErr := mRows.Err(); rowErr != nil {
+		return fmt.Errorf("pika/botmemory: archive iter msgs: %w", rowErr)
 	}
 	// events -> events_archive
 	eRows, err := tx.QueryContext(ctx,
@@ -805,8 +811,8 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 			return fmt.Errorf("pika/botmemory: archive insert evt: %w", err)
 		}
 	}
-	if err := eRows.Err(); err != nil {
-		return fmt.Errorf("pika/botmemory: archive iter evts: %w", err)
+	if rowErr := eRows.Err(); rowErr != nil {
+		return fmt.Errorf("pika/botmemory: archive iter evts: %w", rowErr)
 	}
 	// reasoning_log -> reasoning_log_archive
 	rRows, err := tx.QueryContext(ctx,
@@ -857,8 +863,8 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 			return fmt.Errorf("pika/botmemory: archive insert reas: %w", err)
 		}
 	}
-	if err := rRows.Err(); err != nil {
-		return fmt.Errorf("pika/botmemory: archive iter reas: %w", err)
+	if rowErr := rRows.Err(); rowErr != nil {
+		return fmt.Errorf("pika/botmemory: archive iter reas: %w", rowErr)
 	}
 	// Delete hot data
 	for _, tbl := range []string{"messages", "events", "reasoning_log"} {
