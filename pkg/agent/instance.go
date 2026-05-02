@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +11,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/isolation"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/memory"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/routing"
 	"github.com/sipeed/picoclaw/pkg/session"
@@ -90,21 +89,29 @@ func NewAgentInstance(
 		maxReadFileSize := cfg.Tools.ReadFile.MaxReadFileSize
 		switch cfg.Tools.ReadFile.EffectiveMode() {
 		case config.ReadFileModeLines:
-			toolsRegistry.Register(tools.NewReadFileLinesTool(workspace, readRestrict, maxReadFileSize, allowReadPaths))
+			toolsRegistry.Register(tools.NewReadFileLinesTool(
+				workspace, readRestrict,
+				maxReadFileSize, allowReadPaths))
 		default:
-			toolsRegistry.Register(tools.NewReadFileBytesTool(workspace, readRestrict, maxReadFileSize, allowReadPaths))
+			toolsRegistry.Register(tools.NewReadFileBytesTool(
+				workspace, readRestrict,
+				maxReadFileSize, allowReadPaths))
 		}
 	}
 	if cfg.Tools.IsToolEnabled("write_file") {
-		toolsRegistry.Register(tools.NewWriteFileTool(workspace, restrict, allowWritePaths))
+		toolsRegistry.Register(tools.NewWriteFileTool(
+			workspace, restrict, allowWritePaths))
 	}
 	if cfg.Tools.IsToolEnabled("list_dir") {
-		toolsRegistry.Register(tools.NewListDirTool(workspace, readRestrict, allowReadPaths))
+		toolsRegistry.Register(tools.NewListDirTool(
+			workspace, readRestrict, allowReadPaths))
 	}
 	if cfg.Tools.IsToolEnabled("exec") {
-		execTool, err := tools.NewExecToolWithConfig(workspace, restrict, cfg, allowReadPaths)
+		execTool, err := tools.NewExecToolWithConfig(
+			workspace, restrict, cfg, allowReadPaths)
 		if err != nil {
-			logger.ErrorCF("agent", "Failed to initialize exec tool; continuing without exec",
+			logger.ErrorCF("agent",
+				"Failed to initialize exec tool; continuing without exec",
 				map[string]any{"error": err.Error()})
 		} else {
 			toolsRegistry.Register(execTool)
@@ -112,20 +119,25 @@ func NewAgentInstance(
 	}
 
 	if cfg.Tools.IsToolEnabled("edit_file") {
-		toolsRegistry.Register(tools.NewEditFileTool(workspace, restrict, allowWritePaths))
+		toolsRegistry.Register(tools.NewEditFileTool(
+			workspace, restrict, allowWritePaths))
 	}
 	if cfg.Tools.IsToolEnabled("append_file") {
-		toolsRegistry.Register(tools.NewAppendFileTool(workspace, restrict, allowWritePaths))
+		toolsRegistry.Register(tools.NewAppendFileTool(
+			workspace, restrict, allowWritePaths))
 	}
 
-	sessionsDir := filepath.Join(workspace, "sessions")
-	sessions := initSessionStore(sessionsDir)
+	// PIKA-V3: use PikaSessionStore with bot_memory.db backend
+	sessions := initSessionStore(cfg)
 
-	mcpDiscoveryActive := cfg.Tools.MCP.Enabled && cfg.Tools.MCP.Discovery.Enabled
+	mcpDiscoveryActive := cfg.Tools.MCP.Enabled &&
+		cfg.Tools.MCP.Discovery.Enabled
 	contextBuilder := NewContextBuilder(workspace).
 		WithToolDiscovery(
-			mcpDiscoveryActive && cfg.Tools.MCP.Discovery.UseBM25,
-			mcpDiscoveryActive && cfg.Tools.MCP.Discovery.UseRegex,
+			mcpDiscoveryActive &&
+				cfg.Tools.MCP.Discovery.UseBM25,
+			mcpDiscoveryActive &&
+				cfg.Tools.MCP.Discovery.UseRegex,
 		).
 		WithSplitOnMarker(cfg.Agents.Defaults.SplitOnMarker)
 
@@ -184,28 +196,45 @@ func NewAgentInstance(
 	}
 
 	// Resolve fallback candidates
-	candidates := resolveModelCandidates(cfg, defaults.Provider, model, fallbacks)
+	candidates := resolveModelCandidates(
+		cfg, defaults.Provider, model, fallbacks)
 
 	candidateProviders := make(map[string]providers.LLMProvider)
-	populateCandidateProvidersFromNames(cfg, workspace, fallbacks, candidateProviders)
+	populateCandidateProvidersFromNames(
+		cfg, workspace, fallbacks, candidateProviders)
 
 	// Model routing setup: pre-resolve light model candidates at creation time
 	// to avoid repeated model_list lookups on every incoming message.
 	var router *routing.Router
 	var lightCandidates []providers.FallbackCandidate
 	var lightProvider providers.LLMProvider
-	if rc := defaults.Routing; rc != nil && rc.Enabled && rc.LightModel != "" {
-		resolved := resolveModelCandidates(cfg, defaults.Provider, rc.LightModel, nil)
+	if rc := defaults.Routing; rc != nil &&
+		rc.Enabled && rc.LightModel != "" {
+		resolved := resolveModelCandidates(
+			cfg, defaults.Provider, rc.LightModel, nil)
 		if len(resolved) > 0 {
-			lightModelCfg, err := resolvedModelConfig(cfg, rc.LightModel, workspace)
+			lightModelCfg, err := resolvedModelConfig(
+				cfg, rc.LightModel, workspace)
 			if err != nil {
-				logger.WarnCF("agent", "Routing light model config invalid; routing disabled",
-					map[string]any{"light_model": rc.LightModel, "agent_id": agentID, "error": err.Error()})
+				logger.WarnCF("agent",
+					"Routing light model config invalid; routing disabled",
+					map[string]any{
+						"light_model": rc.LightModel,
+						"agent_id":    agentID,
+						"error":       err.Error(),
+					})
 			} else {
-				lp, _, err := providers.CreateProviderFromConfig(lightModelCfg)
+				lp, _, err := providers.CreateProviderFromConfig(
+					lightModelCfg)
 				if err != nil {
-					logger.WarnCF("agent", "Routing light model provider init failed; routing disabled",
-						map[string]any{"light_model": rc.LightModel, "agent_id": agentID, "error": err.Error()})
+					logger.WarnCF("agent",
+						"Routing light model provider init failed; "+
+							"routing disabled",
+						map[string]any{
+							"light_model": rc.LightModel,
+							"agent_id":    agentID,
+							"error":       err.Error(),
+						})
 				} else {
 					router = routing.New(routing.RouterConfig{
 						LightModel: rc.LightModel,
@@ -213,12 +242,19 @@ func NewAgentInstance(
 					})
 					lightCandidates = resolved
 					lightProvider = lp
-					populateCandidateProvidersFromNames(cfg, workspace, []string{rc.LightModel}, candidateProviders)
+					populateCandidateProvidersFromNames(
+						cfg, workspace,
+						[]string{rc.LightModel},
+						candidateProviders)
 				}
 			}
 		} else {
-			logger.WarnCF("agent", "Routing light model not found; routing disabled",
-				map[string]any{"light_model": rc.LightModel, "agent_id": agentID})
+			logger.WarnCF("agent",
+				"Routing light model not found; routing disabled",
+				map[string]any{
+					"light_model": rc.LightModel,
+					"agent_id":    agentID,
+				})
 		}
 	}
 
@@ -263,11 +299,16 @@ func populateCandidateProvidersFromNames(
 		return
 	}
 	for _, name := range names {
-		mc, err := resolvedModelConfig(cfg, strings.TrimSpace(name), workspace)
+		mc, err := resolvedModelConfig(
+			cfg, strings.TrimSpace(name), workspace)
 		if err != nil {
 			logger.WarnCF("agent",
-				"fallback provider: no model_list entry found; will inherit primary provider credentials",
-				map[string]any{"name": name, "error": err.Error()})
+				"fallback provider: no model_list entry found; "+
+					"will inherit primary provider credentials",
+				map[string]any{
+					"name":  name,
+					"error": err.Error(),
+				})
 			continue
 		}
 		protocol, modelID := providers.ExtractProtocol(mc)
@@ -277,8 +318,12 @@ func populateCandidateProvidersFromNames(
 		}
 		p, _, err := providers.CreateProviderFromConfig(mc)
 		if err != nil {
-			logger.WarnCF("agent", "fallback provider: failed to create provider",
-				map[string]any{"model": mc.Model, "error": err.Error()})
+			logger.WarnCF("agent",
+				"fallback provider: failed to create provider",
+				map[string]any{
+					"model": mc.Model,
+					"error": err.Error(),
+				})
 			continue
 		}
 		out[key] = p
@@ -286,30 +331,48 @@ func populateCandidateProvidersFromNames(
 }
 
 // resolveAgentWorkspace determines the workspace directory for an agent.
-func resolveAgentWorkspace(agentCfg *config.AgentConfig, defaults *config.AgentDefaults) string {
-	if agentCfg != nil && strings.TrimSpace(agentCfg.Workspace) != "" {
-		return expandHome(strings.TrimSpace(agentCfg.Workspace))
+func resolveAgentWorkspace(
+	agentCfg *config.AgentConfig,
+	defaults *config.AgentDefaults,
+) string {
+	if agentCfg != nil &&
+		strings.TrimSpace(agentCfg.Workspace) != "" {
+		return expandHome(
+			strings.TrimSpace(agentCfg.Workspace))
 	}
 	// Use the configured default workspace (respects PICOCLAW_HOME)
-	if agentCfg == nil || agentCfg.Default || agentCfg.ID == "" || routing.NormalizeAgentID(agentCfg.ID) == "main" {
+	if agentCfg == nil || agentCfg.Default ||
+		agentCfg.ID == "" ||
+		routing.NormalizeAgentID(agentCfg.ID) == "main" {
 		return expandHome(defaults.Workspace)
 	}
-	// For named agents without explicit workspace, use default workspace with agent ID suffix
+	// For named agents without explicit workspace,
+	// use default workspace with agent ID suffix
 	id := routing.NormalizeAgentID(agentCfg.ID)
-	return filepath.Join(expandHome(defaults.Workspace), "..", "workspace-"+id)
+	return filepath.Join(
+		expandHome(defaults.Workspace),
+		"..", "workspace-"+id)
 }
 
 // resolveAgentModel resolves the primary model for an agent.
-func resolveAgentModel(agentCfg *config.AgentConfig, defaults *config.AgentDefaults) string {
-	if agentCfg != nil && agentCfg.Model != nil && strings.TrimSpace(agentCfg.Model.Primary) != "" {
+func resolveAgentModel(
+	agentCfg *config.AgentConfig,
+	defaults *config.AgentDefaults,
+) string {
+	if agentCfg != nil && agentCfg.Model != nil &&
+		strings.TrimSpace(agentCfg.Model.Primary) != "" {
 		return strings.TrimSpace(agentCfg.Model.Primary)
 	}
 	return defaults.GetModelName()
 }
 
 // resolveAgentFallbacks resolves the fallback models for an agent.
-func resolveAgentFallbacks(agentCfg *config.AgentConfig, defaults *config.AgentDefaults) []string {
-	if agentCfg != nil && agentCfg.Model != nil && agentCfg.Model.Fallbacks != nil {
+func resolveAgentFallbacks(
+	agentCfg *config.AgentConfig,
+	defaults *config.AgentDefaults,
+) []string {
+	if agentCfg != nil && agentCfg.Model != nil &&
+		agentCfg.Model.Fallbacks != nil {
 		return agentCfg.Model.Fallbacks
 	}
 	return defaults.ModelFallbacks
@@ -320,7 +383,9 @@ func compilePatterns(patterns []string) []*regexp.Regexp {
 	for _, p := range patterns {
 		re, err := regexp.Compile(p)
 		if err != nil {
-			fmt.Printf("Warning: invalid path pattern %q: %v\n", p, err)
+			fmt.Printf(
+				"Warning: invalid path pattern %q: %v\n",
+				p, err)
 			continue
 		}
 		compiled = append(compiled, re)
@@ -328,14 +393,17 @@ func compilePatterns(patterns []string) []*regexp.Regexp {
 	return compiled
 }
 
-func buildAllowReadPatterns(cfg *config.Config) []*regexp.Regexp {
+func buildAllowReadPatterns(
+	cfg *config.Config,
+) []*regexp.Regexp {
 	var configured []string
 	if cfg != nil {
 		configured = cfg.Tools.AllowReadPaths
 	}
 
 	compiled := compilePatterns(configured)
-	mediaDirPattern := regexp.MustCompile(mediaTempDirPattern())
+	mediaDirPattern := regexp.MustCompile(
+		mediaTempDirPattern())
 	for _, pattern := range compiled {
 		if pattern.String() == mediaDirPattern.String() {
 			return compiled
@@ -347,7 +415,10 @@ func buildAllowReadPatterns(cfg *config.Config) []*regexp.Regexp {
 
 func mediaTempDirPattern() string {
 	sep := regexp.QuoteMeta(string(os.PathSeparator))
-	return "^" + regexp.QuoteMeta(filepath.Clean(media.TempDir())) + "(?:" + sep + "|$)"
+	return "^" +
+		regexp.QuoteMeta(
+			filepath.Clean(media.TempDir())) +
+		"(?:" + sep + "|$)"
 }
 
 // Close releases resources held by the agent's session store.
@@ -358,31 +429,35 @@ func (a *AgentInstance) Close() error {
 	return nil
 }
 
-// initSessionStore creates the session persistence backend.
-// It uses the JSONL store by default and auto-migrates legacy JSON sessions.
-// Falls back to SessionManager if the JSONL store cannot be initialized or
-// if migration fails (which indicates the store cannot write reliably).
-func initSessionStore(dir string) session.SessionStore {
-	store, err := memory.NewJSONLStore(dir)
+// PIKA-V3: initSessionStore creates PikaSessionStore backed by
+// bot_memory.db. Replaces upstream JSONL + JSON session storage
+// with SQLite WAL backend via BotMemory.
+func initSessionStore(
+	cfg *config.Config,
+) session.SessionStore {
+	dbPath := cfg.Agents.Defaults.MemoryDBPath
+
+	// Migrate opens the DB, sets PRAGMAs, runs DDL.
+	db, err := pika.Migrate(dbPath)
 	if err != nil {
-		logger.WarnCF("agent", "Memory JSONL store init failed; falling back to json sessions",
+		logger.ErrorCF("agent",
+			"pika migration failed",
 			map[string]any{"error": err.Error()})
-		return session.NewSessionManager(dir)
+		panic(
+			"pika: migration failed: " + err.Error())
 	}
 
-	if n, merr := memory.MigrateFromJSON(context.Background(), dir, store); merr != nil {
-		// Migration failure means the store could not write data.
-		// Fall back to SessionManager to avoid a split state where
-		// some sessions are in JSONL and others remain in JSON.
-		logger.WarnCF("agent", "Memory migration failed; falling back to json sessions",
-			map[string]any{"error": merr.Error()})
-		store.Close()
-		return session.NewSessionManager(dir)
-	} else if n > 0 {
-		logger.InfoCF("agent", "Memory migrated to JSONL", map[string]any{"sessions_migrated": n})
+	mem, err := pika.NewBotMemory(db)
+	if err != nil {
+		db.Close()
+		logger.ErrorCF("agent",
+			"pika NewBotMemory failed",
+			map[string]any{"error": err.Error()})
+		panic(
+			"pika: NewBotMemory: " + err.Error())
 	}
 
-	return session.NewJSONLBackend(store)
+	return pika.NewPikaSessionStore(mem)
 }
 
 func expandHome(path string) string {
