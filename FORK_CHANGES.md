@@ -88,3 +88,18 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/memory/migration.go` — DELETED (dead code, no longer imported)
   - `pkg/memory/migration_test.go` — DELETED (dead code, no longer imported)
 - **Breaking:** `pkg/memory/` package removed entirely. `initSessionStore` signature changed from `(dir string)` to `(*config.Config)`. Session storage backend changed from JSONL/JSON files to SQLite WAL via bot_memory.db.
+
+### [2026-05-03] fix(pika): steering.go undefined + session_test.go pkg/memory — wave 1b-fix2
+
+- **ТЗ:** ТЗ-v2-1b-fix2: Migrate signature + проверка реальных типов
+- **PR:** #8 (updated)
+- **Files:**
+  - `pkg/session/metadata.go` — NEW: `MetadataAwareSessionStore` interface extending `SessionStore` with `GetSessionScope(sessionKey) *SessionScope` — fixes CI error `undefined: session.MetadataAwareSessionStore` in `pkg/agent/steering.go:396`
+  - `web/backend/api/session_test.go` — MODIFIED: removed `"github.com/sipeed/picoclaw/pkg/memory"` import (package deleted in wave 1b); replaced all `memory.NewJSONLStore(dir)` with local `testJSONLWriter` helper that writes JSONL + .meta.json files directly; replaced `memory.SessionMeta{...}` with local `sessionMeta{...}` (already defined in session.go); all 27 tests preserved with identical assertions
+- **Verified (no fix needed):**
+  - Баг 1 (Migrate signature): `instance.go` already uses correct `db, err := pika.Migrate(dbPath)` — no double `sql.Open`
+  - Баг 2a (tokenizer): `tokenizer.EstimateMessageTokens(msg)` exists and is used correctly in `session_store.go`
+  - Баг 2b (providers.Message fields): `ToolCalls []ToolCall` and `ToolCallID string` match exactly
+  - Баг 2c (SessionStore interface): PikaSessionStore satisfies all methods with compile-time check
+  - Задача 4 (jsonl_backend.go): already deleted, not present in `pkg/session/`
+- **Breaking:** None (additive interface + test fix only)
