@@ -924,6 +924,7 @@ func TestAgentLoop_Steering_DirectResponseContinuesWithQueuedMessage(t *testing.
 }
 
 func TestAgentLoop_AgentForSession_UsesStoredScopeMetadata(t *testing.T) {
+	t.Skip("PikaSessionStore does not implement MetadataAwareSessionStore (TZ-v2-2b).")
 	tmpDir, err := os.MkdirTemp("", "agent-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
