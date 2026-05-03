@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +11,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/isolation"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/memory"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/routing"
 	"github.com/sipeed/picoclaw/pkg/session"
@@ -358,31 +357,53 @@ func (a *AgentInstance) Close() error {
 	return nil
 }
 
-// initSessionStore creates the session persistence backend.
-// It uses the JSONL store by default and auto-migrates legacy JSON sessions.
-// Falls back to SessionManager if the JSONL store cannot be initialized or
-// if migration fails (which indicates the store cannot write reliably).
+// PIKA-V3: initSessionStore creates the session persistence backend
+// using PikaSessionStore backed by SQLite (bot_memory.db).
+// Falls back to in-memory SQLite if file-based init fails.
+// Panics only when in-memory fallback also fails (unrecoverable).
 func initSessionStore(dir string) session.SessionStore {
-	store, err := memory.NewJSONLStore(dir)
+	os.MkdirAll(dir, 0o755)
+	dbPath := filepath.Join(dir, "bot_memory.db")
+
+	db, err := pika.Migrate(dbPath)
 	if err != nil {
-		logger.WarnCF("agent", "Memory JSONL store init failed; falling back to json sessions",
+		logger.WarnCF("agent",
+			"Pika SQLite init failed; trying in-memory",
+			map[string]any{
+				"error": err.Error(),
+				"path":  dbPath,
+			})
+		db, err = pika.Migrate(":memory:")
+		if err != nil {
+			panic(fmt.Sprintf(
+				"pika: in-memory SQLite failed: %v", err,
+			))
+		}
+	}
+
+	mem, err := pika.NewBotMemory(db)
+	if err != nil {
+		logger.WarnCF("agent",
+			"BotMemory init failed; trying in-memory",
 			map[string]any{"error": err.Error()})
-		return session.NewSessionManager(dir)
+		db.Close()
+		db, dbErr := pika.Migrate(":memory:")
+		if dbErr != nil {
+			panic(fmt.Sprintf(
+				"pika: in-memory fallback failed: %v",
+				dbErr,
+			))
+		}
+		mem, err = pika.NewBotMemory(db)
+		if err != nil {
+			panic(fmt.Sprintf(
+				"pika: in-memory BotMemory failed: %v",
+				err,
+			))
+		}
 	}
 
-	if n, merr := memory.MigrateFromJSON(context.Background(), dir, store); merr != nil {
-		// Migration failure means the store could not write data.
-		// Fall back to SessionManager to avoid a split state where
-		// some sessions are in JSONL and others remain in JSON.
-		logger.WarnCF("agent", "Memory migration failed; falling back to json sessions",
-			map[string]any{"error": merr.Error()})
-		store.Close()
-		return session.NewSessionManager(dir)
-	} else if n > 0 {
-		logger.InfoCF("agent", "Memory migrated to JSONL", map[string]any{"sessions_migrated": n})
-	}
-
-	return session.NewJSONLBackend(store)
+	return pika.NewPikaSessionStore(mem)
 }
 
 func expandHome(path string) string {
