@@ -173,8 +173,7 @@ func (s *PikaSessionStore) GetHistory(
 				r.Metadata, &meta,
 			); jErr != nil {
 				log.Printf(
-					"pika/session_store: "+
-						"unmarshal metadata id=%d: %v",
+					"pika/session_store: unmarshal metadata id=%d: %v",
 					r.ID, jErr,
 				)
 			} else {
