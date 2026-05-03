@@ -1,5 +1,5 @@
-// PIKA-V3: session_store.go — PikaSessionStore implements session.SessionStore
-// with SQLite backend via BotMemory. All persistence through BotMemory methods.
+// PIKA-V3: PikaSessionStore implements session.SessionStore via BotMemory.
+
 package pika
 
 import (
@@ -13,7 +13,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/tokenizer"
 )
 
-// PIKA-V3: compile-time interface check
+// compile-time interface check
 var _ session.SessionStore = (*PikaSessionStore)(nil)
 
 // PikaSessionStore implements session.SessionStore using BotMemory
