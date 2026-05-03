@@ -296,9 +296,11 @@ func TestHandleGetSession_HidesHandledToolAttachmentsBackedByMediaRefs(t *testin
 	for _, msg := range []providers.Message{
 		{Role: "user", Content: "send me the report"},
 		{
-			Role:        "assistant",
-			Content:     handledToolResponseSummaryText,
-			Attachments: []providers.AttachmentRef: "media://temp/report.txt",
+			Role:    "assistant",
+			Content: handledToolResponseSummaryText,
+			Attachments: []providers.Attachment{
+				{Ref: "media://temp/report.txt"},
+			},
 		},
 	} {
 		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
@@ -346,12 +348,14 @@ func TestHandleGetSession_ExposesHandledToolAttachmentsWithDurableURL(t *testing
 		{
 			Role:    "assistant",
 			Content: handledToolResponseSummaryText,
-			Attachments: []providers.Attachment
-				Type:        "file",
-				URL:         "https://example.com/report.txt",
-				Filename:    "report.txt",
-				ContentType: "text/plain",
-			,
+			Attachments: []providers.Attachment{
+				{
+					Type:        "file",
+					URL:         "https://example.com/report.txt",
+					Filename:    "report.txt",
+					ContentType: "text/plain",
+				},
+			},
 		},
 	} {
 		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
@@ -586,28 +590,32 @@ func TestHandleGetSession_ReconstructsRefreshMatrixForThoughtAndToolSummary(t *t
 		{
 			Role:             "assistant",
 			ReasoningContent: "tool thought",
-			ToolCalls: []providers.ToolCall{{
-				ID:   "call_read_file",
-				Type: "function",
-				Function: &providers.FunctionCall{
-					Name:      "read_file",
-					Arguments: `{"path":"README.md"}`,
+			ToolCalls: []providers.ToolCall{
+				{
+					ID:   "call_read_file",
+					Type: "function",
+					Function: &providers.FunctionCall{
+						Name:      "read_file",
+						Arguments: `{"path":"README.md"}`,
+					},
 				},
-			}},
+			},
 		},
 		{Role: "tool", ToolCallID: "call_read_file", Content: "file result"},
 		{Role: "user", Content: "turn3"},
 		{
 			Role:    "assistant",
 			Content: "tool visible only",
-			ToolCalls: []providers.ToolCall{{
-				ID:   "call_list_dir",
-				Type: "function",
-				Function: &providers.FunctionCall{
-					Name:      "list_dir",
-					Arguments: `{"path":"."}`,
+			ToolCalls: []providers.ToolCall{
+				{
+					ID:   "call_list_dir",
+					Type: "function",
+					Function: &providers.FunctionCall{
+						Name:      "list_dir",
+						Arguments: `{"path":"."}`,
+					},
 				},
-			}},
+			},
 		},
 		{Role: "tool", ToolCallID: "call_list_dir", Content: "dir result"},
 		{Role: "user", Content: "turn4"},
@@ -615,14 +623,16 @@ func TestHandleGetSession_ReconstructsRefreshMatrixForThoughtAndToolSummary(t *t
 			Role:             "assistant",
 			Content:          "tool visible and thought",
 			ReasoningContent: "tool mixed thought",
-			ToolCalls: []providers.ToolCall{{
-				ID:   "call_exec",
-				Type: "function",
-				Function: &providers.FunctionCall{
-					Name:      "exec",
-					Arguments: `{"command":"pwd"}`,
+			ToolCalls: []providers.ToolCall{
+				{
+					ID:   "call_exec",
+					Type: "function",
+					Function: &providers.FunctionCall{
+						Name:      "exec",
+						Arguments: `{"command":"pwd"}`,
+					},
 				},
-			}},
+			},
 		},
 		{Role: "tool", ToolCallID: "call_exec", Content: "pwd result"},
 	} {
@@ -1122,12 +1132,14 @@ func TestHandleGetSession_PreservesAttachmentsWhenAssistantToolCallContentDuplic
 		{
 			Role:    "assistant",
 			Content: "Reviewing the generated report.",
-			Attachments: []providers.Attachment
-				Type:        "file",
-				URL:         "https://example.com/report.txt",
-				Filename:    "report.txt",
-				ContentType: "text/plain",
-			,
+			Attachments: []providers.Attachment{
+				{
+					Type:        "file",
+					URL:         "https://example.com/report.txt",
+					Filename:    "report.txt",
+					ContentType: "text/plain",
+				},
+			},
 			ToolCalls: []providers.ToolCall{
 				{
 					ID:   "call_1",
@@ -1214,17 +1226,19 @@ func TestHandleGetSession_UsesConfiguredToolFeedbackMaxArgsLength(t *testing.T) 
 	}
 	err = writer.AddFullMessage(sessionKey, providers.Message{
 		Role: "assistant",
-		ToolCalls: []providers.ToolCall{{
-			ID:   "call_1",
-			Type: "function",
-			Function: &providers.FunctionCall{
-				Name:      "read_file",
-				Arguments: argsJSON,
+		ToolCalls: []providers.ToolCall{
+			{
+				ID:   "call_1",
+				Type: "function",
+				Function: &providers.FunctionCall{
+					Name:      "read_file",
+					Arguments: argsJSON,
+				},
+				ExtraContent: &providers.ExtraContent{
+					ToolFeedbackExplanation: explanation,
+				},
 			},
-			ExtraContent: &providers.ExtraContent{
-				ToolFeedbackExplanation: explanation,
-			},
-		}},
+		},
 	})
 	if err != nil {
 		t.Fatalf("AddFullMessage(assistant) error = %v", err)
@@ -1292,14 +1306,16 @@ func TestHandleGetSession_FallsBackToLegacyToolArgumentsWhenExplanationMissing(t
 	}
 	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role: "assistant",
-		ToolCalls: []providers.ToolCall{{
-			ID:   "call_1",
-			Type: "function",
-			Function: &providers.FunctionCall{
-				Name:      "read_file",
-				Arguments: argsJSON,
+		ToolCalls: []providers.ToolCall{
+			{
+				ID:   "call_1",
+				Type: "function",
+				Function: &providers.FunctionCall{
+					Name:      "read_file",
+					Arguments: argsJSON,
+				},
 			},
-		}},
+		},
 	}); err != nil {
 		t.Fatalf("AddFullMessage(assistant) error = %v", err)
 	}
