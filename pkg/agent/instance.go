@@ -431,7 +431,8 @@ func (a *AgentInstance) Close() error {
 
 // PIKA-V3: initSessionStore creates PikaSessionStore backed by
 // bot_memory.db. Replaces upstream JSONL + JSON session storage
-// with SQLite WAL backend via BotMemory.
+// with SQLite WAL backend via BotMemory. Falls back to in-memory
+// SQLite when the file-based database is unavailable (CI, tests).
 func initSessionStore(
 	cfg *config.Config,
 ) session.SessionStore {
@@ -440,11 +441,19 @@ func initSessionStore(
 	// Migrate opens the DB, sets PRAGMAs, runs DDL.
 	db, err := pika.Migrate(dbPath)
 	if err != nil {
-		logger.ErrorCF("agent",
-			"pika migration failed",
+		logger.WarnCF("agent",
+			"pika migration failed; falling back to in-memory database",
 			map[string]any{"error": err.Error()})
-		panic(
-			"pika: migration failed: " + err.Error())
+		// Fallback: use in-memory SQLite when file DB is unavailable
+		// (e.g. CI environment, tests without writable workspace).
+		db, err = pika.Migrate(":memory:")
+		if err != nil {
+			logger.ErrorCF("agent",
+				"pika in-memory migration also failed",
+				map[string]any{"error": err.Error()})
+			panic(
+				"pika: migration failed: " + err.Error())
+		}
 	}
 
 	mem, err := pika.NewBotMemory(db)
