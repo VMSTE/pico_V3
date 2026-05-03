@@ -8,7 +8,6 @@ import (
 	"log"
 	"sync"
 
-
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/session"
 	"github.com/sipeed/picoclaw/pkg/tokenizer"
