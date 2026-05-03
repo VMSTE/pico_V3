@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/memory"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/providers/messageutil"
 	"github.com/sipeed/picoclaw/pkg/session"
@@ -25,6 +24,21 @@ func (h *Handler) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", h.handleListSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", h.handleGetSession)
 	mux.HandleFunc("DELETE /api/sessions/{id}", h.handleDeleteSession)
+}
+
+// jsonlSessionMeta mirrors the on-disk .meta.json structure written by
+// the legacy JSONL store (formerly pkg/memory). Used for reading existing
+// session metadata files from the web API.
+// PIKA-V3: replaces memory.SessionMeta after pkg/memory removal.
+type jsonlSessionMeta struct {
+	Key       string          `json:"key"`
+	Count     int             `json:"count"`
+	Skip      int             `json:"skip"`
+	Summary   string          `json:"summary,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
+	Scope     json.RawMessage `json:"scope,omitempty"`
+	Aliases   []string        `json:"aliases,omitempty"`
 }
 
 // sessionFile mirrors the on-disk session JSON structure from pkg/session.
@@ -68,8 +82,8 @@ const (
 	legacyPicoSessionPrefix = "agent:main:pico:direct:pico:"
 	picoSessionPrefix       = legacyPicoSessionPrefix
 
-	// Keep the session API aligned with the shared JSONL store reader limit in
-	// pkg/memory/jsonl.go so oversized lines fail consistently everywhere.
+	// Keep the session API aligned with the shared JSONL store reader limit
+	// so oversized lines fail consistently everywhere.
 	maxSessionJSONLLineSize = 10 * 1024 * 1024
 	maxSessionTitleRunes    = 60
 
@@ -110,18 +124,20 @@ func (h *Handler) readLegacySession(path string) (sessionFile, error) {
 	return sess, nil
 }
 
-func (h *Handler) readSessionMeta(path, sessionKey string) (memory.SessionMeta, error) {
+func (h *Handler) readSessionMeta(
+	path, sessionKey string,
+) (jsonlSessionMeta, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return memory.SessionMeta{Key: sessionKey}, nil
+		return jsonlSessionMeta{Key: sessionKey}, nil
 	}
 	if err != nil {
-		return memory.SessionMeta{}, err
+		return jsonlSessionMeta{}, err
 	}
 
-	var meta memory.SessionMeta
+	var meta jsonlSessionMeta
 	if err := json.Unmarshal(data, &meta); err != nil {
-		return memory.SessionMeta{}, err
+		return jsonlSessionMeta{}, err
 	}
 	if meta.Key == "" {
 		meta.Key = sessionKey
@@ -237,7 +253,9 @@ func extractPicoSessionIDFromScope(scope session.SessionScope) (string, bool) {
 	return "", false
 }
 
-func sessionRefFromMeta(meta memory.SessionMeta) (picoJSONLSessionRef, bool) {
+func sessionRefFromMeta(
+	meta jsonlSessionMeta,
+) (picoJSONLSessionRef, bool) {
 	if len(meta.Scope) == 0 {
 		if sessionID, ok := extractLegacyPicoSessionID(meta.Key); ok {
 			return picoJSONLSessionRef{ID: sessionID, Key: meta.Key}, true
