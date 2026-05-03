@@ -1,4 +1,5 @@
-// PIKA-V3: session_store_test.go — tests for PikaSessionStore
+// PIKA-V3: Tests for PikaSessionStore.
+
 package pika
 
 import (
