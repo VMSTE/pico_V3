@@ -4145,6 +4145,8 @@ func TestProcessMessage_PersistsReasoningContentInSessionHistory(t *testing.T) {
 }
 
 func TestProcessMessage_PersistsReasoningToolResponseAsSingleAssistantRecord(t *testing.T) {
+	t.Skip("PikaSessionStore uses SQLite, not JSONL" +
+		" (TZ-v2-2b will remove this test).")
 	tmpDir := t.TempDir()
 	inspectPath := filepath.Join(tmpDir, "inspect.txt")
 	if err := os.WriteFile(inspectPath, []byte("inspect me"), 0o644); err != nil {

@@ -54,7 +54,7 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ---
 
-## Wave 1: CRUD Layer (botmemory)
+## Wave 1: CRUD Layer (botmemory + session store)
 
 ### [2026-05-02] feat(pika): botmemory.go — CRUD layer for bot_memory.db — wave 1a
 
@@ -73,3 +73,31 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/botmemory.go` — MODIFIED: Bug 2: UpsertPromptVersion — column `body` → proper DDL columns (prompt_id, component, version, hash, content, change_description), new signature returns (string, error); Bug 3: InsertPromptSnapshot — removed non-existent columns `component`, `prompt_hash`, now uses full DDL columns (snapshot_id, trace_id, session_id, turn_id, core/context/brief/trail/plan tokens, full_prompt_hash, etc.); Bug 4: InsertAtomUsage — removed non-existent columns `component`, `included`, now uses DDL columns (atom_id, trace_id, turn_id, used_in, position_in_prompt, prompt_tokens, invoked_tool_after/result, archivarius_span_id); Bug 5: ArchiveAndDeleteTurns — removed `msg_index` from messages_archive INSERT (column not in DDL); added `strconv` import
   - `pkg/pika/botmemory_test.go` — MODIFIED: Bug 1: setupTestDB and TestInsertSpanAndRecover — Migrate returns (*sql.DB, error), removed redundant sql.Open; setupTestDB now returns *BotMemory (not *sql.DB, *BotMemory); TestPromptVersionsAndSnapshots updated for new UpsertPromptVersion/InsertPromptSnapshot signatures; TestAtomUsage updated for new InsertAtomUsage signature with FK-valid atoms
 - **Breaking:** Signature changes: UpsertPromptVersion, InsertPromptSnapshot, InsertAtomUsage (no external consumers yet)
+
+### [2026-05-03] feat(pika): PikaSessionStore — session.SessionStore via BotMemory — wave 1b Phase 1
+
+- **ТЗ:** ТЗ-v2-1b-v2-A: session_store.go — создание (фаза 1 из 2)
+- **PR:** #8 (pending)
+- **Files:**
+  - `pkg/pika/session_store.go` — NEW: `PikaSessionStore` struct implementing `session.SessionStore` interface via BotMemory; compile-time check `var _ session.SessionStore = (*PikaSessionStore)(nil)`; `NewPikaSessionStore(mem)` constructor; `messageMetadata` type for JSON serialization of all non-column Message fields (Media, Attachments, ReasoningContent, SystemParts, ToolCalls, ToolCallID); `buildMetadata()` helper; `currentTurnID()` with DB recovery; `addFullMessageLocked()` internal; `AddFullMessage()`, `AddMessage()` delegator; `GetHistory()` with full metadata deserialization; `GetSummary()`/`SetSummary()` in-memory cache; `SetHistory()` delete+re-insert; `TruncateHistory()` no-op (session rotation); `Save()` no-op (WAL); `ListSessions()` via `GetDistinctSessionIDs`; `Close()` no-op; token estimation via `tokenizer.EstimateMessageTokens`
+  - `pkg/pika/session_store_test.go` — NEW: 8 tests (AddAndGetHistory with ToolCalls/ToolCallID round-trip, AttachmentsRoundTrip, TurnIDIncrement user→1/assistant→1/user→2, TurnIDRecovery from DB after restart, EmptySession returns non-nil empty slice, GetSetSummary, SetHistory delete+replace, ListSessions across 2 sessions)
+- **Breaking:** None (new files, additive only). Phase 2 (ТЗ-B) will wire into instance.go.
+
+### [2026-05-03] feat(pika): migration — switch to PikaSessionStore + delete pkg/memory — wave 1b Phase 2
+
+- **ТЗ:** ТЗ-v2-1b-v2-B: миграция — удаление pkg/memory + патчи (фаза 2 из 2)
+- **PR:** #8 (pending)
+- **Files:**
+  - `pkg/agent/instance.go` — MODIFIED: `initSessionStore()` rewritten — now calls `pika.Migrate(dbPath)` → `pika.NewBotMemory(db)` → `pika.NewPikaSessionStore(mem)`; in-memory fallback on file-based init failure; removed imports `context`, `pkg/memory`; added import `pkg/pika`
+  - `pkg/session/metadata.go` — NEW: extracted `MetadataAwareSessionStore` interface from deleted `jsonl_backend.go` (EnsureSessionMetadata, ResolveSessionKey, GetSessionScope)
+  - `web/backend/api/session.go` — MODIFIED: replaced `memory.SessionMeta` with local `jsonlSessionMeta` type; removed import `pkg/memory`
+  - `web/backend/api/test_jsonl_helper_test.go` — NEW: `testJSONLWriter` minimal JSONL fixture writer for tests (replaces `memory.NewJSONLStore` in tests)
+  - `web/backend/api/session_test.go` — MODIFIED: replaced all `memory.NewJSONLStore` → `newTestJSONLWriter`; replaced `memory.SessionMeta` → `jsonlSessionMeta`; removed import `pkg/memory`
+  - `pkg/session/jsonl_backend.go` — DELETED: replaced by PikaSessionStore
+  - `pkg/session/jsonl_backend_test.go` — DELETED: tests no longer applicable
+  - `pkg/memory/store.go` — DELETED: Store interface replaced by BotMemory
+  - `pkg/memory/jsonl.go` — DELETED: JSONL store replaced by SQLite via BotMemory
+  - `pkg/memory/jsonl_test.go` — DELETED: tests no longer applicable
+  - `pkg/memory/migration.go` — DELETED: JSON→JSONL migration no longer needed
+  - `pkg/memory/migration_test.go` — DELETED: tests no longer applicable
+- **Breaking:** `pkg/memory` package removed entirely. `pkg/session/jsonl_backend.go` removed. All session persistence now via PikaSessionStore (SQLite bot_memory.db). `MetadataAwareSessionStore` interface moved to `pkg/session/metadata.go`. PikaSessionStore does NOT implement MetadataAwareSessionStore (steering.go uses type assertion — graceful degradation).

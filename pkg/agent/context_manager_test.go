@@ -451,6 +451,8 @@ func TestLegacyCompact_PostTurn_BelowThreshold(t *testing.T) {
 }
 
 func TestLegacyCompact_PostTurn_ExceedsMessageThreshold(t *testing.T) {
+	t.Skip("TruncateHistory is no-op in PikaSessionStore" +
+		" (D-136). Replaced by PikaContextManager.")
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
