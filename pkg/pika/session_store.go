@@ -1,5 +1,6 @@
 // PIKA-V3: session_store.go — PikaSessionStore implements
 // session.SessionStore with bot_memory.db (SQLite WAL) backend.
+
 package pika
 
 import (
@@ -14,8 +15,10 @@ import (
 )
 
 // PIKA-V3: compile-time checks
-var _ session.SessionStore = (*PikaSessionStore)(nil)
-var _ session.MetadataAwareSessionStore = (*PikaSessionStore)(nil)
+var (
+	_ session.SessionStore              = (*PikaSessionStore)(nil)
+	_ session.MetadataAwareSessionStore = (*PikaSessionStore)(nil)
+)
 
 // PikaSessionStore implements session.SessionStore with
 // bot_memory.db backend. All persistence goes through BotMemory.
@@ -59,7 +62,7 @@ type msgMetadata struct {
 	ToolCallID string               `json:"tool_call_id,omitempty"`
 }
 
-// PIKA-V3: AddFullMessage persists a message to bot_memory.db.
+// AddFullMessage persists a message to bot_memory.db.
 // turn_id: user → increment, others → same turn.
 // tokens: estimated via tokenizer.EstimateMessageTokens.
 // metadata: serialized from msg.ToolCalls / msg.ToolCallID.
@@ -146,7 +149,7 @@ func (s *PikaSessionStore) AddMessage(
 	})
 }
 
-// PIKA-V3: GetHistory returns all messages for session from
+// GetHistory returns all messages for session from
 // bot_memory.db. Deserializes metadata back into
 // providers.Message fields (ToolCalls, ToolCallID).
 func (s *PikaSessionStore) GetHistory(
@@ -204,7 +207,7 @@ func (s *PikaSessionStore) SetSummary(
 	s.mu.Unlock()
 }
 
-// PIKA-V3: SetHistory replaces all messages for session.
+// SetHistory replaces all messages for session.
 // Deletes existing, resets turn counter, re-inserts.
 func (s *PikaSessionStore) SetHistory(
 	key string, history []providers.Message,
@@ -257,8 +260,8 @@ func (s *PikaSessionStore) Close() error {
 	return nil
 }
 
-// PIKA-V3: fix3 — GetSessionScope returns the stored session
-// scope for the given key, or nil if not found. Satisfies the
+// GetSessionScope returns the stored session scope for the
+// given key, or nil if not found. Satisfies the
 // MetadataAwareSessionStore interface.
 func (s *PikaSessionStore) GetSessionScope(
 	sessionKey string,
@@ -268,9 +271,9 @@ func (s *PikaSessionStore) GetSessionScope(
 	return s.scopes[sessionKey]
 }
 
-// PIKA-V3: fix3 — EnsureSessionMetadata stores session scope
-// metadata and associated aliases for the given session key.
-// Satisfies the MetadataAwareSessionStore interface.
+// EnsureSessionMetadata stores session scope metadata and
+// associated aliases for the given session key. Satisfies the
+// MetadataAwareSessionStore interface.
 func (s *PikaSessionStore) EnsureSessionMetadata(
 	sessionKey string,
 	scope *session.SessionScope,
