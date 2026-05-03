@@ -39,12 +39,12 @@ func NewPikaSessionStore(mem *BotMemory) *PikaSessionStore {
 // columns (role, content, tokens). Serialized as JSON into the
 // metadata column. On read, fields are restored into Message.
 type messageMetadata struct {
-	Media            []string                `json:"media,omitempty"`
-	Attachments      []providers.Attachment  `json:"attachments,omitempty"`
-	ReasoningContent string                  `json:"reasoning_content,omitempty"`
+	Media            []string                 `json:"media,omitempty"`
+	Attachments      []providers.Attachment   `json:"attachments,omitempty"`
+	ReasoningContent string                   `json:"reasoning_content,omitempty"`
 	SystemParts      []providers.ContentBlock `json:"system_parts,omitempty"`
-	ToolCalls        []providers.ToolCall    `json:"tool_calls,omitempty"`
-	ToolCallID       string                  `json:"tool_call_id,omitempty"`
+	ToolCalls        []providers.ToolCall     `json:"tool_calls,omitempty"`
+	ToolCallID       string                   `json:"tool_call_id,omitempty"`
 }
 
 func buildMetadata(msg providers.Message) json.RawMessage {
