@@ -62,7 +62,7 @@ Each entry maps to a single wave/phase and its merged PR.
 - **PR:** #7
 - **Files:**
   - `pkg/pika/botmemory.go` — NEW: `BotMemory` struct (sole SQL access layer for bot_memory.db); zstd Encoder/Decoder; `NewBotMemory(db)` constructor with crash-recovery (`recoverStaleSpans`); `Close()`; all row types (MessageRow, EventRow, KnowledgeAtomRow, RegistryRow, RequestLogRow, ReasoningLogRow, TraceSpanRow, EventArchiveRow); Messages CRUD (SaveMessage, GetMessages, GetDistinctSessionIDs, SumTokensBySession, GetOldestTurnIDs, CountMessagesBySession, GetMaxTurnID, DeleteAllMessages); Events (SaveEvent, GetEventsByTurns); Knowledge Atoms (InsertAtom, QueryKnowledgeFTS, UpdateAtomConfidence, GetMaxAtomN with category→prefix map); Registry (UpsertRegistry INSERT OR IGNORE + UPDATE, GetRegistry, SearchRegistry, UpdateRegistryLastUsed); Request/Reasoning Log (InsertRequestLog, InsertReasoningLog, GetReasoningByTurns); Trace Spans (InsertSpan, CompleteSpan, recoverStaleSpans); `ArchiveAndDeleteTurns` transactional archiver (messages→messages_archive with zstd blob, events→events_archive with zstd blob, reasoning_log→reasoning_log_archive with zstd blob, then DELETE hot); Archive Read (ReadArchivedMessage with decompress, SearchEventsArchiveFTS); Prompt Versions (UpsertPromptVersion, InsertPromptSnapshot); Atom Usage (InsertAtomUsage)
-  - `pkg/pika/botmemory_test.go` — NEW: 14 tests (SaveAndGetMessages, SumTokensAndCount, GetMaxTurnID, GetOldestTurnIDs, SaveAndGetEvents, UpsertRegistry, SearchRegistry, InsertSpanAndRecover/crash_recovery, InsertAndCompleteSpan, ArchiveAndDeleteTurns, ArchiveTransactionRollback PK conflict, PromptVersionsAndSnapshots, AtomUsage, GetMaxAtomN, UpdateAtomConfidence)
+  - `pkg/pika/botmemory_test.go` — NEW: 17 tests (SaveAndGetMessages, SumTokensAndCount, GetMaxTurnID, GetOldestTurnIDs, SaveAndGetEvents, UpsertRegistry, SearchRegistry, InsertSpanAndRecover/crash_recovery, InsertAndCompleteSpan, ArchiveAndDeleteTurns, ArchiveTransactionRollback PK conflict, PromptVersionsAndSnapshots, AtomUsage, GetMaxAtomN, UpdateAtomConfidence, InsertAndQueryKnowledgeFTS, InsertRequestLog)
 - **Breaking:** None (new file, additive only)
 
 ### [2026-05-02] fix(pika): botmemory.go — 5 SQL bugs vs DDL — wave 1a-fix
@@ -101,3 +101,20 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/memory/migration.go` — DELETED: JSON→JSONL migration no longer needed
   - `pkg/memory/migration_test.go` — DELETED: tests no longer applicable
 - **Breaking:** `pkg/memory` package removed entirely. `pkg/session/jsonl_backend.go` removed. All session persistence now via PikaSessionStore (SQLite bot_memory.db). `MetadataAwareSessionStore` interface moved to `pkg/session/metadata.go`. PikaSessionStore does NOT implement MetadataAwareSessionStore (steering.go uses type assertion — graceful degradation).
+
+### [2026-05-03] test: skip 3 legacy tests — transitional (D-136)
+
+- **ТЗ:** ТЗ-v2-1b-v2-B-fix4, fix5, fix6
+- **PR:** #8 (updated) / #9
+- **Files:**
+  - `pkg/agent/context_manager_test.go` — MODIFIED: t.Skip on
+    `TestLegacyCompact_PostTurn_ExceedsMessageThreshold`
+    (TruncateHistory is no-op in PikaSessionStore by design, D-136)
+  - `pkg/agent/agent_test.go` — MODIFIED: t.Skip on
+    `TestProcessMessage_PersistsReasoningToolResponseAsSingleAssistantRecord`
+    (expects JSONL file, PikaSessionStore uses SQLite)
+  - `pkg/agent/steering_test.go` — MODIFIED: t.Skip on
+    `TestAgentLoop_Run_AutoContinuesLateSteeringMessage`
+    (session persistence changed to SQLite)
+- **Breaking:** None (tests skipped, not removed). Will be removed
+  in ТЗ-v2-2b (PikaContextManager replaces context_legacy.go).
