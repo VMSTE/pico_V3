@@ -1,16 +1,16 @@
-// PIKA-V3: metadata.go — MetadataAwareSessionStore interface
-// for session scope retrieval by upstream steering.go.
 package session
 
-// MetadataAwareSessionStore extends SessionStore with session
-// scope metadata access. Used by pkg/agent/steering.go to
-// retrieve SessionScope for the Continue flow.
-//
-// Implementations that do not track scope metadata can return
-// nil from GetSessionScope — callers handle nil gracefully.
+// MetadataAwareSessionStore extends SessionStore with structured
+// session scope metadata. Implementations can associate each session
+// key with routing information (agent, channel, peer dimensions)
+// so that components like steering and session allocation can resolve
+// sessions to agents without relying on legacy key parsing.
 type MetadataAwareSessionStore interface {
 	SessionStore
-	// GetSessionScope returns the scope for a session key,
-	// or nil if no scope metadata is tracked.
 	GetSessionScope(sessionKey string) *SessionScope
+	// EnsureSessionMetadata stores or updates session scope metadata
+	// and associated aliases for the given session key. If the session
+	// already has metadata, it is overwritten with the provided scope
+	// and aliases.
+	EnsureSessionMetadata(sessionKey string, scope *SessionScope, aliases []string)
 }
