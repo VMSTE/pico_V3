@@ -103,3 +103,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - Баг 2c (SessionStore interface): PikaSessionStore satisfies all methods with compile-time check
   - Задача 4 (jsonl_backend.go): already deleted, not present in `pkg/session/`
 - **Breaking:** None (additive interface + test fix only)
+
+### [2026-05-03] fix(pika): CI green — session_test.go + steering_test.go — wave 1b-fix3
+
+- **ТЗ:** ТЗ-v2-1b-fix3: CI green — session_test.go + steering_test.go
+- **PR:** #8 (updated)
+- **Files:**
+  - `web/backend/api/session_test.go` — MODIFIED: Bug A — fixed 2 broken `[]providers.Attachment` composite literals at lines ~598 and ~1725 (missing `{…}` around slice literal and inner struct literal, causing 12 cascading typecheck errors). Both now use `[]providers.Attachment{ { Type: "file", … }, }`
+  - `pkg/session/metadata.go` — MODIFIED: Bug B — added `EnsureSessionMetadata(sessionKey string, scope *SessionScope, aliases []string)` method to `MetadataAwareSessionStore` interface — fixes `steering_test.go:969` `metaStore.EnsureSessionMetadata undefined`
+  - `pkg/pika/session_store.go` — MODIFIED: Bug B implementation — `PikaSessionStore` now satisfies `session.MetadataAwareSessionStore`: added `scopes map[string]*session.SessionScope` field, initialized in `NewPikaSessionStore`; added `GetSessionScope(sessionKey) *session.SessionScope` method; added `EnsureSessionMetadata(sessionKey, scope, aliases)` method; added compile-time check `var _ session.MetadataAwareSessionStore = (*PikaSessionStore)(nil)`
+- **Breaking:** None (interface extension + implementation, all existing consumers satisfied)
