@@ -74,42 +74,11 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/botmemory_test.go` — MODIFIED: Bug 1: setupTestDB and TestInsertSpanAndRecover — Migrate returns (*sql.DB, error), removed redundant sql.Open; setupTestDB now returns *BotMemory (not *sql.DB, *BotMemory); TestPromptVersionsAndSnapshots updated for new UpsertPromptVersion/InsertPromptSnapshot signatures; TestAtomUsage updated for new InsertAtomUsage signature with FK-valid atoms
 - **Breaking:** Signature changes: UpsertPromptVersion, InsertPromptSnapshot, InsertAtomUsage (no external consumers yet)
 
-### [2026-05-03] feat(pika): session_store.go — PikaSessionStore — wave 1b
-
-- **ТЗ:** ТЗ-v2-1b: session_store.go — PikaSessionStore
-- **PR:** #8
-- **Files:**
-  - `pkg/pika/session_store.go` — NEW: `PikaSessionStore` struct implementing `session.SessionStore` interface with SQLite WAL backend via BotMemory; compile-time interface check `var _ session.SessionStore = (*PikaSessionStore)(nil)`; per-session turn_id counter with mutex + DB recovery via `GetMaxTurnID`; `AddFullMessage` — persists messages through BotMemory with turn_id management (user→increment, other→same turn), token estimation via `tokenizer.EstimateMessageTokens`, metadata serialization (tool_calls, tool_call_id); `AddMessage` — convenience wrapper; `GetHistory` — retrieves messages from BotMemory with metadata deserialization back to `providers.Message` fields; `ListSessions` — delegates to `BotMemory.GetDistinctSessionIDs`; `SetHistory` — delete-all + re-insert (legacy compat); `GetSummary`/`SetSummary` — in-memory cache (transitional for legacy ContextManager); `TruncateHistory` — no-op (session rotation replaces truncation); `Save` — no-op (SQLite WAL = immediate persistence); `Close` — no-op (BotMemory manages db lifecycle)
-  - `pkg/pika/session_store_test.go` — NEW: 8 tests (AddFullMessage_and_GetHistory, AddMessage_convenience, TurnID_management user/assistant grouping, Metadata_tool_calls round-trip, Metadata_tool_call_id round-trip, SetHistory_replaces, ListSessions, Summary_cache)
-  - `pkg/agent/instance.go` — MODIFIED: removed `"context"` import; replaced `"github.com/sipeed/picoclaw/pkg/memory"` with `"github.com/sipeed/picoclaw/pkg/pika"`; removed `sessionsDir` variable; `initSessionStore` now takes `*config.Config` (was `dir string`), uses `pika.Migrate(cfg.Agents.Defaults.MemoryDBPath)` → `pika.NewBotMemory(db)` → `pika.NewPikaSessionStore(mem)`; panics on init errors with `logger.ErrorCF` logging
-  - `pkg/memory/store.go` — DELETED (dead code, no longer imported)
-  - `pkg/memory/jsonl.go` — DELETED (dead code, no longer imported)
-  - `pkg/memory/jsonl_test.go` — DELETED (dead code, no longer imported)
-  - `pkg/memory/migration.go` — DELETED (dead code, no longer imported)
-  - `pkg/memory/migration_test.go` — DELETED (dead code, no longer imported)
-- **Breaking:** `pkg/memory/` package removed entirely. `initSessionStore` signature changed from `(dir string)` to `(*config.Config)`. Session storage backend changed from JSONL/JSON files to SQLite WAL via bot_memory.db.
-
-### [2026-05-03] fix(pika): steering.go undefined + session_test.go pkg/memory — wave 1b-fix2
-
-- **ТЗ:** ТЗ-v2-1b-fix2: Migrate signature + проверка реальных типов
-- **PR:** #8 (updated)
-- **Files:**
-  - `pkg/session/metadata.go` — NEW: `MetadataAwareSessionStore` interface extending `SessionStore` with `GetSessionScope(sessionKey) *SessionScope` — fixes CI error `undefined: session.MetadataAwareSessionStore` in `pkg/agent/steering.go:396`
-  - `web/backend/api/session_test.go` — MODIFIED: removed `"github.com/sipeed/picoclaw/pkg/memory"` import (package deleted in wave 1b); replaced all `memory.NewJSONLStore(dir)` with local `testJSONLWriter` helper that writes JSONL + .meta.json files directly; replaced `memory.SessionMeta{...}` with local `sessionMeta{...}` (already defined in session.go); all 27 tests preserved with identical assertions
-- **Verified (no fix needed):**
-  - Баг 1 (Migrate signature): `instance.go` already uses correct `db, err := pika.Migrate(dbPath)` — no double `sql.Open`
-  - Баг 2a (tokenizer): `tokenizer.EstimateMessageTokens(msg)` exists and is used correctly in `session_store.go`
-  - Баг 2b (providers.Message fields): `ToolCalls []ToolCall` and `ToolCallID string` match exactly
-  - Баг 2c (SessionStore interface): PikaSessionStore satisfies all methods with compile-time check
-  - Задача 4 (jsonl_backend.go): already deleted, not present in `pkg/session/`
-- **Breaking:** None (additive interface + test fix only)
-
-### [2026-05-03] fix(pika): CI green — session_test.go + steering_test.go — wave 1b-fix3
+### [2026-05-03] fix(api): session_test.go syntax errors — ТЗ-v2-1b-fix3
 
 - **ТЗ:** ТЗ-v2-1b-fix3: CI green — session_test.go + steering_test.go
-- **PR:** #8 (updated)
+- **Branch:** feat/v2-1b-session-store
 - **Files:**
-  - `web/backend/api/session_test.go` — MODIFIED: Bug A — fixed 2 broken `[]providers.Attachment` composite literals at lines ~598 and ~1725 (missing `{…}` around slice literal and inner struct literal, causing 12 cascading typecheck errors). Both now use `[]providers.Attachment{ { Type: "file", … }, }`
-  - `pkg/session/metadata.go` — MODIFIED: Bug B — added `EnsureSessionMetadata(sessionKey string, scope *SessionScope, aliases []string)` method to `MetadataAwareSessionStore` interface — fixes `steering_test.go:969` `metaStore.EnsureSessionMetadata undefined`
-  - `pkg/pika/session_store.go` — MODIFIED: Bug B implementation — `PikaSessionStore` now satisfies `session.MetadataAwareSessionStore`: added `scopes map[string]*session.SessionScope` field, initialized in `NewPikaSessionStore`; added `GetSessionScope(sessionKey) *session.SessionScope` method; added `EnsureSessionMetadata(sessionKey, scope, aliases)` method; added compile-time check `var _ session.MetadataAwareSessionStore = (*PikaSessionStore)(nil)`
-- **Breaking:** None (interface extension + implementation, all existing consumers satisfied)
+  - `web/backend/api/session_test.go` — MODIFIED: Bug A — 2 broken `[]providers.Attachment` composite literals at lines ~598 and ~1725 fixed (added `{…}` initializer braces); resolves 12 cascading typecheck errors in `web/backend/api` package
+- **Bug B (steering_test.go:969):** Already resolved by fix2 — `MetadataAwareSessionStore` interface in `pkg/session/jsonl_backend.go` already contains `EnsureSessionMetadata`, `GetSessionScope`, and `ResolveSessionKey`; `JSONLBackend` implements all three methods
+- **Breaking:** None
