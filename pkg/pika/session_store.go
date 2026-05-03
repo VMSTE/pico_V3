@@ -13,8 +13,9 @@ import (
 	"github.com/sipeed/picoclaw/pkg/tokenizer"
 )
 
-// PIKA-V3: compile-time check
+// PIKA-V3: compile-time checks
 var _ session.SessionStore = (*PikaSessionStore)(nil)
+var _ session.MetadataAwareSessionStore = (*PikaSessionStore)(nil)
 
 // PikaSessionStore implements session.SessionStore with
 // bot_memory.db backend. All persistence goes through BotMemory.
@@ -31,6 +32,11 @@ type PikaSessionStore struct {
 	// Will be removed when PikaContextManager takes over
 	// (wave 2+).
 	summaryCache map[string]string
+
+	// PIKA-V3: fix3 — in-memory session scope cache for
+	// MetadataAwareSessionStore compliance. Maps session key
+	// to its structured scope metadata.
+	scopes map[string]*session.SessionScope
 }
 
 // NewPikaSessionStore creates a PikaSessionStore backed by
@@ -42,6 +48,7 @@ func NewPikaSessionStore(
 		mem:          mem,
 		turnIDs:      make(map[string]int),
 		summaryCache: make(map[string]string),
+		scopes:       make(map[string]*session.SessionScope),
 	}
 }
 
@@ -248,4 +255,28 @@ func (s *PikaSessionStore) ListSessions() []string {
 // Close — no-op. BotMemory manages db lifecycle.
 func (s *PikaSessionStore) Close() error {
 	return nil
+}
+
+// PIKA-V3: fix3 — GetSessionScope returns the stored session
+// scope for the given key, or nil if not found. Satisfies the
+// MetadataAwareSessionStore interface.
+func (s *PikaSessionStore) GetSessionScope(
+	sessionKey string,
+) *session.SessionScope {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.scopes[sessionKey]
+}
+
+// PIKA-V3: fix3 — EnsureSessionMetadata stores session scope
+// metadata and associated aliases for the given session key.
+// Satisfies the MetadataAwareSessionStore interface.
+func (s *PikaSessionStore) EnsureSessionMetadata(
+	sessionKey string,
+	scope *session.SessionScope,
+	aliases []string,
+) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.scopes[sessionKey] = scope
 }
