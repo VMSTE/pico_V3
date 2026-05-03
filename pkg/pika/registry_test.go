@@ -1,4 +1,3 @@
-// PIKA-V3: registry_test.go — tests for AtomIDGenerator + RegistryHandler
 package pika
 
 import (

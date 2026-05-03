@@ -1,4 +1,3 @@
-// PIKA-V3: registry.go — Registry CRUD + validated handlers + AtomID generator
 package pika
 
 import (
