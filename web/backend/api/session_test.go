@@ -296,8 +296,8 @@ func TestHandleGetSession_HidesHandledToolAttachmentsBackedByMediaRefs(t *testin
 	for _, msg := range []providers.Message{
 		{Role: "user", Content: "send me the report"},
 		{
-			Role:    "assistant",
-			Content: handledToolResponseSummaryText,
+			Role:        "assistant",
+			Content:     handledToolResponseSummaryText,
 			Attachments: []providers.AttachmentRef: "media://temp/report.txt",
 		},
 	} {
