@@ -595,12 +595,14 @@ func TestHandleGetSession_ExposesHandledToolAttachmentsWithDurableURL(
 		{
 			Role:    "assistant",
 			Content: handledToolResponseSummaryText,
-			Attachments: []providers.Attachment
-				Type:        "file",
-				URL:         "https://example.com/report.txt",
-				Filename:    "report.txt",
-				ContentType: "text/plain",
-			,
+			Attachments: []providers.Attachment{
+				{
+					Type:        "file",
+					URL:         "https://example.com/report.txt",
+					Filename:    "report.txt",
+					ContentType: "text/plain",
+				},
+			},
 		},
 	} {
 		store.addMessage(t, sessionKey, msg)
@@ -1722,12 +1724,14 @@ func TestHandleGetSession_PreservesAttachmentsWhenAssistantToolCallContentDuplic
 		{
 			Role:    "assistant",
 			Content: "Reviewing the generated report.",
-			Attachments: []providers.Attachment
-				Type:        "file",
-				URL:         "https://example.com/report.txt",
-				Filename:    "report.txt",
-				ContentType: "text/plain",
-			,
+			Attachments: []providers.Attachment{
+				{
+					Type:        "file",
+					URL:         "https://example.com/report.txt",
+					Filename:    "report.txt",
+					ContentType: "text/plain",
+				},
+			},
 			ToolCalls: []providers.ToolCall{{
 				ID:   "call_1",
 				Type: "function",
