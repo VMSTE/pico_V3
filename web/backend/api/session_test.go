@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/memory"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/session"
 	"github.com/sipeed/picoclaw/pkg/utils"
@@ -56,31 +55,28 @@ func TestHandleListSessions_JSONLStorage(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, storeErr := memory.NewJSONLStore(dir)
-	if storeErr != nil {
-		t.Fatalf("NewJSONLStore() error = %v", storeErr)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := legacyPicoSessionPrefix + "history-jsonl"
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role:    "user",
 		Content: "Explain why the history API is empty after migration.",
 	}); err != nil {
 		t.Fatalf("AddFullMessage(user) error = %v", err)
 	}
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role:    "assistant",
 		Content: "Because the API still reads only legacy JSON session files.",
 	}); err != nil {
 		t.Fatalf("AddFullMessage(assistant) error = %v", err)
 	}
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role:    "tool",
 		Content: "ignored",
 	}); err != nil {
 		t.Fatalf("AddFullMessage(tool) error = %v", err)
 	}
-	if err := store.SetSummary(nil, sessionKey, "JSONL-backed session"); err != nil {
+	if err := writer.SetSummary(sessionKey, "JSONL-backed session"); err != nil {
 		t.Fatalf("SetSummary() error = %v", err)
 	}
 
@@ -138,7 +134,7 @@ func TestHandleListSessions_TransientThoughtDoesNotInflateMessageCount(t *testin
 	if err := os.WriteFile(base+".jsonl", []byte(rawJSONL), 0o644); err != nil {
 		t.Fatalf("WriteFile(jsonl) error = %v", err)
 	}
-	metaData, err := json.Marshal(memory.SessionMeta{
+	metaData, err := json.Marshal(jsonlSessionMeta{
 		Key:       sessionKey,
 		Count:     3,
 		Skip:      0,
@@ -184,20 +180,16 @@ func TestHandleListSessions_TitleUsesFirstUserMessage(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, storeErr := memory.NewJSONLStore(dir)
-	if storeErr != nil {
-		t.Fatalf("NewJSONLStore() error = %v", storeErr)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := legacyPicoSessionPrefix + "summary-title"
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role:    "user",
 		Content: "fallback preview",
 	}); err != nil {
 		t.Fatalf("AddFullMessage() error = %v", err)
 	}
-	if err := store.SetSummary(
-		nil,
+	if err := writer.SetSummary(
 		sessionKey,
 		"  This summary is intentionally longer than sixty characters so it must be truncated in the history menu.  ",
 	); err != nil {
@@ -237,10 +229,7 @@ func TestHandleGetSession_JSONLStorage(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := legacyPicoSessionPrefix + "detail-jsonl"
 	for _, msg := range []providers.Message{
@@ -248,11 +237,11 @@ func TestHandleGetSession_JSONLStorage(t *testing.T) {
 		{Role: "assistant", Content: "second"},
 		{Role: "tool", Content: "ignored"},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
-	if err := store.SetSummary(nil, sessionKey, "detail summary"); err != nil {
+	if err := writer.SetSummary(sessionKey, "detail summary"); err != nil {
 		t.Fatalf("SetSummary() error = %v", err)
 	}
 
@@ -301,10 +290,7 @@ func TestHandleGetSession_HidesHandledToolAttachmentsBackedByMediaRefs(t *testin
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := legacyPicoSessionPrefix + "attachment-history"
 	for _, msg := range []providers.Message{
@@ -312,15 +298,10 @@ func TestHandleGetSession_HidesHandledToolAttachmentsBackedByMediaRefs(t *testin
 		{
 			Role:    "assistant",
 			Content: handledToolResponseSummaryText,
-			Attachments: []providers.Attachment{{
-				Type:        "file",
-				Ref:         "media://attachment-1",
-				Filename:    "report.txt",
-				ContentType: "text/plain",
-			}},
+			Attachments: []providers.AttachmentRef: "media://temp/report.txt",
 		},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -357,10 +338,7 @@ func TestHandleGetSession_ExposesHandledToolAttachmentsWithDurableURL(t *testing
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := legacyPicoSessionPrefix + "attachment-history-durable"
 	for _, msg := range []providers.Message{
@@ -368,15 +346,15 @@ func TestHandleGetSession_ExposesHandledToolAttachmentsWithDurableURL(t *testing
 		{
 			Role:    "assistant",
 			Content: handledToolResponseSummaryText,
-			Attachments: []providers.Attachment{{
+			Attachments: []providers.Attachment
 				Type:        "file",
 				URL:         "https://example.com/report.txt",
 				Filename:    "report.txt",
 				ContentType: "text/plain",
-			}},
+			,
 		},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -431,19 +409,16 @@ func TestHandleSessions_JSONLScopeDiscovery(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, storeErr := memory.NewJSONLStore(dir)
-	if storeErr != nil {
-		t.Fatalf("NewJSONLStore() error = %v", storeErr)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := "sk_v1_scope_discovery"
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role:    "user",
 		Content: "scope discovered session",
 	}); err != nil {
 		t.Fatalf("AddFullMessage() error = %v", err)
 	}
-	if err := store.SetSummary(nil, sessionKey, "scope summary"); err != nil {
+	if err := writer.SetSummary(sessionKey, "scope summary"); err != nil {
 		t.Fatalf("SetSummary() error = %v", err)
 	}
 
@@ -460,7 +435,7 @@ func TestHandleSessions_JSONLScopeDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal(scope) error = %v", err)
 	}
-	if err := store.UpsertSessionMeta(nil, sessionKey, scopeData, nil); err != nil {
+	if err := writer.UpsertSessionMeta(sessionKey, scopeData, nil); err != nil {
 		t.Fatalf("UpsertSessionMeta() error = %v", err)
 	}
 
@@ -506,10 +481,7 @@ func TestHandleGetSession_SkipsTransientThoughtMessages(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-transient-thought"
 	for _, msg := range []providers.Message{
@@ -517,7 +489,7 @@ func TestHandleGetSession_SkipsTransientThoughtMessages(t *testing.T) {
 		{Role: "assistant", ReasoningContent: "internal chain of thought"},
 		{Role: "assistant", Content: "final visible answer"},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -556,17 +528,14 @@ func TestHandleGetSession_ReconstructsThoughtFromAssistantReasoningContent(t *te
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-reasoning-content"
 	for _, msg := range []providers.Message{
 		{Role: "user", Content: "hello"},
 		{Role: "assistant", Content: "final visible answer", ReasoningContent: "internal chain of thought"},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -607,10 +576,7 @@ func TestHandleGetSession_ReconstructsRefreshMatrixForThoughtAndToolSummary(t *t
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-refresh-matrix"
 	for _, msg := range []providers.Message{
@@ -660,7 +626,7 @@ func TestHandleGetSession_ReconstructsRefreshMatrixForThoughtAndToolSummary(t *t
 		},
 		{Role: "tool", ToolCallID: "call_exec", Content: "pwd result"},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -716,10 +682,7 @@ func TestHandleGetSession_ReconstructsVisibleMessageToolOutputWithoutDuplicateSu
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-message-tool"
 	for _, msg := range []providers.Message{
@@ -741,7 +704,7 @@ func TestHandleGetSession_ReconstructsVisibleMessageToolOutputWithoutDuplicateSu
 		{Role: "tool", Content: "Message sent to pico:pico:detail-message-tool", ToolCallID: "call_1"},
 		{Role: "assistant", Content: handledToolResponseSummaryText},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -781,10 +744,7 @@ func TestHandleGetSession_PreservesFinalAssistantReplyAfterMessageToolOutput(t *
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-message-tool-final-reply"
 	for _, msg := range []providers.Message{
@@ -805,7 +765,7 @@ func TestHandleGetSession_PreservesFinalAssistantReplyAfterMessageToolOutput(t *
 		{Role: "tool", Content: "Message sent to pico:pico:detail-message-tool-final-reply", ToolCallID: "call_1"},
 		{Role: "assistant", Content: "final assistant reply"},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -848,10 +808,7 @@ func TestHandleListSessions_MessageCountUsesVisibleTranscript(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "list-visible-count"
 	for _, msg := range []providers.Message{
@@ -872,7 +829,7 @@ func TestHandleListSessions_MessageCountUsesVisibleTranscript(t *testing.T) {
 		{Role: "tool", Content: "Message sent to pico:pico:list-visible-count", ToolCallID: "call_1"},
 		{Role: "assistant", Content: handledToolResponseSummaryText},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -906,10 +863,7 @@ func TestHandleListSessions_DeduplicatesAssistantToolCallContentFromVisibleTrans
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "list-deduped-tool-content"
 	for _, msg := range []providers.Message{
@@ -933,7 +887,7 @@ func TestHandleListSessions_DeduplicatesAssistantToolCallContentFromVisibleTrans
 		},
 		{Role: "tool", Content: "raw read_file result", ToolCallID: "call_1"},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -967,10 +921,7 @@ func TestHandleGetSession_DoesNotDuplicateAssistantToolCallContent(t *testing.T)
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-tool-summary-and-content"
 	for _, msg := range []providers.Message{
@@ -994,7 +945,7 @@ func TestHandleGetSession_DoesNotDuplicateAssistantToolCallContent(t *testing.T)
 		},
 		{Role: "tool", Content: "raw read_file result", ToolCallID: "call_1"},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -1035,10 +986,7 @@ func TestHandleGetSession_PreservesDistinctAssistantToolCallContent(t *testing.T
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-tool-summary-distinct-content"
 	for _, msg := range []providers.Message{
@@ -1061,7 +1009,7 @@ func TestHandleGetSession_PreservesDistinctAssistantToolCallContent(t *testing.T
 			},
 		},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -1099,10 +1047,7 @@ func TestHandleGetSession_PreservesMediaWhenAssistantToolCallContentDuplicatesSu
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-tool-summary-duplicate-content-with-media"
 	for _, msg := range []providers.Message{
@@ -1126,7 +1071,7 @@ func TestHandleGetSession_PreservesMediaWhenAssistantToolCallContentDuplicatesSu
 			},
 		},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -1169,10 +1114,7 @@ func TestHandleGetSession_PreservesAttachmentsWhenAssistantToolCallContentDuplic
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-tool-summary-duplicate-content-with-attachments"
 	for _, msg := range []providers.Message{
@@ -1180,12 +1122,12 @@ func TestHandleGetSession_PreservesAttachmentsWhenAssistantToolCallContentDuplic
 		{
 			Role:    "assistant",
 			Content: "Reviewing the generated report.",
-			Attachments: []providers.Attachment{{
+			Attachments: []providers.Attachment
 				Type:        "file",
 				URL:         "https://example.com/report.txt",
 				Filename:    "report.txt",
 				ContentType: "text/plain",
-			}},
+			,
 			ToolCalls: []providers.ToolCall{
 				{
 					ID:   "call_1",
@@ -1201,7 +1143,7 @@ func TestHandleGetSession_PreservesAttachmentsWhenAssistantToolCallContentDuplic
 			},
 		},
 	} {
-		if err := store.AddFullMessage(nil, sessionKey, msg); err != nil {
+		if err := writer.AddFullMessage(sessionKey, msg); err != nil {
 			t.Fatalf("AddFullMessage() error = %v", err)
 		}
 	}
@@ -1261,19 +1203,16 @@ func TestHandleGetSession_UsesConfiguredToolFeedbackMaxArgsLength(t *testing.T) 
 	}
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	argsJSON := `{"path":"README.md","start_line":1,"end_line":10,"extra":"abcdefghijklmnopqrstuvwxyz"}`
 	explanation := "Read README.md first to confirm the current project structure before editing the config example."
 	sessionKey := picoSessionPrefix + "detail-tool-summary-max-args"
-	err = store.AddFullMessage(nil, sessionKey, providers.Message{Role: "user", Content: "check file"})
+	err = writer.AddFullMessage(sessionKey, providers.Message{Role: "user", Content: "check file"})
 	if err != nil {
 		t.Fatalf("AddFullMessage(user) error = %v", err)
 	}
-	err = store.AddFullMessage(nil, sessionKey, providers.Message{
+	err = writer.AddFullMessage(sessionKey, providers.Message{
 		Role: "assistant",
 		ToolCalls: []providers.ToolCall{{
 			ID:   "call_1",
@@ -1341,21 +1280,17 @@ func TestHandleGetSession_FallsBackToLegacyToolArgumentsWhenExplanationMissing(t
 	}
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	argsJSON := `{"path":"README.md","start_line":1,"end_line":10,"extra":"abcdefghijklmnopqrstuvwxyz"}`
 	sessionKey := picoSessionPrefix + "detail-tool-summary-legacy-args"
-	if err := store.AddFullMessage(
-		nil,
+	if err := writer.AddFullMessage(
 		sessionKey,
 		providers.Message{Role: "user", Content: "check file"},
 	); err != nil {
 		t.Fatalf("AddFullMessage(user) error = %v", err)
 	}
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role: "assistant",
 		ToolCalls: []providers.ToolCall{{
 			ID:   "call_1",
@@ -1405,13 +1340,10 @@ func TestHandleGetSession_IncludesMediaOnlyMessages(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-media-only"
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role:  "user",
 		Media: []string{"data:image/png;base64,abc123"},
 	}); err != nil {
@@ -1453,14 +1385,11 @@ func TestHandleSessions_SupportsJSONLMessagesUpToStoreCap(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "detail-large-jsonl"
 	largeContent := strings.Repeat("x", 9*1024*1024)
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role:    "user",
 		Content: largeContent,
 	}); err != nil {
@@ -1525,13 +1454,10 @@ func TestHandleListSessions_UsesImagePreviewForMediaOnlyMessage(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := picoSessionPrefix + "preview-media-only"
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role:  "user",
 		Media: []string{"data:image/png;base64,abc123"},
 	}); err != nil {
@@ -1570,19 +1496,16 @@ func TestHandleDeleteSession_JSONLStorage(t *testing.T) {
 	defer cleanup()
 
 	dir := sessionsTestDir(t, configPath)
-	store, err := memory.NewJSONLStore(dir)
-	if err != nil {
-		t.Fatalf("NewJSONLStore() error = %v", err)
-	}
+	writer := newTestJSONLWriter(dir)
 
 	sessionKey := legacyPicoSessionPrefix + "delete-jsonl"
-	if err := store.AddFullMessage(nil, sessionKey, providers.Message{
+	if err := writer.AddFullMessage(sessionKey, providers.Message{
 		Role:    "user",
 		Content: "delete me",
 	}); err != nil {
 		t.Fatalf("AddFullMessage() error = %v", err)
 	}
-	if err := store.SetSummary(nil, sessionKey, "delete summary"); err != nil {
+	if err := writer.SetSummary(sessionKey, "delete summary"); err != nil {
 		t.Fatalf("SetSummary() error = %v", err)
 	}
 
