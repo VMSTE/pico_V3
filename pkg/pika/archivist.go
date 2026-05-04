@@ -632,7 +632,7 @@ func (a *Archivist) searchMessages(
 				if !seen[key] {
 					seen[key] = true
 					hits = append(hits, MessageHit{
-						Role:    role,
+						Role: role,
 						Content: truncateStr(
 							content.String, 500,
 						),
