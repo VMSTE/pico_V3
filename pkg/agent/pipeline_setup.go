@@ -19,6 +19,7 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 
 	var history []providers.Message
 	var summary string
+	var systemPrompt string // PIKA-V3: full system prompt from CM
 	if !ts.opts.NoHistory {
 		if resp, err := p.ContextManager.Assemble(ctx, &AssembleRequest{
 			SessionKey: ts.sessionKey,
@@ -27,13 +28,23 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 		}); err == nil && resp != nil {
 			history = resp.History
 			summary = resp.Summary
+			systemPrompt = resp.SystemPrompt // PIKA-V3
 		}
 	}
 	ts.captureRestorePoint(history, summary)
 
-	messages := ts.agent.ContextBuilder.BuildMessagesFromPrompt(
-		promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
-	)
+	// PIKA-V3 BYPASS: if CM returned a ready system prompt,
+	// skip ContextBuilder and use it directly.
+	var messages []providers.Message
+	if systemPrompt != "" {
+		messages = []providers.Message{
+			{Role: "system", Content: systemPrompt},
+		}
+	} else {
+		messages = ts.agent.ContextBuilder.BuildMessagesFromPrompt(
+			promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
+		)
+	}
 
 	messages = resolveMediaRefs(messages, p.MediaStore, maxMediaSize)
 
@@ -53,6 +64,7 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 				})
 			}
 			ts.refreshRestorePointFromSession(ts.agent)
+			systemPrompt = "" // PIKA-V3: reset for re-assembly
 			if resp, err := p.ContextManager.Assemble(ctx, &AssembleRequest{
 				SessionKey: ts.sessionKey,
 				Budget:     ts.agent.ContextWindow,
@@ -60,10 +72,18 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 			}); err == nil && resp != nil {
 				history = resp.History
 				summary = resp.Summary
+				systemPrompt = resp.SystemPrompt // PIKA-V3
 			}
-			messages = ts.agent.ContextBuilder.BuildMessagesFromPrompt(
-				promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
-			)
+			// PIKA-V3 BYPASS: same bypass after re-assembly
+			if systemPrompt != "" {
+				messages = []providers.Message{
+					{Role: "system", Content: systemPrompt},
+				}
+			} else {
+				messages = ts.agent.ContextBuilder.BuildMessagesFromPrompt(
+					promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
+				)
+			}
 			messages = resolveMediaRefs(messages, p.MediaStore, maxMediaSize)
 		}
 	}

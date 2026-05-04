@@ -41,6 +41,9 @@ type AssembleRequest struct {
 type AssembleResponse struct {
 	History []providers.Message // assembled conversation history for BuildMessages
 	Summary string              // conversation summary embedded into system prompt by BuildMessages
+	// PIKA-V3: When set, pipeline_setup.go bypasses ContextBuilder
+	// and uses this as the complete system prompt directly.
+	SystemPrompt string
 }
 
 // CompactRequest is the input to Compact.
