@@ -69,7 +69,7 @@ type MemoryBrief struct {
 type ArchivistResult struct {
 	Focus     Focus
 	Brief     MemoryBrief
-	BriefText string   // serialized text for system prompt
+	BriefText string // serialized text for system prompt
 	ToolSet   []string
 }
 
