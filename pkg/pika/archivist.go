@@ -606,7 +606,7 @@ func (a *Archivist) searchMessages(
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return hits, nil //nolint:nilerr // partial results are acceptable
+		return hits, nil
 	}
 
 	// LIKE search across all sessions
