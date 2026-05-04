@@ -17,9 +17,9 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 	cfg := p.Cfg
 	maxMediaSize := cfg.Agents.Defaults.GetMaxMediaSize()
 
+	var resp *AssembleResponse
 	var history []providers.Message
 	var summary string
-	var resp *AssembleResponse
 	if !ts.opts.NoHistory {
 		var err error
 		resp, err = p.ContextManager.Assemble(ctx, &AssembleRequest{
@@ -27,70 +27,62 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 			Budget:     ts.agent.ContextWindow,
 			MaxTokens:  ts.agent.MaxTokens,
 		})
-		if err == nil && resp != nil {
+		if err != nil || resp == nil {
+			resp = nil
+		} else {
 			history = resp.History
 			summary = resp.Summary
 		}
 	}
 	ts.captureRestorePoint(history, summary)
 
-	// PIKA-V3 BYPASS: if CM returned a ready-made system prompt,
-	// skip upstream ContextBuilder and compose messages directly.
+	// --- PIKA-V3 BYPASS: if CM returned a ready-made system prompt, skip upstream ContextBuilder ---
 	var messages []providers.Message
 	if resp != nil && resp.SystemPrompt != "" {
+		// Append dynamic per-turn context (time, runtime, session, sender) that upstream
+		// ContextBuilder.BuildMessagesFromPrompt would normally add via buildDynamicContext.
+		// Without this, tests like TestProcessMessage_IncludesCurrentSenderInDynamicContext fail.
+		dynamicCtx := ts.agent.ContextBuilder.buildDynamicContext(
+			ts.channel, ts.chatID,
+			ts.opts.Dispatch.SenderID(), ts.opts.SenderDisplayName,
+		)
+		systemPrompt := resp.SystemPrompt + "\n\n---\n\n" + dynamicCtx
+
 		messages = []providers.Message{
-			{Role: "system", Content: resp.SystemPrompt},
+			{Role: "system", Content: systemPrompt},
 		}
+		// Add conversation history from session store
 		messages = append(messages, history...)
-		messages = append(
-			messages,
-			userPromptMessage(ts.userMessage, ts.media),
-		)
-		messages = resolveMediaRefs(
-			messages, p.MediaStore, maxMediaSize,
-		)
+		// Add current user message
+		messages = append(messages, userPromptMessage(ts.userMessage, ts.media))
+		messages = resolveMediaRefs(messages, p.MediaStore, maxMediaSize)
 	} else {
+		// Fallback to upstream ContextBuilder (SystemPrompt empty or no PikaContextManager)
 		messages = ts.agent.ContextBuilder.BuildMessagesFromPrompt(
-			promptBuildRequestForTurn(
-				ts, history, summary,
-				ts.userMessage, ts.media,
-			),
+			promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
 		)
-		messages = resolveMediaRefs(
-			messages, p.MediaStore, maxMediaSize,
-		)
+		messages = resolveMediaRefs(messages, p.MediaStore, maxMediaSize)
 	}
 
 	if !ts.opts.NoHistory {
 		toolDefs := ts.agent.Tools.ToProviderDefs()
-		if isOverContextBudget(
-			ts.agent.ContextWindow, messages,
-			toolDefs, ts.agent.MaxTokens,
-		) {
-			// PIKA-V3: proactive compact removed (wave 2b, Phase C).
-			// Session rotation pending wave 4.
+		if isOverContextBudget(ts.agent.ContextWindow, messages, toolDefs, ts.agent.MaxTokens) {
+			// PIKA-V3: legacy proactive CompressReasonProactive removed (Phase C, wave 2b).
+			// Context rotation via SessionLifecycle will handle budget overflow (wave 4).
 			logger.WarnCF(
 				"agent",
-				"PIKA-V3: context budget exceeded before LLM call, "+
-					"legacy compression removed; "+
-					"pending session rotation (wave 4)",
+				"PIKA-V3: context budget exceeded before LLM call, legacy compression removed; pending session rotation (wave 4)",
 				map[string]any{"session_key": ts.sessionKey},
 			)
 		}
 	}
 
-	if !ts.opts.NoHistory &&
-		(strings.TrimSpace(ts.userMessage) != "" ||
-			len(ts.media) > 0) {
+	if !ts.opts.NoHistory && (strings.TrimSpace(ts.userMessage) != "" || len(ts.media) > 0) {
 		rootMsg := userPromptMessage(ts.userMessage, ts.media)
 		if len(rootMsg.Media) > 0 {
-			ts.agent.Sessions.AddFullMessage(
-				ts.sessionKey, rootMsg,
-			)
+			ts.agent.Sessions.AddFullMessage(ts.sessionKey, rootMsg)
 		} else {
-			ts.agent.Sessions.AddMessage(
-				ts.sessionKey, rootMsg.Role, rootMsg.Content,
-			)
+			ts.agent.Sessions.AddMessage(ts.sessionKey, rootMsg.Role, rootMsg.Content)
 		}
 		ts.recordPersistedMessage(rootMsg)
 		ts.ingestMessage(ctx, p.al, rootMsg)
