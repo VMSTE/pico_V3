@@ -162,6 +162,22 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/trail_meta_test.go` — NEW: tests for Trail (Add/Entries ordering, ring overflow at capacity 5, Serialize format, HasLoopDetection true/false, Reset clears entries), Meta (IncrementMsgCount, UpdateContextPct, Serialize with healthy/degraded+lastFail, Reset preserves Health/LastFail), concurrency (race detection via `go test -race` with parallel Add/Entries on Trail and IncrementMsgCount/Serialize on Meta)
 - **Breaking:** None (new files, additive only)
 
+### [2026-05-04] fix(pika): remove Seahorse + legacy CM — wave 2b Phase B
+
+- **ТЗ:** ТЗ-v2-2b-B: Удаление Seahorse + legacy CM (Фаза B)
+- **PR:** #18 (existing branch `feat/v2-2b-context-manager`)
+- **Files:**
+  - `pkg/seahorse/` (24 files) — DELETED: entire Seahorse package (schema.go, store.go, short_engine.go, short_compaction.go, short_assembler.go, short_retrieval.go, types.go, all tests, fts5_sanitize, tool_expand, tool_grep, etc.)
+  - `pkg/agent/context_seahorse.go` — DELETED: seahorseContextManager implementation
+  - `pkg/agent/context_seahorse_test.go` — DELETED: seahorse CM tests
+  - `pkg/agent/context_seahorse_unsupported.go` — DELETED: unsupported platform stub for seahorse CM
+  - `pkg/agent/context_legacy.go` — DELETED: legacyContextManager (forceCompression, maybeSummarize, TruncateHistory)
+  - `docs/architecture/agent-refactor/context.md` — DELETED: obsolete CM refactoring plan
+  - `cmd/membench/` (12 files) — DELETED: seahorse benchmark tool (eval.go, ingest.go, main.go, metrics.go, etc. — all imported `pkg/seahorse`)
+  - `pkg/agent/turn_coord.go` — MODIFIED: `resolveContextManager()` rewritten — default CM name now "pika" instead of creating `legacyContextManager` directly; all 3 legacy fallback paths removed; unknown/failed CM lookup panics instead of silent legacy fallback
+  - `Makefile` — MODIFIED: removed `mem` target (depended on deleted `cmd/membench`)
+- **Breaking:** `legacyContextManager` removed. Default context manager is now "pika" (PikaContextManager from Phase A). Config value `"legacy"` or `""` maps to `"pika"`. `pkg/seahorse/` package no longer exists — no `import pkg/seahorse` anywhere in project. `cmd/membench/` binary no longer builds.
+
 ### [2026-05-04] feat(pika): envelope.go — unified tool response envelope — wave 2c
 
 - **ТЗ:** ТЗ-v2-2c: envelope.go — Tool response envelope
