@@ -33,10 +33,10 @@ type SearchMemoryArgs struct {
 
 // SearchResult represents a single result from memory search.
 type SearchResult struct {
-	Type      string  `json:"type"`       // "session"|"knowledge"|"archive"|"event"|"reasoning"|"snapshot"
+	Type      string  `json:"type"` // "session"|"knowledge"|"archive"|"event"|"reasoning"|"snapshot"
 	Summary   string  `json:"summary"`
 	Score     float64 `json:"score"`
-	Source    string  `json:"source"`     // table name
+	Source    string  `json:"source"` // table name
 	CreatedAt string  `json:"created_at"`
 }
 
