@@ -606,7 +606,7 @@ func (a *Archivist) searchMessages(
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return hits, nil //nolint:nilerr
+		return hits, nil //nolint:nilerr // partial results are acceptable
 	}
 
 	// LIKE search across all sessions
@@ -643,6 +643,7 @@ func (a *Archivist) searchMessages(
 					break
 				}
 			}
+			_ = likeRows.Err() // best-effort LIKE fallback
 		}
 	}
 
@@ -680,6 +681,10 @@ func (a *Archivist) extractReasoningKeywords(
 		for _, kw := range kws {
 			unique[kw] = true
 		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("pika/archivist: reasoning kw rows: %w", err)
 	}
 
 	result := make([]string, 0, len(unique))
@@ -777,10 +782,8 @@ func (a *Archivist) compressBrief(
 	}
 
 	// Protect AVOID and CONSTRAINTS
-	compressed.MemoryBrief.Avoid =
-		output.MemoryBrief.Avoid
-	compressed.MemoryBrief.Constraints =
-		output.MemoryBrief.Constraints
+	compressed.MemoryBrief.Avoid = output.MemoryBrief.Avoid
+	compressed.MemoryBrief.Constraints = output.MemoryBrief.Constraints
 
 	return compressed.MemoryBrief, nil
 }
