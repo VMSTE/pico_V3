@@ -16,10 +16,10 @@ const TrailSize = 5
 // TrailEntry — one record in the TRAIL ring buffer.
 type TrailEntry struct {
 	ToolName   string
-	Operation  string   // e.g. "restart", "status"
-	Result     string   // short result (≤100 chars)
-	OK         bool     // success flag
-	DurationMs int      // execution time in ms
+	Operation  string // e.g. "restart", "status"
+	Result     string // short result (≤100 chars)
+	OK         bool   // success flag
+	DurationMs int    // execution time in ms
 	Timestamp  time.Time
 }
 
@@ -27,7 +27,7 @@ type TrailEntry struct {
 // Thread-safe via sync.RWMutex.
 type Trail struct {
 	entries [TrailSize]TrailEntry
-	count   int                  // total adds (used for position calc)
+	count   int // total adds (used for position calc)
 	mu      sync.RWMutex
 }
 
