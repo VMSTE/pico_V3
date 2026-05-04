@@ -186,3 +186,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/clarify_test.go` — NEW: 9 tests (MemoryHit — FTS5 hit → source=memory, EscalateToUser — empty knowledge → source=manager, Timeout — WaitForReply error → source=timeout, StreakBypass — streak≥2 → immediate escalation with history, DecisionQuestion — «делать?» regex → escalation, ResetStreak — streak=0+lastQuestions=nil, CleanupSession — sync.Map delete, IsAwaiting — true during WaitForReply, PrecheckTimeout — cancelled context → escalation)
 - **Breaking:** None (new files, additive only). Consumer: `loop.go` (wave 4) via `toolRouter.RegisterBrain(ch)`
 - **Dependencies:** ТЗ-v2-1a (`botmemory.go` — BotMemory.db for FTS5 queries), ТЗ-v2-3c (`memory_tools.go` — `buildFTSQuery`, `SessionIDKey`)
+
+### [2026-05-04] feat(pika): autoevent.go — deterministic event generator — wave 3e
+
+- **ТЗ:** ТЗ-v2-3e: autoevent.go — AutoEvent
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/autoevent.go` — NEW: `AutoEventHandler` struct — deterministic event generator after tool calls (0 LLM). `EventClasses` (Critical/Diagnostic/Heartbeat). `NewAutoEventHandler()` merges filesystem autoEvent.json + hardcoded BRAIN mappings (brainAutoEventMap, brainAutoTagMap). `HandleToolResult()` — key builder (toolName.operation + _fail suffix), toolTypeMap lookup, runtime guard (validTypes), entropy filter (consecutive dedup ring buffer, drop_if_consecutive_same=3), event class routing (critical/diagnostic→INSERT, heartbeat→atomic counter, heartbeat+fail→escalate to INSERT). `FlushHeartbeats()` — writes summary events on session rotation, resets entropy filter. `ValidateStartup()` — consistency checks (unclassified types, orphan classes, unmapped write-ops F7-4). `SetRegisteredWriteOps()` for coverage check.
+  - `pkg/pika/autoevent_test.go` — NEW: 11 tests (WriteOp, ReadOpSkipped, FailSuffix, ConsecutiveDedup, HeartbeatCounter, HeartbeatFlush, HeartbeatFailEscalate, InvalidType, ValidateStartup, CoverageCheck, BrainTools)
+- **Breaking:** None (new files, additive only). Consumer: `loop.go` (wave 4)
+- **Dependencies:** ТЗ-v2-1a (`botmemory.go` — BotMemory.SaveEvent, EventRow), ТЗ-v2-0a (`migrate.go` — Migrate for tests)
