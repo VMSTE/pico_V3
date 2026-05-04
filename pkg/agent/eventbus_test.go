@@ -423,7 +423,9 @@ func TestAgentLoop_EmitsContextCompressEventOnRetry(t *testing.T) {
 	sub := al.SubscribeEvents(16)
 	defer al.UnsubscribeEvents(sub.ID)
 
-	resp, err := al.runAgentLoop(context.Background(), defaultAgent, processOptions{
+	// PIKA-V3 Phase C: legacy compression retry removed.
+	// Context overflow now returns error (wave 4 adds session rotation).
+	_, err = al.runAgentLoop(context.Background(), defaultAgent, processOptions{
 		SessionKey:      "session-1",
 		Channel:         "cli",
 		ChatID:          "direct",
@@ -432,42 +434,15 @@ func TestAgentLoop_EmitsContextCompressEventOnRetry(t *testing.T) {
 		EnableSummary:   false,
 		SendResponse:    false,
 	})
-	if err != nil {
-		t.Fatalf("runAgentLoop failed: %v", err)
-	}
-	if resp != "Recovered from context error" {
-		t.Fatalf("expected retry success, got %q", resp)
+	if err == nil {
+		t.Fatal("expected error after context overflow, got nil")
 	}
 
 	events := collectEventStream(sub.C)
-	retryEvt, ok := findEvent(events, EventKindLLMRetry)
-	if !ok {
-		t.Fatal("expected llm retry event")
-	}
-	retryPayload, ok := retryEvt.Payload.(LLMRetryPayload)
-	if !ok {
-		t.Fatalf("expected LLMRetryPayload, got %T", retryEvt.Payload)
-	}
-	if retryPayload.Reason != "context_limit" {
-		t.Fatalf("expected context_limit retry reason, got %q", retryPayload.Reason)
-	}
-	if retryPayload.Attempt != 1 {
-		t.Fatalf("expected retry attempt 1, got %d", retryPayload.Attempt)
-	}
-
-	compressEvt, ok := findEvent(events, EventKindContextCompress)
-	if !ok {
-		t.Fatal("expected context compress event")
-	}
-	payload, ok := compressEvt.Payload.(ContextCompressPayload)
-	if !ok {
-		t.Fatalf("expected ContextCompressPayload, got %T", compressEvt.Payload)
-	}
-	if payload.Reason != ContextCompressReasonRetry {
-		t.Fatalf("expected retry compress reason, got %q", payload.Reason)
-	}
-	if payload.DroppedMessages == 0 {
-		t.Fatal("expected dropped messages to be recorded")
+	// Verify NO compress event is emitted (removed in Phase C)
+	_, ok := findEvent(events, EventKindContextCompress)
+	if ok {
+		t.Fatal("unexpected context compress event after Phase C removal")
 	}
 }
 
