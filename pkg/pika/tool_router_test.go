@@ -22,10 +22,11 @@ type mockTool struct {
 }
 
 func (m *mockTool) Name() string        { return m.name }
-func (m *mockTool) Description() string  { return m.desc }
+func (m *mockTool) Description() string { return m.desc }
 func (m *mockTool) Parameters() map[string]any {
 	return nil
 }
+
 func (m *mockTool) Execute(
 	_ context.Context, _ map[string]any,
 ) *toolshared.ToolResult {
@@ -58,10 +59,11 @@ type dynamicMockTool struct {
 }
 
 func (d *dynamicMockTool) Name() string        { return d.name }
-func (d *dynamicMockTool) Description() string  { return d.desc }
+func (d *dynamicMockTool) Description() string { return d.desc }
 func (d *dynamicMockTool) Parameters() map[string]any {
 	return nil
 }
+
 func (d *dynamicMockTool) Execute(
 	ctx context.Context, args map[string]any,
 ) *toolshared.ToolResult {
