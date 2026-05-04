@@ -1,8 +1,8 @@
-package pika
-
 // PIKA-V3: clarify.go — Go-native HITL clarify tool (D-NEW-2)
 // FTS5 pre-check → escalation to manager via Telegram.
 // 0 LLM tokens — pure Go fast-path.
+
+package pika
 
 import (
 	"context"

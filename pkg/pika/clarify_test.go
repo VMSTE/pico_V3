@@ -14,12 +14,12 @@ import (
 
 // mockSender implements ClarifySender for tests.
 type mockSender struct {
-	mu          sync.Mutex
-	sentMsgs    []string
-	reply       string
-	replyErr    error
-	replyDelay  time.Duration
-	sendErr     error
+	mu         sync.Mutex
+	sentMsgs   []string
+	reply      string
+	replyErr   error
+	replyDelay time.Duration
+	sendErr    error
 }
 
 func (m *mockSender) SendMessage(
@@ -411,7 +411,7 @@ func TestClarify_PrecheckTimeout(t *testing.T) {
 		"devops",
 	)
 
-	// Create a context that is already cancelled
+	// Create a context that is already canceled
 	ctx, cancel := context.WithCancel(
 		ctxWithSession("sess-9"),
 	)
@@ -425,7 +425,7 @@ func TestClarify_PrecheckTimeout(t *testing.T) {
 	if err := json.Unmarshal(
 		[]byte(result.ForLLM), &cr,
 	); err != nil {
-		// On cancelled context, escalation will
+		// On canceled context, escalation will
 		// also fail — check error result
 		if !result.IsError {
 			t.Fatalf(
@@ -433,7 +433,7 @@ func TestClarify_PrecheckTimeout(t *testing.T) {
 				err, result.ForLLM,
 			)
 		}
-		// Error is expected when context is cancelled
+		// Error is expected when context is canceled
 		return
 	}
 	// If we got a valid result, it should be manager
@@ -441,7 +441,7 @@ func TestClarify_PrecheckTimeout(t *testing.T) {
 	if cr.Source == "memory" {
 		t.Error(
 			"should not get memory hit on " +
-				"cancelled context",
+				"canceled context",
 		)
 	}
 }
