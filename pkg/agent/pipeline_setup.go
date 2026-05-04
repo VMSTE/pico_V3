@@ -19,43 +19,78 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 
 	var history []providers.Message
 	var summary string
+	var resp *AssembleResponse
 	if !ts.opts.NoHistory {
-		if resp, err := p.ContextManager.Assemble(ctx, &AssembleRequest{
+		var err error
+		resp, err = p.ContextManager.Assemble(ctx, &AssembleRequest{
 			SessionKey: ts.sessionKey,
 			Budget:     ts.agent.ContextWindow,
 			MaxTokens:  ts.agent.MaxTokens,
-		}); err == nil && resp != nil {
+		})
+		if err == nil && resp != nil {
 			history = resp.History
 			summary = resp.Summary
 		}
 	}
 	ts.captureRestorePoint(history, summary)
 
-	messages := ts.agent.ContextBuilder.BuildMessagesFromPrompt(
-		promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
-	)
-
-	messages = resolveMediaRefs(messages, p.MediaStore, maxMediaSize)
+	// PIKA-V3 BYPASS: if CM returned a ready-made system prompt,
+	// skip upstream ContextBuilder and compose messages directly.
+	var messages []providers.Message
+	if resp != nil && resp.SystemPrompt != "" {
+		messages = []providers.Message{
+			{Role: "system", Content: resp.SystemPrompt},
+		}
+		messages = append(messages, history...)
+		messages = append(
+			messages,
+			userPromptMessage(ts.userMessage, ts.media),
+		)
+		messages = resolveMediaRefs(
+			messages, p.MediaStore, maxMediaSize,
+		)
+	} else {
+		messages = ts.agent.ContextBuilder.BuildMessagesFromPrompt(
+			promptBuildRequestForTurn(
+				ts, history, summary,
+				ts.userMessage, ts.media,
+			),
+		)
+		messages = resolveMediaRefs(
+			messages, p.MediaStore, maxMediaSize,
+		)
+	}
 
 	if !ts.opts.NoHistory {
 		toolDefs := ts.agent.Tools.ToProviderDefs()
-		if isOverContextBudget(ts.agent.ContextWindow, messages, toolDefs, ts.agent.MaxTokens) {
-			// PIKA-V3: legacy proactive CompressReasonProactive removed (Phase C, wave 2b).
-			// Context rotation via SessionLifecycle will handle budget overflow (wave 4).
+		if isOverContextBudget(
+			ts.agent.ContextWindow, messages,
+			toolDefs, ts.agent.MaxTokens,
+		) {
+			// PIKA-V3: proactive compact removed (wave 2b, Phase C).
+			// Session rotation pending wave 4.
 			logger.WarnCF(
 				"agent",
-				"PIKA-V3: context budget exceeded before LLM call, legacy compression removed; pending session rotation (wave 4)",
+				"PIKA-V3: context budget exceeded before LLM call, "+
+					"legacy compression removed; "+
+					"pending session rotation (wave 4)",
 				map[string]any{"session_key": ts.sessionKey},
 			)
 		}
 	}
 
-	if !ts.opts.NoHistory && (strings.TrimSpace(ts.userMessage) != "" || len(ts.media) > 0) {
+	if !ts.opts.NoHistory &&
+		(strings.TrimSpace(ts.userMessage) != "" ||
+			len(ts.media) > 0) {
 		rootMsg := userPromptMessage(ts.userMessage, ts.media)
 		if len(rootMsg.Media) > 0 {
-			ts.agent.Sessions.AddFullMessage(ts.sessionKey, rootMsg)
+			ts.agent.Sessions.AddFullMessage(
+				ts.sessionKey, rootMsg,
+			)
 		} else {
-			ts.agent.Sessions.AddMessage(ts.sessionKey, rootMsg.Role, rootMsg.Content)
+			ts.agent.Sessions.AddMessage(
+				ts.sessionKey, rootMsg.Role, rootMsg.Content,
+			)
 		}
 		ts.recordPersistedMessage(rootMsg)
 		ts.ingestMessage(ctx, p.al, rootMsg)
