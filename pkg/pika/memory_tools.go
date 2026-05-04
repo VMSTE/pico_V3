@@ -83,7 +83,7 @@ func (ms *MemorySearch) Name() string {
 func (ms *MemorySearch) Description() string {
 	return "Unified memory search across all knowledge layers. " +
 		"Returns top-N results with type and relevance score. " +
-		"Model sends query — Go searches everywhere."
+		"Model sends query \u2014 Go searches everywhere."
 }
 
 func (ms *MemorySearch) Parameters() map[string]any {
@@ -219,7 +219,7 @@ func (ms *MemorySearch) fanOut(
 		return nil
 	})
 
-	// Layer 3: archive (atom → decompress → snippet)
+	// Layer 3: archive (atom -> decompress -> snippet)
 	g.Go(func() error {
 		res, err := ms.searchArchive(gCtx, query, limit)
 		if err != nil {
@@ -318,6 +318,7 @@ func (ms *MemorySearch) searchMessages(
 				"pika/memory_tools: messages scan: %w", err,
 			)
 		}
+		// truncateStr is defined in archivist.go (same package)
 		summary := fmt.Sprintf(
 			"[%s] %s", role,
 			truncateStr(content.String, 200),
@@ -387,7 +388,7 @@ func (ms *MemorySearch) searchKnowledge(
 	return out, rows.Err()
 }
 
-// Layer 3: archive — atom as index → decompress → snippet.
+// Layer 3: archive — atom as index -> decompress -> snippet.
 func (ms *MemorySearch) searchArchive(
 	ctx context.Context,
 	query string,
@@ -783,6 +784,7 @@ func extractSnippet(
 		}
 	}
 	if idx < 0 {
+		// truncateStr is defined in archivist.go (same package)
 		return truncateStr(content, maxLen)
 	}
 	start := idx - maxLen/4
@@ -803,13 +805,8 @@ func extractSnippet(
 	return s
 }
 
-func truncateStr(s string, maxLen int) string {
-	r := []rune(s)
-	if len(r) <= maxLen {
-		return s
-	}
-	return string(r[:maxLen]) + "..."
-}
+// NOTE: truncateStr is NOT defined here — it lives in archivist.go
+// (same package pika). Reused via package-level visibility.
 
 func reasoningSummary(task, mode string) string {
 	if task == "" && mode == "" {
