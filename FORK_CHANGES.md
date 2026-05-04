@@ -162,6 +162,19 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/trail_meta_test.go` — NEW: tests for Trail (Add/Entries ordering, ring overflow at capacity 5, Serialize format, HasLoopDetection true/false, Reset clears entries), Meta (IncrementMsgCount, UpdateContextPct, Serialize with healthy/degraded+lastFail, Reset preserves Health/LastFail), concurrency (race detection via `go test -race` with parallel Add/Entries on Trail and IncrementMsgCount/Serialize on Meta)
 - **Breaking:** None (new files, additive only)
 
+### [2026-05-04] feat(pika): PikaContextManager + bypass — wave 2b Phase A
+
+- **ТЗ:** ТЗ-v2-2b: context_manager.go — PikaContextManager (Фаза A)
+- **PR:** #18
+- **Files:**
+  - `pkg/pika/interfaces.go` — NEW: `SystemStateProvider` interface + `alwaysHealthyProvider` stub (wave 2 default); `ArchivistCaller` interface + `noopArchivistCaller` stub (wave 2 default); `SystemState` struct (Status, DegradedComponents); constructors `NewAlwaysHealthyProvider()`, `NewNoopArchivistCaller()`
+  - `pkg/pika/context_manager.go` — NEW: `PikaContextManager` struct — builds full system prompt (CORE.md + CONTEXT.md + MEMORY_BRIEF + TRAIL/META + ACTIVE_PLAN + DEGRADATION); `NewPikaContextManager(workspace, trail, meta, stateProvider, archivist)` constructor with nil-safe defaults; `BuildSystemPrompt(ctx, sessionKey)` assembler with mtime-cached bootstrap file loading; `loadBootstrapFile(name)` with `os.Stat` + `os.ReadFile` + RWMutex cache; `injectDegradation(sb)` appends DEGRADATION block with per-component instructions (archivist/mcp_guard/toolguard/registry/telemetry/atomizer); `Compact(sessionKey, reason)` no-op stub (wave 5); `Ingest(sessionKey)` no-op stub; `Clear(sessionKey)` no-op stub; `InvalidateCache()` clears bootstrap cache; `GetTrail()`/`GetMeta()` accessors
+  - `pkg/pika/context_manager_test.go` — NEW: 12 tests (EmptyWorkspace → TRAIL+META present, WithCoreAndContext → content loaded, CachesFiles → cachedCore populated, TrailEntries → compose.restart in prompt, DegradationBlock → DEGRADATION with archivist/mcp_guard instructions, HealthyNoDegradation → no DEGRADATION block, Compact/Ingest/Clear no-ops, InvalidateCache clears cache, AlwaysHealthyProvider returns healthy, NoopArchivistCaller returns empty)
+  - `pkg/agent/context_pika.go` — NEW: `pikaContextManagerAdapter` struct wrapping `pika.PikaContextManager` as `agent.ContextManager` (avoids circular import); `pikaContextManagerFactory` creates Trail+Meta+stubs+PikaContextManager; `init()` calls `RegisterContextManager("pika", pikaContextManagerFactory)`; adapter methods: Assemble (gets history from session, builds system prompt, returns SystemPrompt field), Compact/Ingest/Clear delegate to pika.PikaContextManager
+  - `pkg/agent/context_manager.go` — MODIFIED: added `SystemPrompt string` field to `AssembleResponse` (PIKA-V3 bypass: when set, pipeline_setup.go skips ContextBuilder)
+  - `pkg/agent/pipeline_setup.go` — MODIFIED: PIKA-V3 BYPASS at both Assemble call sites — if `resp.SystemPrompt != ""`, uses `[]providers.MessageRole: "system", Content: systemPrompt` instead of `ContextBuilder.BuildMessagesFromPrompt()`; `systemPrompt` variable tracks across initial and post-compression re-assembly
+- **Breaking:** None (additive: new SystemPrompt field in AssembleResponse, bypass is backwards-compatible — empty SystemPrompt falls through to upstream ContextBuilder)
+
 ### [2026-05-04] fix(pika): remove Seahorse + legacy CM — wave 2b Phase B
 
 - **ТЗ:** ТЗ-v2-2b-B: Удаление Seahorse + legacy CM (Фаза B)
