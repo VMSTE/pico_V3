@@ -21,7 +21,7 @@ import (
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
 )
 
-// PIKA-V3: SessionIDKey is the context key for the current session ID.
+// SessionIDKey is the context key for the current session ID.
 // Used by MemorySearch to scope layer 1 (messages) to current session.
 type SessionIDKey struct{}
 
@@ -76,16 +76,19 @@ func NewMemorySearch(bm *BotMemory) *MemorySearch {
 	return &MemorySearch{bm: bm}
 }
 
+// Name returns the tool name.
 func (ms *MemorySearch) Name() string {
 	return "search_memory"
 }
 
+// Description returns the tool description.
 func (ms *MemorySearch) Description() string {
 	return "Unified memory search across all knowledge layers. " +
 		"Returns top-N results with type and relevance score. " +
 		"Model sends query \u2014 Go searches everywhere."
 }
 
+// Parameters returns the JSON schema for the tool arguments.
 func (ms *MemorySearch) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -311,11 +314,11 @@ func (ms *MemorySearch) searchMessages(
 		var role string
 		var content sql.NullString
 		var ts string
-		if err := rows.Scan(
+		if scanErr := rows.Scan(
 			&id, &role, &content, &ts,
-		); err != nil {
+		); scanErr != nil {
 			return nil, fmt.Errorf(
-				"pika/memory_tools: messages scan: %w", err,
+				"pika/memory_tools: messages scan: %w", scanErr,
 			)
 		}
 		// truncateStr is defined in archivist.go (same package)
@@ -364,14 +367,14 @@ func (ms *MemorySearch) searchKnowledge(
 		var id int64
 		var atomID, cat, summary, ca string
 		var conf, bm25Score float64
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&id, &atomID, &cat, &summary,
 			&conf, &ca, &bm25Score,
 		)
-		if err != nil {
+		if scanErr != nil {
 			return nil, fmt.Errorf(
 				"pika/memory_tools: knowledge scan: %w",
-				err,
+				scanErr,
 			)
 		}
 		out = append(out, rawResult{
@@ -422,19 +425,19 @@ func (ms *MemorySearch) searchArchive(
 	var hits []archiveHit
 	for rows.Next() {
 		var h archiveHit
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&h.atomID, &h.msgID,
 			&h.summary, &h.createdAt, &h.bm25Score,
 		)
-		if err != nil {
+		if scanErr != nil {
 			return nil, fmt.Errorf(
-				"pika/memory_tools: archive scan: %w", err,
+				"pika/memory_tools: archive scan: %w", scanErr,
 			)
 		}
 		hits = append(hits, h)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	if rowErr := rows.Err(); rowErr != nil {
+		return nil, rowErr
 	}
 
 	var out []rawResult
@@ -492,13 +495,13 @@ func (ms *MemorySearch) searchEventsArchive(
 		var typ, summary, ts string
 		var outcome sql.NullString
 		var bm25Score float64
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&id, &typ, &outcome,
 			&summary, &ts, &bm25Score,
 		)
-		if err != nil {
+		if scanErr != nil {
 			return nil, fmt.Errorf(
-				"pika/memory_tools: events scan: %w", err,
+				"pika/memory_tools: events scan: %w", scanErr,
 			)
 		}
 		label := "[" + typ
@@ -532,7 +535,7 @@ func (ms *MemorySearch) searchReasoning(
 	var out []rawResult
 
 	// Hot reasoning_log
-	hotRows, err := ms.bm.db.QueryContext(ctx,
+	hotRows, hotErr := ms.bm.db.QueryContext(ctx,
 		`SELECT id, task, mode, ts
 		FROM reasoning_log
 		WHERE EXISTS (
@@ -541,9 +544,9 @@ func (ms *MemorySearch) searchReasoning(
 		)
 		ORDER BY ts DESC LIMIT ?`,
 		pat, limit)
-	if err != nil {
+	if hotErr != nil {
 		return nil, fmt.Errorf(
-			"pika/memory_tools: reasoning hot: %w", err,
+			"pika/memory_tools: reasoning hot: %w", hotErr,
 		)
 	}
 	defer hotRows.Close()
@@ -552,12 +555,12 @@ func (ms *MemorySearch) searchReasoning(
 		var id int64
 		var task, mode sql.NullString
 		var ts string
-		if err := hotRows.Scan(
+		if scanErr := hotRows.Scan(
 			&id, &task, &mode, &ts,
-		); err != nil {
+		); scanErr != nil {
 			return nil, fmt.Errorf(
 				"pika/memory_tools: reasoning scan: %w",
-				err,
+				scanErr,
 			)
 		}
 		out = append(out, rawResult{
@@ -572,12 +575,12 @@ func (ms *MemorySearch) searchReasoning(
 			LayerPrio: prioReasoning,
 		})
 	}
-	if err := hotRows.Err(); err != nil {
-		return nil, err
+	if rowErr := hotRows.Err(); rowErr != nil {
+		return nil, rowErr
 	}
 
 	// Archive reasoning_log_archive
-	archRows, err := ms.bm.db.QueryContext(ctx,
+	archRows, archErr := ms.bm.db.QueryContext(ctx,
 		`SELECT id, task, mode, ts
 		FROM reasoning_log_archive
 		WHERE EXISTS (
@@ -586,9 +589,9 @@ func (ms *MemorySearch) searchReasoning(
 		)
 		ORDER BY ts DESC LIMIT ?`,
 		pat, limit)
-	if err != nil {
+	if archErr != nil {
 		return nil, fmt.Errorf(
-			"pika/memory_tools: reasoning arch: %w", err,
+			"pika/memory_tools: reasoning arch: %w", archErr,
 		)
 	}
 	defer archRows.Close()
@@ -597,12 +600,12 @@ func (ms *MemorySearch) searchReasoning(
 		var id int64
 		var task, mode sql.NullString
 		var ts string
-		if err := archRows.Scan(
+		if scanErr := archRows.Scan(
 			&id, &task, &mode, &ts,
-		); err != nil {
+		); scanErr != nil {
 			return nil, fmt.Errorf(
 				"pika/memory_tools: reasoning arch scan: %w",
-				err,
+				scanErr,
 			)
 		}
 		out = append(out, rawResult{
@@ -651,11 +654,11 @@ func (ms *MemorySearch) searchRegistry(
 		var key string
 		var summary sql.NullString
 		var ts string
-		if err := rows.Scan(
+		if scanErr := rows.Scan(
 			&id, &key, &summary, &ts,
-		); err != nil {
+		); scanErr != nil {
 			return nil, fmt.Errorf(
-				"pika/memory_tools: registry scan: %w", err,
+				"pika/memory_tools: registry scan: %w", scanErr,
 			)
 		}
 		label := key

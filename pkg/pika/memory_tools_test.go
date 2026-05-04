@@ -40,9 +40,7 @@ func execSearch(
 	t.Helper()
 	ctx := context.Background()
 	if sessionID != "" {
-		ctx = context.WithValue(
-			ctx, SessionIDKey{}, sessionID,
-		)
+		ctx = context.WithValue(ctx, SessionIDKey{}, sessionID)
 	}
 	args := map[string]any{
 		"query": query,
@@ -56,9 +54,7 @@ func execSearch(
 	if err := json.Unmarshal(
 		[]byte(result.ForLLM), &results,
 	); err != nil {
-		t.Fatalf(
-			"unmarshal: %v, raw: %s", err, result.ForLLM,
-		)
+		t.Fatalf("unmarshal: %v, raw: %s", err, result.ForLLM)
 	}
 	return results
 }
@@ -82,10 +78,13 @@ func TestSearchMemory_BasicQuery(t *testing.T) {
 
 	// Layer 2: knowledge atom
 	err = bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-1", SessionID: "s1", TurnID: 1,
-		Category: "pattern",
-		Summary:  "nginx deploy requires confirmation",
-		Confidence: 0.8, Polarity: "neutral",
+		AtomID:     "P-1",
+		SessionID:  "s1",
+		TurnID:     1,
+		Category:   "pattern",
+		Summary:    "nginx deploy requires confirmation",
+		Confidence: 0.8,
+		Polarity:   "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -163,10 +162,13 @@ func TestSearchMemory_EmptySessionID(t *testing.T) {
 	ctx := context.Background()
 
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-1", SessionID: "s1", TurnID: 1,
+		AtomID:     "P-1",
+		SessionID:  "s1",
+		TurnID:     1,
 		Category:   "pattern",
 		Summary:    "test pattern for empty session",
-		Confidence: 0.5, Polarity: "neutral",
+		Confidence: 0.5,
+		Polarity:   "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -191,10 +193,13 @@ func TestSearchMemory_LayerFailure(t *testing.T) {
 	ctx := context.Background()
 
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-1", SessionID: "s1", TurnID: 1,
+		AtomID:     "P-1",
+		SessionID:  "s1",
+		TurnID:     1,
 		Category:   "pattern",
 		Summary:    "surviving layer data",
-		Confidence: 0.5, Polarity: "neutral",
+		Confidence: 0.5,
+		Polarity:   "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -214,7 +219,7 @@ func TestSearchMemory_LayerFailure(t *testing.T) {
 	}
 }
 
-// TestSearchMemory_Timeout — context cancelled,
+// TestSearchMemory_Timeout — context canceled,
 // should not panic, returns valid JSON.
 func TestSearchMemory_Timeout(t *testing.T) {
 	_, ms, cleanup := setupSearchTest(t)
@@ -256,11 +261,14 @@ func TestSearchMemory_Dedup(t *testing.T) {
 
 	msgID := int64(1)
 	err = bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-1", SessionID: "s1", TurnID: 1,
+		AtomID:          "P-1",
+		SessionID:       "s1",
+		TurnID:          1,
 		SourceMessageID: &msgID,
 		Category:        "pattern",
 		Summary:         "duplicate content atom",
-		Confidence: 0.5, Polarity: "neutral",
+		Confidence:      0.5,
+		Polarity:        "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -290,9 +298,7 @@ func TestSearchMemory_EmptyDB(t *testing.T) {
 
 	results := execSearch(t, ms, "anything", 10, "s1")
 	if len(results) != 0 {
-		t.Errorf(
-			"expected 0 results, got %d", len(results),
-		)
+		t.Errorf("expected 0 results, got %d", len(results))
 	}
 }
 
@@ -304,10 +310,13 @@ func TestSearchMemory_ScoringOrder(t *testing.T) {
 	ctx := context.Background()
 
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-1", SessionID: "s1", TurnID: 1,
+		AtomID:     "P-1",
+		SessionID:  "s1",
+		TurnID:     1,
 		Category:   "pattern",
 		Summary:    "important deploy knowledge",
-		Confidence: 0.9, Polarity: "neutral",
+		Confidence: 0.9,
+		Polarity:   "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -324,9 +333,7 @@ func TestSearchMemory_ScoringOrder(t *testing.T) {
 
 	results := execSearch(t, ms, "deploy", 10, "")
 	if len(results) < 2 {
-		t.Skipf(
-			"need >=2 results, got %d", len(results),
-		)
+		t.Skipf("need >=2 results, got %d", len(results))
 	}
 
 	var knScore, regScore float64
@@ -368,11 +375,14 @@ func TestSearchMemory_ArchivePipeline(t *testing.T) {
 	}
 
 	err = bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-1", SessionID: "s1", TurnID: 1,
+		AtomID:          "P-1",
+		SessionID:       "s1",
+		TurnID:          1,
 		SourceMessageID: &msgID,
 		Category:        "pattern",
 		Summary:         "nginx workers config update",
-		Confidence: 0.8, Polarity: "neutral",
+		Confidence:      0.8,
+		Polarity:        "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -389,9 +399,7 @@ func TestSearchMemory_ArchivePipeline(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error(
-			"expected archive or knowledge result",
-		)
+		t.Error("expected archive or knowledge result")
 	}
 }
 
