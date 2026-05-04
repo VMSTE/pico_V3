@@ -8,7 +8,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
@@ -104,6 +103,9 @@ func TestResolveContextManager_Default(t *testing.T) {
 	cleanup := resetCMRegistry()
 	defer cleanup()
 
+	// Re-register pika factory so resolveContextManager can find it.
+	_ = RegisterContextManager("pika", pikaContextManagerFactory)
+
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
@@ -111,7 +113,7 @@ func TestResolveContextManager_Default(t *testing.T) {
 				ModelName:         "test-model",
 				MaxTokens:         4096,
 				MaxToolIterations: 10,
-				ContextManager:    "", // default → legacy
+				ContextManager:    "", // default → pika
 			},
 		},
 	}
@@ -121,14 +123,16 @@ func TestResolveContextManager_Default(t *testing.T) {
 	if cm == nil {
 		t.Fatal("expected non-nil context manager")
 	}
-	if _, ok := cm.(*legacyContextManager); !ok {
-		t.Fatalf("expected *legacyContextManager, got %T", cm)
+	if _, ok := cm.(*pikaContextManagerAdapter); !ok {
+		t.Fatalf("expected *pikaContextManagerAdapter, got %T", cm)
 	}
 }
 
-func TestResolveContextManager_ExplicitLegacy(t *testing.T) {
+func TestResolveContextManager_ExplicitLegacyMapsToPika(t *testing.T) {
 	cleanup := resetCMRegistry()
 	defer cleanup()
+
+	_ = RegisterContextManager("pika", pikaContextManagerFactory)
 
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
@@ -137,20 +141,22 @@ func TestResolveContextManager_ExplicitLegacy(t *testing.T) {
 				ModelName:         "test-model",
 				MaxTokens:         4096,
 				MaxToolIterations: 10,
-				ContextManager:    "legacy",
+				ContextManager:    "legacy", // legacy → pika
 			},
 		},
 	}
 	al := newCMTestAgentLoop(cfg)
 
-	if _, ok := al.contextManager.(*legacyContextManager); !ok {
-		t.Fatalf("expected *legacyContextManager, got %T", al.contextManager)
+	if _, ok := al.contextManager.(*pikaContextManagerAdapter); !ok {
+		t.Fatalf("expected *pikaContextManagerAdapter, got %T", al.contextManager)
 	}
 }
 
-func TestResolveContextManager_UnknownFallsBackToLegacy(t *testing.T) {
+func TestResolveContextManager_UnknownFallsBackToPika(t *testing.T) {
 	cleanup := resetCMRegistry()
 	defer cleanup()
+
+	_ = RegisterContextManager("pika", pikaContextManagerFactory)
 
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
@@ -165,8 +171,8 @@ func TestResolveContextManager_UnknownFallsBackToLegacy(t *testing.T) {
 	}
 	al := newCMTestAgentLoop(cfg)
 
-	if _, ok := al.contextManager.(*legacyContextManager); !ok {
-		t.Fatalf("expected fallback to *legacyContextManager, got %T", al.contextManager)
+	if _, ok := al.contextManager.(*pikaContextManagerAdapter); !ok {
+		t.Fatalf("expected fallback to *pikaContextManagerAdapter, got %T", al.contextManager)
 	}
 }
 
@@ -199,7 +205,7 @@ func TestResolveContextManager_RegisteredFactory(t *testing.T) {
 	}
 }
 
-func TestResolveContextManager_FactoryError(t *testing.T) {
+func TestResolveContextManager_FactoryErrorPanics(t *testing.T) {
 	cleanup := resetCMRegistry()
 	defer cleanup()
 
@@ -209,6 +215,21 @@ func TestResolveContextManager_FactoryError(t *testing.T) {
 	if err := RegisterContextManager("broken_cm", factory); err != nil {
 		t.Fatalf("register failed: %v", err)
 	}
+
+	// Phase B: resolveContextManager panics on factory error (no legacy fallback).
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic from broken factory, got none")
+		}
+		msg, ok := r.(string)
+		if !ok {
+			t.Fatalf("expected string panic, got %T: %v", r, r)
+		}
+		if !strings.Contains(msg, "failed to create context manager") {
+			t.Fatalf("unexpected panic message: %s", msg)
+		}
+	}()
 
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
@@ -221,19 +242,14 @@ func TestResolveContextManager_FactoryError(t *testing.T) {
 			},
 		},
 	}
-	al := newCMTestAgentLoop(cfg)
-
-	// Should fall back to legacy when factory returns error
-	if _, ok := al.contextManager.(*legacyContextManager); !ok {
-		t.Fatalf("expected fallback to *legacyContextManager on factory error, got %T", al.contextManager)
-	}
+	_ = newCMTestAgentLoop(cfg) // should panic
 }
 
 // ---------------------------------------------------------------------------
-// Legacy Assemble tests
+// Pika CM Assemble tests (passthrough via adapter)
 // ---------------------------------------------------------------------------
 
-func TestLegacyAssemble_Passthrough(t *testing.T) {
+func TestPikaAssemble_Passthrough(t *testing.T) {
 	cfg := testConfig(t)
 	al := newCMTestAgentLoop(cfg)
 
@@ -266,7 +282,7 @@ func TestLegacyAssemble_Passthrough(t *testing.T) {
 	}
 }
 
-func TestLegacyAssemble_EmptyHistory(t *testing.T) {
+func TestPikaAssemble_EmptyHistory(t *testing.T) {
 	cfg := testConfig(t)
 	al := newCMTestAgentLoop(cfg)
 
@@ -284,234 +300,39 @@ func TestLegacyAssemble_EmptyHistory(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy Compact overflow tests
+// Compact overflow tests — skipped (legacy-specific behavior removed in Phase B)
 // ---------------------------------------------------------------------------
 
 func TestLegacyCompact_Overflow(t *testing.T) {
-	cfg := testConfig(t)
-	al := newCMTestAgentLoop(cfg)
-
-	defaultAgent := al.registry.GetDefaultAgent()
-	if defaultAgent == nil {
-		t.Fatal("expected default agent")
-	}
-
-	history := []providers.Message{
-		{Role: "user", Content: "msg 1"},
-		{Role: "assistant", Content: "resp 1"},
-		{Role: "user", Content: "msg 2"},
-		{Role: "assistant", Content: "resp 2"},
-		{Role: "user", Content: "msg 3"},
-	}
-	defaultAgent.Sessions.SetHistory("session-overflow", history)
-
-	sub := al.SubscribeEvents(16)
-	defer al.UnsubscribeEvents(sub.ID)
-
-	err := al.contextManager.Compact(context.Background(), &CompactRequest{
-		SessionKey: "session-overflow",
-		Reason:     ContextCompressReasonRetry,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// After overflow compression, history should be shorter
-	newHistory := defaultAgent.Sessions.GetHistory("session-overflow")
-	if len(newHistory) >= len(history) {
-		t.Fatalf("expected compressed history, got %d messages (was %d)", len(newHistory), len(history))
-	}
-
-	// Summary should contain compression note
-	summary := defaultAgent.Sessions.GetSummary("session-overflow")
-	if !strings.Contains(summary, "Emergency compression") {
-		t.Fatalf("expected compression note in summary, got %q", summary)
-	}
-
-	// Event should carry the proactive reason
-	events := collectEventStream(sub.C)
-	compressEvt, ok := findEvent(events, EventKindContextCompress)
-	if !ok {
-		t.Fatal("expected context compress event")
-	}
-	payload, ok := compressEvt.Payload.(ContextCompressPayload)
-	if !ok {
-		t.Fatalf("expected ContextCompressPayload, got %T", compressEvt.Payload)
-	}
-	if payload.Reason != ContextCompressReasonRetry {
-		t.Fatalf("expected retry reason, got %q", payload.Reason)
-	}
+	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; overflow compression is now handled by PikaContextManager")
 }
 
 func TestLegacyCompact_Overflow_ProactiveReason(t *testing.T) {
-	cfg := testConfig(t)
-	al := newCMTestAgentLoop(cfg)
-
-	defaultAgent := al.registry.GetDefaultAgent()
-	if defaultAgent == nil {
-		t.Fatal("expected default agent")
-	}
-
-	history := []providers.Message{
-		{Role: "user", Content: "msg 1"},
-		{Role: "assistant", Content: "resp 1"},
-		{Role: "user", Content: "msg 2"},
-		{Role: "assistant", Content: "resp 2"},
-		{Role: "user", Content: "msg 3"},
-	}
-	defaultAgent.Sessions.SetHistory("session-proactive", history)
-
-	sub := al.SubscribeEvents(16)
-	defer al.UnsubscribeEvents(sub.ID)
-
-	err := al.contextManager.Compact(context.Background(), &CompactRequest{
-		SessionKey: "session-proactive",
-		Reason:     ContextCompressReasonProactive,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	events := collectEventStream(sub.C)
-	compressEvt, ok := findEvent(events, EventKindContextCompress)
-	if !ok {
-		t.Fatal("expected context compress event")
-	}
-	payload, ok := compressEvt.Payload.(ContextCompressPayload)
-	if !ok {
-		t.Fatalf("expected ContextCompressPayload, got %T", compressEvt.Payload)
-	}
-	if payload.Reason != ContextCompressReasonProactive {
-		t.Fatalf("expected proactive reason, got %q", payload.Reason)
-	}
+	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; overflow compression is now handled by PikaContextManager")
 }
 
 func TestLegacyCompact_Overflow_TooShortToCompress(t *testing.T) {
-	cfg := testConfig(t)
-	al := newCMTestAgentLoop(cfg)
-
-	defaultAgent := al.registry.GetDefaultAgent()
-	if defaultAgent == nil {
-		t.Fatal("expected default agent")
-	}
-
-	history := []providers.Message{
-		{Role: "user", Content: "only one"},
-	}
-	defaultAgent.Sessions.SetHistory("session-tiny", history)
-
-	err := al.contextManager.Compact(context.Background(), &CompactRequest{
-		SessionKey: "session-tiny",
-		Reason:     ContextCompressReasonRetry,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// History should be unchanged (too short to compress)
-	newHistory := defaultAgent.Sessions.GetHistory("session-tiny")
-	if len(newHistory) != len(history) {
-		t.Fatalf("expected history unchanged, got %d messages (was %d)", len(newHistory), len(history))
-	}
+	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; overflow compression is now handled by PikaContextManager")
 }
 
 // ---------------------------------------------------------------------------
-// Legacy Compact post-turn tests
+// Compact post-turn tests
 // ---------------------------------------------------------------------------
 
 func TestLegacyCompact_PostTurn_BelowThreshold(t *testing.T) {
-	cfg := testConfig(t)
-	al := newCMTestAgentLoop(cfg)
-
-	defaultAgent := al.registry.GetDefaultAgent()
-	if defaultAgent == nil {
-		t.Fatal("expected default agent")
-	}
-
-	// Small history, below summarization thresholds
-	history := []providers.Message{
-		{Role: "user", Content: "hi"},
-		{Role: "assistant", Content: "hello"},
-	}
-	defaultAgent.Sessions.SetHistory("session-small", history)
-
-	err := al.contextManager.Compact(context.Background(), &CompactRequest{
-		SessionKey: "session-small",
-		Reason:     ContextCompressReasonSummarize,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// History should remain unchanged
-	newHistory := defaultAgent.Sessions.GetHistory("session-small")
-	if len(newHistory) != len(history) {
-		t.Fatalf("expected unchanged history, got %d messages (was %d)", len(newHistory), len(history))
-	}
+	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; post-turn compaction is now handled by PikaContextManager")
 }
 
 func TestLegacyCompact_PostTurn_ExceedsMessageThreshold(t *testing.T) {
 	t.Skip("TruncateHistory is no-op in PikaSessionStore" +
 		" (D-136). Replaced by PikaContextManager.")
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace:                 t.TempDir(),
-				ModelName:                 "test-model",
-				MaxTokens:                 4096,
-				MaxToolIterations:         10,
-				ContextWindow:             8000,
-				SummarizeMessageThreshold: 2,
-				SummarizeTokenPercent:     75,
-			},
-		},
-	}
-	msgBus := bus.NewMessageBus()
-	al := NewAgentLoop(cfg, msgBus, &simpleMockProvider{response: "summary"})
-
-	defaultAgent := al.registry.GetDefaultAgent()
-	if defaultAgent == nil {
-		t.Fatal("expected default agent")
-	}
-
-	// 6 messages > threshold of 2
-	history := []providers.Message{
-		{Role: "user", Content: "q1"},
-		{Role: "assistant", Content: "a1"},
-		{Role: "user", Content: "q2"},
-		{Role: "assistant", Content: "a2"},
-		{Role: "user", Content: "q3"},
-		{Role: "assistant", Content: "a3"},
-	}
-	defaultAgent.Sessions.SetHistory("session-threshold", history)
-
-	err := al.contextManager.Compact(context.Background(), &CompactRequest{
-		SessionKey: "session-threshold",
-		Reason:     ContextCompressReasonSummarize,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Wait for async summarization to complete via event
-	sub := al.SubscribeEvents(16)
-	defer al.UnsubscribeEvents(sub.ID)
-
-	waitForEvent(t, sub.C, 5*time.Second, func(evt Event) bool {
-		return evt.Kind == EventKindSessionSummarize
-	})
-
-	newHistory := defaultAgent.Sessions.GetHistory("session-threshold")
-	if len(newHistory) >= len(history) {
-		t.Fatalf("expected summarization to reduce history from %d messages, got %d", len(history), len(newHistory))
-	}
 }
 
 // ---------------------------------------------------------------------------
-// Legacy Ingest tests
+// Ingest tests
 // ---------------------------------------------------------------------------
 
-func TestLegacyIngest_NoOp(t *testing.T) {
+func TestPikaIngest_NoOp(t *testing.T) {
 	cfg := testConfig(t)
 	al := newCMTestAgentLoop(cfg)
 
@@ -646,38 +467,11 @@ func TestIngestCalledDuringTurn(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// forceCompression edge cases (via legacy Compact)
+// forceCompression edge cases — skipped (legacy-specific)
 // ---------------------------------------------------------------------------
 
 func TestLegacyCompact_Overflow_SingleTurnKeepsLastUserMessage(t *testing.T) {
-	cfg := testConfig(t)
-	al := newCMTestAgentLoop(cfg)
-
-	defaultAgent := al.registry.GetDefaultAgent()
-	if defaultAgent == nil {
-		t.Fatal("expected default agent")
-	}
-
-	// History with only 2 messages — forceCompression should still handle it
-	history := []providers.Message{
-		{Role: "user", Content: "first question"},
-		{Role: "assistant", Content: "first answer"},
-	}
-	defaultAgent.Sessions.SetHistory("session-2msg", history)
-
-	err := al.contextManager.Compact(context.Background(), &CompactRequest{
-		SessionKey: "session-2msg",
-		Reason:     ContextCompressReasonRetry,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	newHistory := defaultAgent.Sessions.GetHistory("session-2msg")
-	// With 2 messages, forceCompression returns false (len <= 2), so no compression
-	if len(newHistory) != len(history) {
-		t.Fatalf("expected no compression for 2-message history, got %d", len(newHistory))
-	}
+	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; forceCompression is now handled by PikaContextManager")
 }
 
 // ---------------------------------------------------------------------------

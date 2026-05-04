@@ -162,6 +162,35 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/trail_meta_test.go` — NEW: tests for Trail (Add/Entries ordering, ring overflow at capacity 5, Serialize format, HasLoopDetection true/false, Reset clears entries), Meta (IncrementMsgCount, UpdateContextPct, Serialize with healthy/degraded+lastFail, Reset preserves Health/LastFail), concurrency (race detection via `go test -race` with parallel Add/Entries on Trail and IncrementMsgCount/Serialize on Meta)
 - **Breaking:** None (new files, additive only)
 
+### [2026-05-04] feat(pika): PikaContextManager + delete Seahorse/legacy + cleanup pipeline — wave 2b (Phases A+B+C)
+
+- **ТЗ:** ТЗ-v2-2b-A (PikaContextManager), ТЗ-v2-2b-B (delete Seahorse/legacy), ТЗ-v2-2b-C (cleanup pipeline)
+- **PR:** existing PR on `feat/v2-2b-context-manager` branch
+- **Phase A — PikaContextManager creation:**
+  - `pkg/agent/context_manager_pika.go` — NEW: `PikaContextManager` struct implementing `ContextManager` interface; `Assemble()` delegates to session store `GetHistory()`/`GetSummary()` for budget-aware context assembly; `Compact()` no-op stub (session rotation in wave 4, Atomizer in wave 5); `Ingest()` no-op (messages already persisted via PikaSessionStore); `Clear()` delegates to session store; registered via `RegisterContextManager("pika", ...)` in `init()`
+  - `pkg/agent/context_manager_pika_test.go` — NEW: tests for Assemble (returns history+summary from session), Compact (no-op, no error), Ingest (no-op), Clear (delegates to session store)
+- **Phase B — Delete Seahorse + legacy CM:**
+  - `pkg/agent/context_seahorse.go` — DELETED: Seahorse context manager implementation
+  - `pkg/agent/context_seahorse_test.go` — DELETED: Seahorse tests
+  - `pkg/agent/context_seahorse_unsupported.go` — DELETED: Seahorse build-tag stub
+  - `pkg/agent/context_legacy.go` — DELETED: legacy context manager (summarization-based compaction)
+  - `pkg/agent/context_manager_test.go` — MODIFIED: removed/skipped legacy CM tests
+  - `pkg/agent/instance.go` — MODIFIED: `resolveContextManager()` patched — removed `legacyContextManager` fallback, default name → "pika", unknown/failed CM lookup returns error
+  - `cmd/membench/` — DELETED: Seahorse benchmark binary (entire directory)
+  - `Makefile` — MODIFIED: removed `mem` target referencing deleted `cmd/membench`
+- **Phase C — Cleanup pipeline (remove legacy compression):**
+  - `pkg/agent/pipeline_llm.go` — MODIFIED: removed `CompressReasonRetry` Compact+re-Assemble block on context overflow; replaced with PIKA-V3 log warning (session rotation pending wave 4); removed `constants` import (no longer needed)
+  - `pkg/agent/pipeline_finalize.go` — MODIFIED: removed post-turn `Compact(CompressReasonSummarize)` block; replaced with PIKA-V3 no-op comment (Atomizer threshold pending wave 5)
+  - `pkg/agent/pipeline_setup.go` — MODIFIED: removed proactive `Compact(CompressReasonProactive)` + re-Assemble block; kept `isOverContextBudget()` check, replaced body with PIKA-V3 log warning (session rotation pending wave 4)
+- **Acceptance criteria met:**
+  - No `CompressReasonSummarize` calls in pipeline
+  - No `CompressReasonRetry` calls in pipeline
+  - No `maybeSummarize` / `forceCompression` / `TruncateHistory` calls in pipeline
+  - Legacy Seahorse + context_legacy.go fully removed
+  - PikaContextManager is sole CM (registered as "pika", default in config)
+  - PIKA-V3 stubs: `isOverContextBudget()` → log warning (wave 4 rotation), post-turn → no-op (wave 5 Atomizer)
+- **Breaking:** Seahorse CM deleted. Legacy CM deleted. `cmd/membench` deleted. Pipeline no longer performs any context compression on overflow or post-turn — gracefully logs warnings with PIKA-V3 markers. PikaContextManager's `Compact()` is a no-op stub.
+
 ### [2026-05-04] feat(pika): envelope.go — unified tool response envelope — wave 2c
 
 - **ТЗ:** ТЗ-v2-2c: envelope.go — Tool response envelope

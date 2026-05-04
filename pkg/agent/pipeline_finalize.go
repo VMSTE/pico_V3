@@ -11,7 +11,7 @@ import (
 
 // Finalize handles turn finalization, either:
 // - Early return when allResponsesHandled=true (ExecuteTools already finalized)
-// - Normal finalization for allResponsesHandled=false (sets finalContent, saves session, compact)
+// - Normal finalization for allResponsesHandled=false (sets finalContent, saves session)
 func (p *Pipeline) Finalize(
 	ctx context.Context,
 	turnCtx context.Context,
@@ -61,16 +61,8 @@ func (p *Pipeline) Finalize(
 		}
 	}
 
-	if ts.opts.EnableSummary {
-		al.contextManager.Compact(
-			turnCtx,
-			&CompactRequest{
-				SessionKey: ts.sessionKey,
-				Reason:     ContextCompressReasonSummarize,
-				Budget:     ts.agent.ContextWindow,
-			},
-		)
-	}
+	// PIKA-V3: legacy post-turn CompressReasonSummarize removed (Phase C, wave 2b).
+	// Post-turn compaction will be handled by Atomizer threshold (wave 5, no-op stub).
 
 	ts.setPhase(TurnPhaseCompleted)
 	return turnResult{

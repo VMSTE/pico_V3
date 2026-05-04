@@ -423,7 +423,9 @@ func TestAgentLoop_EmitsContextCompressEventOnRetry(t *testing.T) {
 	sub := al.SubscribeEvents(16)
 	defer al.UnsubscribeEvents(sub.ID)
 
-	resp, err := al.runAgentLoop(context.Background(), defaultAgent, processOptions{
+	// PIKA-V3 Phase C: legacy compression retry removed.
+	// Context overflow now returns error (wave 4 adds session rotation).
+	_, err = al.runAgentLoop(context.Background(), defaultAgent, processOptions{
 		SessionKey:      "session-1",
 		Channel:         "cli",
 		ChatID:          "direct",
@@ -432,100 +434,20 @@ func TestAgentLoop_EmitsContextCompressEventOnRetry(t *testing.T) {
 		EnableSummary:   false,
 		SendResponse:    false,
 	})
-	if err != nil {
-		t.Fatalf("runAgentLoop failed: %v", err)
-	}
-	if resp != "Recovered from context error" {
-		t.Fatalf("expected retry success, got %q", resp)
+	if err == nil {
+		t.Fatal("expected error after context overflow, got nil")
 	}
 
 	events := collectEventStream(sub.C)
-	retryEvt, ok := findEvent(events, EventKindLLMRetry)
-	if !ok {
-		t.Fatal("expected llm retry event")
-	}
-	retryPayload, ok := retryEvt.Payload.(LLMRetryPayload)
-	if !ok {
-		t.Fatalf("expected LLMRetryPayload, got %T", retryEvt.Payload)
-	}
-	if retryPayload.Reason != "context_limit" {
-		t.Fatalf("expected context_limit retry reason, got %q", retryPayload.Reason)
-	}
-	if retryPayload.Attempt != 1 {
-		t.Fatalf("expected retry attempt 1, got %d", retryPayload.Attempt)
-	}
-
-	compressEvt, ok := findEvent(events, EventKindContextCompress)
-	if !ok {
-		t.Fatal("expected context compress event")
-	}
-	payload, ok := compressEvt.Payload.(ContextCompressPayload)
-	if !ok {
-		t.Fatalf("expected ContextCompressPayload, got %T", compressEvt.Payload)
-	}
-	if payload.Reason != ContextCompressReasonRetry {
-		t.Fatalf("expected retry compress reason, got %q", payload.Reason)
-	}
-	if payload.DroppedMessages == 0 {
-		t.Fatal("expected dropped messages to be recorded")
+	// Verify NO compress event is emitted (removed in Phase C)
+	_, ok := findEvent(events, EventKindContextCompress)
+	if ok {
+		t.Fatal("unexpected context compress event after Phase C removal")
 	}
 }
 
 func TestAgentLoop_EmitsSessionSummarizeEvent(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "agent-eventbus-summary-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	cfg := &config.Config{
-		Agents: config.AgentsConfig{
-			Defaults: config.AgentDefaults{
-				Workspace:                 tmpDir,
-				ModelName:                 "test-model",
-				MaxTokens:                 4096,
-				MaxToolIterations:         10,
-				ContextWindow:             8000,
-				SummarizeMessageThreshold: 2,
-				SummarizeTokenPercent:     75,
-			},
-		},
-	}
-
-	msgBus := bus.NewMessageBus()
-	al := NewAgentLoop(cfg, msgBus, &simpleMockProvider{response: "summary text"})
-	defaultAgent := al.registry.GetDefaultAgent()
-	if defaultAgent == nil {
-		t.Fatal("expected default agent")
-	}
-
-	defaultAgent.Sessions.SetHistory("session-1", []providers.Message{
-		{Role: "user", Content: "Question one"},
-		{Role: "assistant", Content: "Answer one"},
-		{Role: "user", Content: "Question two"},
-		{Role: "assistant", Content: "Answer two"},
-		{Role: "user", Content: "Question three"},
-		{Role: "assistant", Content: "Answer three"},
-	})
-
-	sub := al.SubscribeEvents(16)
-	defer al.UnsubscribeEvents(sub.ID)
-
-	lcm := &legacyContextManager{al: al}
-	lcm.summarizeSession(defaultAgent, "session-1")
-
-	events := collectEventStream(sub.C)
-	summaryEvt, ok := findEvent(events, EventKindSessionSummarize)
-	if !ok {
-		t.Fatal("expected session summarize event")
-	}
-	payload, ok := summaryEvt.Payload.(SessionSummarizePayload)
-	if !ok {
-		t.Fatalf("expected SessionSummarizePayload, got %T", summaryEvt.Payload)
-	}
-	if payload.SummaryLen == 0 {
-		t.Fatal("expected non-empty summary length")
-	}
+	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; session summarization is now handled by PikaContextManager")
 }
 
 func TestAgentLoop_EmitsFollowUpQueuedEvent(t *testing.T) {

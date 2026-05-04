@@ -251,10 +251,10 @@ func TestMetaReset(t *testing.T) {
 	}
 
 	// Health and LastFail are NOT reset
-	if m.GetHealth() != StateDegraded {
+	if m.GetHealth().Status != StateDegraded.Status {
 		t.Errorf(
 			"Health = %s after reset, want degraded",
-			m.GetHealth(),
+			m.GetHealth().Status,
 		)
 	}
 	m.mu.RLock()

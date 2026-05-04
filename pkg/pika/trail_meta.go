@@ -157,15 +157,8 @@ func (t *Trail) Reset() {
 }
 
 // --- META: system metrics ---
-
-// SystemState — system health state for META.HEALTH.
-type SystemState string
-
-const (
-	StateHealthy  SystemState = "healthy"
-	StateDegraded SystemState = "degraded"
-	StateOffline  SystemState = "offline"
-)
+// SystemState type and constants (StateHealthy, StateDegraded, StateOffline)
+// are defined in interfaces.go.
 
 // Meta — system metrics, updated after each API response.
 // Thread-safe via sync.RWMutex.
@@ -252,10 +245,10 @@ func (m *Meta) Serialize() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	healthStr := string(m.Health)
-	if m.Health == StateDegraded {
+	healthStr := m.Health.Status
+	if m.Health.Status == "degraded" {
 		healthStr = "⚠️ degraded"
-	} else if m.Health == StateOffline {
+	} else if m.Health.Status == "offline" {
 		healthStr = "🔴 offline"
 	}
 

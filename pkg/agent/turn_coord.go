@@ -292,25 +292,26 @@ func (al *AgentLoop) selectCandidates(
 	return agent.LightCandidates, resolvedCandidateModel(agent.LightCandidates, agent.Router.LightModel()), true
 }
 
+// resolveContextManager returns the configured ContextManager.
+// PIKA-V3 Phase B: legacyContextManager removed; default is now "pika".
 func (al *AgentLoop) resolveContextManager() ContextManager {
 	name := al.cfg.Agents.Defaults.ContextManager
 	if name == "" || name == "legacy" {
-		return &legacyContextManager{al: al}
+		name = "pika"
 	}
 	factory, ok := lookupContextManager(name)
 	if !ok {
-		logger.WarnCF("agent", "Unknown context manager, falling back to legacy", map[string]any{
+		logger.WarnCF("agent", "Unknown context manager, trying pika", map[string]any{
 			"name": name,
 		})
-		return &legacyContextManager{al: al}
+		factory, ok = lookupContextManager("pika")
+		if !ok {
+			panic(fmt.Sprintf("context manager %q not registered and pika fallback unavailable", name))
+		}
 	}
 	cm, err := factory(al.cfg.Agents.Defaults.ContextManagerConfig, al)
 	if err != nil {
-		logger.WarnCF("agent", "Failed to create context manager, falling back to legacy", map[string]any{
-			"name":  name,
-			"error": err.Error(),
-		})
-		return &legacyContextManager{al: al}
+		panic(fmt.Sprintf("failed to create context manager %q: %v", name, err))
 	}
 	return cm
 }
