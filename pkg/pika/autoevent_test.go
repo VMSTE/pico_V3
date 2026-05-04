@@ -11,8 +11,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// setupAutoEventTest creates a temp DB with schema,
-// BotMemory, and AutoEventHandler configured for tests.
 func setupAutoEventTest(t *testing.T) (
 	*AutoEventHandler, *sql.DB,
 ) {
@@ -68,14 +66,13 @@ func setupAutoEventTest(t *testing.T) (
 }
 
 func countEvents(
-	t *testing.T, db *sql.DB, sessionID string,
+	t *testing.T, db *sql.DB, sid string,
 ) int {
 	t.Helper()
 	var c int
 	err := db.QueryRow(
 		"SELECT COUNT(*) FROM events "+
-			"WHERE session_id=?",
-		sessionID,
+			"WHERE session_id=?", sid,
 	).Scan(&c)
 	if err != nil {
 		t.Fatal(err)
@@ -84,13 +81,13 @@ func countEvents(
 }
 
 func getEventTypes(
-	t *testing.T, db *sql.DB, sessionID string,
+	t *testing.T, db *sql.DB, sid string,
 ) []string {
 	t.Helper()
 	rows, err := db.Query(
 		"SELECT type FROM events "+
 			"WHERE session_id=? ORDER BY id ASC",
-		sessionID,
+		sid,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -104,11 +101,14 @@ func getEventTypes(
 		}
 		types = append(types, tp)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	return types
 }
 
 func getEventOutcome(
-	t *testing.T, db *sql.DB, sessionID string,
+	t *testing.T, db *sql.DB, sid string,
 ) string {
 	t.Helper()
 	var outcome sql.NullString
@@ -116,7 +116,7 @@ func getEventOutcome(
 		"SELECT outcome FROM events "+
 			"WHERE session_id=? "+
 			"ORDER BY id DESC LIMIT 1",
-		sessionID,
+		sid,
 	).Scan(&outcome)
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +124,6 @@ func getEventOutcome(
 	return outcome.String
 }
 
-// 1. sandbox.run -> INSERT type=tool_exec
 func TestAutoEvent_WriteOp(t *testing.T) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
@@ -136,7 +135,6 @@ func TestAutoEvent_WriteOp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if c := countEvents(t, db, sid); c != 1 {
 		t.Fatalf("expected 1 event, got %d", c)
 	}
@@ -148,7 +146,6 @@ func TestAutoEvent_WriteOp(t *testing.T) {
 	}
 }
 
-// 2. compose.status -> no mapping -> 0 events
 func TestAutoEvent_ReadOpSkipped(t *testing.T) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
@@ -160,13 +157,11 @@ func TestAutoEvent_ReadOpSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if c := countEvents(t, db, sid); c != 0 {
 		t.Fatalf("expected 0 events, got %d", c)
 	}
 }
 
-// 3. sandbox.run + isError -> tool_fail
 func TestAutoEvent_FailSuffix(t *testing.T) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
@@ -178,7 +173,6 @@ func TestAutoEvent_FailSuffix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if c := countEvents(t, db, sid); c != 1 {
 		t.Fatalf("expected 1 event, got %d", c)
 	}
@@ -196,7 +190,6 @@ func TestAutoEvent_FailSuffix(t *testing.T) {
 	}
 }
 
-// 4. 4x same -> 3 written, 4th dropped
 func TestAutoEvent_ConsecutiveDedup(t *testing.T) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
@@ -207,16 +200,14 @@ func TestAutoEvent_ConsecutiveDedup(t *testing.T) {
 			ctx, "sandbox", "run", false, sid, 1,
 		)
 	}
-
 	c := countEvents(t, db, sid)
 	if c != 3 {
 		t.Fatalf(
-			"expected 3 events (4th dropped), got %d", c,
+			"expected 3 (4th dropped), got %d", c,
 		)
 	}
 }
 
-// 5. heartbeat type -> 0 INSERTs, counter++
 func TestAutoEvent_HeartbeatCounter(t *testing.T) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
@@ -228,23 +219,20 @@ func TestAutoEvent_HeartbeatCounter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if c := countEvents(t, db, sid); c != 0 {
 		t.Fatalf(
-			"expected 0 events (heartbeat), got %d", c,
+			"expected 0 (heartbeat), got %d", c,
 		)
 	}
-
 	val, ok := h.heartbeatCtrs.Load("health_ping")
 	if !ok {
 		t.Fatal("heartbeat counter not found")
 	}
 	if atomic.LoadInt64(val.(*int64)) != 1 {
-		t.Fatal("expected heartbeat counter = 1")
+		t.Fatal("expected counter = 1")
 	}
 }
 
-// 6. flush -> 1 summary INSERT with count
 func TestAutoEvent_HeartbeatFlush(t *testing.T) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
@@ -255,7 +243,6 @@ func TestAutoEvent_HeartbeatFlush(t *testing.T) {
 			ctx, "health", "check", false, sid, 1,
 		)
 	}
-
 	if c := countEvents(t, db, sid); c != 0 {
 		t.Fatalf(
 			"expected 0 before flush, got %d", c,
@@ -266,7 +253,6 @@ func TestAutoEvent_HeartbeatFlush(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if c := countEvents(t, db, sid); c != 1 {
 		t.Fatalf(
 			"expected 1 after flush, got %d", c,
@@ -276,8 +262,7 @@ func TestAutoEvent_HeartbeatFlush(t *testing.T) {
 	var summary string
 	err = db.QueryRow(
 		"SELECT summary FROM events "+
-			"WHERE session_id=?",
-		sid,
+			"WHERE session_id=?", sid,
 	).Scan(&summary)
 	if err != nil {
 		t.Fatal(err)
@@ -289,8 +274,9 @@ func TestAutoEvent_HeartbeatFlush(t *testing.T) {
 	}
 }
 
-// 7. heartbeat + isError -> escalate INSERT
-func TestAutoEvent_HeartbeatFailEscalate(t *testing.T) {
+func TestAutoEvent_HeartbeatFailEscalate(
+	t *testing.T,
+) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
 	sid := "test-hb-escalate"
@@ -301,13 +287,11 @@ func TestAutoEvent_HeartbeatFailEscalate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if c := countEvents(t, db, sid); c != 1 {
 		t.Fatalf(
 			"expected 1 (escalated), got %d", c,
 		)
 	}
-
 	types := getEventTypes(t, db, sid)
 	if types[0] != "health_ping_fail" {
 		t.Fatalf(
@@ -317,7 +301,6 @@ func TestAutoEvent_HeartbeatFailEscalate(t *testing.T) {
 	}
 }
 
-// 8. forced invalid type -> drop
 func TestAutoEvent_InvalidType(t *testing.T) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
@@ -331,7 +314,6 @@ func TestAutoEvent_InvalidType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if c := countEvents(t, db, sid); c != 0 {
 		t.Fatalf(
 			"expected 0 (invalid type), got %d", c,
@@ -339,14 +321,12 @@ func TestAutoEvent_InvalidType(t *testing.T) {
 	}
 }
 
-// 9. orphan eventClass -> warning
 func TestAutoEvent_ValidateStartup(t *testing.T) {
 	h, _ := setupAutoEventTest(t)
 
 	h.eventClasses.Critical["orphan_type"] = true
 
 	warnings := h.ValidateStartup()
-
 	found := false
 	for _, w := range warnings {
 		if strings.Contains(w, "orphan_type") &&
@@ -357,13 +337,12 @@ func TestAutoEvent_ValidateStartup(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf(
-			"expected orphan_type warning, got: %v",
+			"expected orphan warning, got: %v",
 			warnings,
 		)
 	}
 }
 
-// 10. tool without mapping -> warning
 func TestAutoEvent_CoverageCheck(t *testing.T) {
 	h, _ := setupAutoEventTest(t)
 
@@ -373,7 +352,6 @@ func TestAutoEvent_CoverageCheck(t *testing.T) {
 	})
 
 	warnings := h.ValidateStartup()
-
 	found := false
 	for _, w := range warnings {
 		if strings.Contains(w, "unknown.write_op") &&
@@ -390,7 +368,6 @@ func TestAutoEvent_CoverageCheck(t *testing.T) {
 	}
 }
 
-// 11. search_memory.search -> memory_search
 func TestAutoEvent_BrainTools(t *testing.T) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
@@ -403,7 +380,6 @@ func TestAutoEvent_BrainTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if c := countEvents(t, db, sid); c != 1 {
 		t.Fatalf("expected 1 event, got %d", c)
 	}

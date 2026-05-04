@@ -9,35 +9,36 @@ import (
 	"sync/atomic"
 )
 
-// PIKA-V3: AutoEventHandler — deterministic event generator after tool calls.
-// Zero LLM. Go maps tool action → event type → tags → INSERT into events table.
+// PIKA-V3: AutoEventHandler — deterministic event generator
+// after tool calls.
+// Zero LLM. Go maps tool action -> event type -> tags -> INSERT.
 
-// EventClasses defines three tiers of event persistence behavior.
+// EventClasses defines three tiers of event persistence.
 type EventClasses struct {
-	Critical   map[string]bool // always persist + full atomization
-	Diagnostic map[string]bool // persist + aggregate atomization
-	Heartbeat  map[string]bool // in-memory counter, flush on rotate
+	Critical   map[string]bool // always persist
+	Diagnostic map[string]bool // persist + aggregate
+	Heartbeat  map[string]bool // in-memory counter
 }
 
-// AutoEventHandler записывает events после tool calls.
+// AutoEventHandler records events after tool calls.
 type AutoEventHandler struct {
 	bm            *BotMemory
-	toolTypeMap   map[string]string   // "sandbox.run" → "tool_exec"
-	toolTagMap    map[string][]string // "sandbox.run" → ["tool:sandbox"]
+	toolTypeMap   map[string]string
+	toolTagMap    map[string][]string
 	eventClasses  EventClasses
-	validTypes    map[string]bool // startup-built set for runtime guard
-	heartbeatCtrs sync.Map        // eventType → *int64 (atomic counter)
+	validTypes    map[string]bool
+	heartbeatCtrs sync.Map // eventType -> *int64
 
-	// PIKA-V3: entropy filter — consecutive dedup ring buffer
+	// PIKA-V3: entropy filter — consecutive dedup
 	mu             sync.Mutex
 	recentTypes    []string
-	dedupThreshold int // drop_if_consecutive_same (default 3)
+	dedupThreshold int
 
-	// PIKA-V3: optional — registered write-ops for coverage check (F7-4)
+	// optional — registered write-ops for coverage (F7-4)
 	registeredWriteOps []string
 }
 
-// brainAutoEventMap contains hardcoded BRAIN tool → event type mappings.
+// brainAutoEventMap: hardcoded BRAIN tool -> event type.
 var brainAutoEventMap = map[string]string{
 	"search_memory.search":      "memory_search",
 	"registry_write.write":      "registry_write",
@@ -46,7 +47,7 @@ var brainAutoEventMap = map[string]string{
 	"clarify.ask_manager":       "clarify_ask_manager",
 }
 
-// brainAutoTagMap contains hardcoded BRAIN tool → tags mappings.
+// brainAutoTagMap: hardcoded BRAIN tool -> tags.
 var brainAutoTagMap = map[string][]string{
 	"search_memory.search": {
 		"tool:search_memory", "op:search",
@@ -61,16 +62,13 @@ var brainAutoTagMap = map[string][]string{
 	"clarify.ask_manager": {"tool:clarify", "op:ask_manager"},
 }
 
-// NewAutoEventHandler creates an AutoEventHandler with merged mappings.
-// toolTypeMap and toolTagMap come from filesystem loader (autoEvent.json).
-// BRAIN mappings are merged automatically.
+// NewAutoEventHandler creates handler with merged mappings.
 func NewAutoEventHandler(
 	bm *BotMemory,
 	toolTypeMap map[string]string,
 	toolTagMap map[string][]string,
 	eventClasses EventClasses,
 ) *AutoEventHandler {
-	// Merge BRAIN hardcoded mappings into copies
 	merged := make(
 		map[string]string,
 		len(toolTypeMap)+len(brainAutoEventMap),
@@ -93,7 +91,6 @@ func NewAutoEventHandler(
 		mergedTags[k] = v
 	}
 
-	// Build validTypes set from all event type values
 	valid := make(map[string]bool)
 	for _, et := range merged {
 		valid[et] = true
@@ -109,14 +106,14 @@ func NewAutoEventHandler(
 	}
 }
 
-// SetRegisteredWriteOps sets the list of registered write-ops
-// for coverage validation (F7-4). Called by wiring code at startup.
-func (h *AutoEventHandler) SetRegisteredWriteOps(ops []string) {
+// SetRegisteredWriteOps sets write-ops for coverage (F7-4).
+func (h *AutoEventHandler) SetRegisteredWriteOps(
+	ops []string,
+) {
 	h.registeredWriteOps = ops
 }
 
 // HandleToolResult is called after each tool call from loop.go.
-// It deterministically maps tool actions to events and persists them.
 func (h *AutoEventHandler) HandleToolResult(
 	ctx context.Context,
 	toolName string,
@@ -125,25 +122,22 @@ func (h *AutoEventHandler) HandleToolResult(
 	sessionID string,
 	turnID int,
 ) error {
-	// 1. Build key: toolName.operation (+ _fail suffix if isError)
+	// 1. Build key
 	key := toolName + "." + operation
 	if isError {
 		failKey := key + "_fail"
 		if _, ok := h.toolTypeMap[failKey]; ok {
 			key = failKey
 		}
-		// If fail key not found, use base key
-		// (heartbeat escalation case)
 	}
 
-	// 2. Lookup eventType in toolTypeMap
+	// 2. Lookup eventType
 	eventType, ok := h.toolTypeMap[key]
 	if !ok {
-		// Read-only operations not mapped → skip silently
 		return nil
 	}
 
-	// 3. Runtime guard: reject invalid types
+	// 3. Runtime guard
 	if !h.validTypes[eventType] {
 		log.Printf(
 			"WARN pika/autoevent: invalid event type %q "+
@@ -153,22 +147,20 @@ func (h *AutoEventHandler) HandleToolResult(
 		return nil
 	}
 
-	// 4. Entropy filter — consecutive dedup
-	if !h.checkAndRecordEvent(eventType) {
-		return nil
-	}
-
-	// 5. Determine outcome
 	outcome := "success"
 	if isError {
 		outcome = "fail"
 	}
 	summary := toolName + "." + operation
 
-	// 6. Event class routing
+	// 4. Heartbeat routing BEFORE entropy filter.
+	// Heartbeats don't write to DB — dedup not needed.
 	if h.eventClasses.Heartbeat[eventType] {
 		if isError {
 			// Fail escalates heartbeat to critical INSERT
+			if !h.checkAndRecordEvent(eventType) {
+				return nil
+			}
 			return h.insertEvent(
 				ctx, sessionID, turnID,
 				eventType, summary, outcome, key,
@@ -178,15 +170,19 @@ func (h *AutoEventHandler) HandleToolResult(
 		return nil
 	}
 
-	// Critical, Diagnostic, or unknown class → INSERT
+	// 5. Entropy filter for DB writes
+	if !h.checkAndRecordEvent(eventType) {
+		return nil
+	}
+
+	// 6. Critical / Diagnostic / default -> INSERT
 	return h.insertEvent(
 		ctx, sessionID, turnID,
 		eventType, summary, outcome, key,
 	)
 }
 
-// FlushHeartbeats writes summary heartbeat events on session rotation.
-// Called by loop.go when rotating sessions.
+// FlushHeartbeats writes summary events on session rotation.
 func (h *AutoEventHandler) FlushHeartbeats(
 	ctx context.Context,
 	sessionID string,
@@ -233,25 +229,21 @@ func (h *AutoEventHandler) FlushHeartbeats(
 }
 
 // ValidateStartup checks mapping consistency at startup.
-// Returns a list of warning strings. Empty = all ok.
 func (h *AutoEventHandler) ValidateStartup() []string {
 	var warnings []string
 
-	// 1. validTypes already built in constructor
-
-	// 2. Each eventType in toolTypeMap should be in an event class
 	for key, eventType := range h.toolTypeMap {
 		if !h.eventClasses.Critical[eventType] &&
 			!h.eventClasses.Diagnostic[eventType] &&
 			!h.eventClasses.Heartbeat[eventType] {
 			warnings = append(warnings, fmt.Sprintf(
-				"event type %q (from %q) not in any event class",
+				"event type %q (from %q) "+
+					"not in any event class",
 				eventType, key,
 			))
 		}
 	}
 
-	// 3. Each eventType in eventClasses should be in toolTypeMap
 	allValues := make(map[string]bool)
 	for _, et := range h.toolTypeMap {
 		allValues[et] = true
@@ -259,8 +251,8 @@ func (h *AutoEventHandler) ValidateStartup() []string {
 	for et := range h.eventClasses.Critical {
 		if !allValues[et] {
 			warnings = append(warnings, fmt.Sprintf(
-				"orphan critical class: %q not in "+
-					"toolTypeMap values",
+				"orphan critical class: %q "+
+					"not in toolTypeMap values",
 				et,
 			))
 		}
@@ -268,8 +260,8 @@ func (h *AutoEventHandler) ValidateStartup() []string {
 	for et := range h.eventClasses.Diagnostic {
 		if !allValues[et] {
 			warnings = append(warnings, fmt.Sprintf(
-				"orphan diagnostic class: %q not in "+
-					"toolTypeMap values",
+				"orphan diagnostic class: %q "+
+					"not in toolTypeMap values",
 				et,
 			))
 		}
@@ -277,19 +269,19 @@ func (h *AutoEventHandler) ValidateStartup() []string {
 	for et := range h.eventClasses.Heartbeat {
 		if !allValues[et] {
 			warnings = append(warnings, fmt.Sprintf(
-				"orphan heartbeat class: %q not in "+
-					"toolTypeMap values",
+				"orphan heartbeat class: %q "+
+					"not in toolTypeMap values",
 				et,
 			))
 		}
 	}
 
-	// 4. Coverage check (F7-4): unmapped write-ops
 	if h.registeredWriteOps != nil {
 		for _, op := range h.registeredWriteOps {
 			if _, ok := h.toolTypeMap[op]; !ok {
 				warnings = append(warnings, fmt.Sprintf(
-					"unmapped write-op: %q not in toolTypeMap",
+					"unmapped write-op: %q "+
+						"not in toolTypeMap",
 					op,
 				))
 			}
@@ -299,9 +291,8 @@ func (h *AutoEventHandler) ValidateStartup() []string {
 	return warnings
 }
 
-// checkAndRecordEvent checks consecutive dedup and records the event
-// in the ring buffer. Returns true if the event should be persisted,
-// false if it should be dropped (consecutive dup).
+// checkAndRecordEvent checks consecutive dedup.
+// Returns true if event should be persisted.
 func (h *AutoEventHandler) checkAndRecordEvent(
 	eventType string,
 ) bool {
@@ -318,29 +309,30 @@ func (h *AutoEventHandler) checkAndRecordEvent(
 			}
 		}
 		if allSame {
-			return false // drop — consecutive dup
+			return false
 		}
 	}
 
-	// Record this event type
 	h.recentTypes = append(h.recentTypes, eventType)
-	// Trim to keep memory bounded
 	if len(h.recentTypes) > 100 {
-		copy(h.recentTypes, h.recentTypes[50:])
+		copy(
+			h.recentTypes,
+			h.recentTypes[50:],
+		)
 		h.recentTypes = h.recentTypes[:50]
 	}
-	return true // allow
+	return true
 }
 
-// incrementHeartbeat atomically increments the counter for eventType.
-func (h *AutoEventHandler) incrementHeartbeat(eventType string) {
+func (h *AutoEventHandler) incrementHeartbeat(
+	eventType string,
+) {
 	val, _ := h.heartbeatCtrs.LoadOrStore(
 		eventType, new(int64),
 	)
 	atomic.AddInt64(val.(*int64), 1)
 }
 
-// insertEvent persists an event via BotMemory.SaveEvent.
 func (h *AutoEventHandler) insertEvent(
 	ctx context.Context,
 	sessionID string,
@@ -363,7 +355,9 @@ func (h *AutoEventHandler) insertEvent(
 		TurnID:    turnID,
 	})
 	if err != nil {
-		return fmt.Errorf("pika/autoevent: save event: %w", err)
+		return fmt.Errorf(
+			"pika/autoevent: save event: %w", err,
+		)
 	}
 	return nil
 }
