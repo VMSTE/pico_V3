@@ -42,9 +42,11 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 		if isOverContextBudget(ts.agent.ContextWindow, messages, toolDefs, ts.agent.MaxTokens) {
 			// PIKA-V3: legacy proactive CompressReasonProactive removed (Phase C, wave 2b).
 			// Context rotation via SessionLifecycle will handle budget overflow (wave 4).
-			logger.WarnCF("agent",
+			logger.WarnCF(
+				"agent",
 				"PIKA-V3: context budget exceeded before LLM call, legacy compression removed; pending session rotation (wave 4)",
-				map[string]any{"session_key": ts.sessionKey})
+				map[string]any{"session_key": ts.sessionKey},
+			)
 		}
 	}
 
@@ -59,7 +61,11 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 		ts.ingestMessage(ctx, p.al, rootMsg)
 	}
 
-	activeCandidates, activeModel, usedLight := p.al.selectCandidates(ts.agent, ts.userMessage, messages)
+	activeCandidates, activeModel, usedLight := p.al.selectCandidates(
+		ts.agent,
+		ts.userMessage,
+		messages,
+	)
 	activeProvider := ts.agent.Provider
 	if usedLight && ts.agent.LightProvider != nil {
 		activeProvider = ts.agent.LightProvider

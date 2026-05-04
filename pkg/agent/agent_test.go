@@ -5273,22 +5273,23 @@ func TestProcessMessage_ContextOverflowRecovery(t *testing.T) {
 		agent.Sessions.AddFullMessage(sessionKey, providers.Message{Role: "assistant", Content: "response"})
 	}
 
-	response, err := al.processMessage(context.Background(), testInboundMessage(bus.InboundMessage{
+	_, err := al.processMessage(context.Background(), testInboundMessage(bus.InboundMessage{
 		Channel:    "test",
 		ChatID:     "chat1",
 		SenderID:   "user1",
 		SessionKey: "test-session",
 		Content:    "trigger recovery",
 	}))
-	if err != nil {
-		t.Fatalf("processMessage() error = %v", err)
+		// PIKA-V3 Phase C: legacy compression retry removed.
+	// Context overflow now returns error (wave 4 adds session rotation).
+	if err == nil {
+		t.Fatal("expected error after context overflow, got nil")
 	}
-	if response != "Recovered from overflow" {
-		t.Fatalf("response = %q, want %q", response, "Recovered from overflow")
+	if !strings.Contains(err.Error(), "context_window_exceeded") {
+		t.Fatalf("expected context_window_exceeded error, got: %v", err)
 	}
-
-	if provider.calls != 2 {
-		t.Fatalf("expected 2 calls, got %d", provider.calls)
+	if provider.calls != 1 {
+		t.Fatalf("expected 1 call (no retry), got %d", provider.calls)
 	}
 }
 

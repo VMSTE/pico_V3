@@ -87,7 +87,7 @@ func (a *pikaContextManagerAdapter) Assemble(
 		)
 		// Degraded: return history without system prompt;
 		// upstream ContextBuilder will be used as fallback.
-		return &AssembleResponse{
+		return &AssembleResponse{ //nolint:nilerr // degraded mode
 			History: history,
 			Summary: summary,
 		}, nil
