@@ -151,7 +151,7 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ---
 
-## Wave 2: Runtime Components (TRAIL/META, context manager)
+## Wave 2: Runtime Components (TRAIL/META, envelope, context manager)
 
 ### [2026-05-04] feat(pika): trail_meta.go — TRAIL ring buffer + META metrics — wave 2a
 
@@ -161,3 +161,12 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/trail_meta.go` — NEW: `TrailEntry` struct (Timestamp, Operation, StatusIcon, Detail, IsError); `Trail` struct — fixed-size ring buffer (`[5]TrailEntry`, thread-safe via `sync.RWMutex`); `NewTrail()` constructor; `Trail.Add(op, statusIcon, detail, isError)` with auto-timestamp; `Trail.Entries()` returns oldest→newest ordered slice; `Trail.Serialize()` formatted text output (`[HH:MM:SS] icon OPERATION: detail`); `Trail.HasLoopDetection(threshold)` detects N consecutive identical operations; `Trail.Reset()` clears all entries; `Meta` struct — system metrics (MsgCount int, ContextPct float64, Health SystemState, LastFail *time.Time, thread-safe via `sync.RWMutex`); `SystemState` type alias (Healthy/Degraded/Offline constants); `NewMeta()` constructor with Health=Healthy; `Meta.IncrementMsgCount()`; `Meta.UpdateContextPct(pct)`; `Meta.Serialize()` formatted text output; `Meta.Reset()` preserves Health and LastFail, resets MsgCount and ContextPct
   - `pkg/pika/trail_meta_test.go` — NEW: tests for Trail (Add/Entries ordering, ring overflow at capacity 5, Serialize format, HasLoopDetection true/false, Reset clears entries), Meta (IncrementMsgCount, UpdateContextPct, Serialize with healthy/degraded+lastFail, Reset preserves Health/LastFail), concurrency (race detection via `go test -race` with parallel Add/Entries on Trail and IncrementMsgCount/Serialize on Meta)
 - **Breaking:** None (new files, additive only)
+
+### [2026-05-04] feat(pika): envelope.go — unified tool response envelope — wave 2c
+
+- **ТЗ:** ТЗ-v2-2c: envelope.go — Tool response envelope
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/envelope.go` — NEW: `ErrorKind` type (Transient/Permanent/Degraded constants with String()); error code constants (ErrUnknownOp, ErrInvalidParams, ErrTimeout, ErrExecError, ErrPermissionDenied, ErrParseError); `Envelope` struct (OK bool, Data json.RawMessage, Error *string); `ParseEnvelope(raw []byte) Envelope` — never panics, never returns error, invalid/empty input → parse_error; `ErrorCode()` extracts code prefix from "code: description" format; `ClassifyEnvelopeError(code) ErrorKind` maps codes to Transient (timeout, exec_error) or Permanent (all others); `IsRetryable()` true only for transient errors; `ToToolResult()` converts to upstream `toolshared.ToolResult`; `formatData()` helper
+  - `pkg/pika/envelope_test.go` — NEW: 18 tests (ParseEnvelope valid ok=true with data extraction, ok=false for each of 5 error codes with correct ErrorCode/IsRetryable, invalid JSON → parse_error, empty input → parse_error, nil input → parse_error, ClassifyEnvelopeError all 6 codes + unknown code, IsRetryable table-driven for all codes, ToToolResult ok=true → IsError=false, ok=false → IsError=true, ok=true null data → empty ForLLM, ErrorKind.String() for all 3 values, ok=true not retryable)
+- **Breaking:** None (new files, additive only). Consumer: `tool_router.go` (wave 3)
