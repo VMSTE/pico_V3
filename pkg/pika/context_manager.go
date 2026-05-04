@@ -87,8 +87,14 @@ func (cm *PikaContextManager) BuildSystemPrompt(
 		sb.WriteString("\n\n")
 	}
 
-	// 3. MEMORY BRIEF (stub in wave 2: empty)
-	brief, _ := cm.archivist.BuildPrompt(ctx, sessionKey)
+	// 3. MEMORY BRIEF (Archivist, wave 3)
+	archResult, _ := cm.archivist.BuildPrompt(
+		ctx, ArchivistInput{SessionKey: sessionKey},
+	)
+	brief := ""
+	if archResult != nil {
+		brief = archResult.BriefText
+	}
 	if brief != "" {
 		sb.WriteString("--- MEMORY BRIEF ---\n")
 		sb.WriteString(brief)
