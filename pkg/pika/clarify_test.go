@@ -124,10 +124,10 @@ func newTestClarify(
 	db := newTestClarifyDB(t)
 	bm := &BotMemory{db: db}
 	cfg := &ClarifyConfig{
-		Enabled:              true,
-		TimeoutMin:           1,
+		Enabled:               true,
+		TimeoutMin:            1,
 		MaxStreakBeforeBypass: 2,
-		PrecheckTimeoutMs:    3000,
+		PrecheckTimeoutMs:     3000,
 	}
 	ch := NewClarifyHandler(cfg, bm, sender, "chat-1")
 	return ch, db
@@ -396,8 +396,8 @@ func TestClarify_PrecheckTimeout(t *testing.T) {
 
 	bm := &BotMemory{db: db}
 	cfg := &ClarifyConfig{
-		Enabled:              true,
-		TimeoutMin:           1,
+		Enabled:               true,
+		TimeoutMin:            1,
 		MaxStreakBeforeBypass: 2,
 		// Extremely short timeout to force FTS miss
 		PrecheckTimeoutMs: 1,

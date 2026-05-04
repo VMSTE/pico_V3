@@ -19,10 +19,10 @@ import (
 
 // ClarifyConfig holds config for the clarify tool.
 type ClarifyConfig struct {
-	Enabled              bool `json:"enabled"`
-	TimeoutMin           int  `json:"timeout_min"`
+	Enabled               bool `json:"enabled"`
+	TimeoutMin            int  `json:"timeout_min"`
 	MaxStreakBeforeBypass int  `json:"max_streak_before_bypass"`
-	PrecheckTimeoutMs    int  `json:"precheck_timeout_ms"`
+	PrecheckTimeoutMs     int  `json:"precheck_timeout_ms"`
 }
 
 // ClarifySender is the minimal interface for sending
