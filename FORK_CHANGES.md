@@ -148,3 +148,16 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/registry_test.go` — NEW: 13 tests (TestAtomIDGenerator_Sequential P-1/P-2/P-3, TestAtomIDGenerator_MultiCategory P-1/D-1/P-2, TestAtomIDGenerator_RecoveryFromDB insert P-1..P-5 then new generator → P-6, TestAtomIDGenerator_UnknownCategory → error, TestHandleWrite_Created, TestHandleWrite_Updated same key → created=false, TestHandleWrite_InvalidKind, TestHandleWrite_EmptyKey, TestHandleWrite_InvalidJSON, TestHandleWrite_InvalidTags not array, TestHandleRead_NotFound → nil/nil, TestHandleRead_UpdatesLastUsed, TestHandleSearch 3 entries filter by kind)
 - **Bug fix vs ТЗ:** `fmt.Sprintf("%s-%d", prefix, N)` → `fmt.Sprintf("%s%d", prefix, N)` — categoryPrefix already contains hyphen ("P-"), ТЗ format would produce "P--1"
 - **Breaking:** None (new files, additive only). Does not touch botmemory.go.
+
+---
+
+## Wave 2: Runtime Components (TRAIL/META, context manager)
+
+### [2026-05-04] feat(pika): trail_meta.go — TRAIL ring buffer + META metrics — wave 2a
+
+- **ТЗ:** ТЗ-v2-2a: trail_meta.go — TRAIL + META
+- **PR:** #16
+- **Files:**
+  - `pkg/pika/trail_meta.go` — NEW: `TrailEntry` struct (Timestamp, Operation, StatusIcon, Detail, IsError); `Trail` struct — fixed-size ring buffer (`[5]TrailEntry`, thread-safe via `sync.RWMutex`); `NewTrail()` constructor; `Trail.Add(op, statusIcon, detail, isError)` with auto-timestamp; `Trail.Entries()` returns oldest→newest ordered slice; `Trail.Serialize()` formatted text output (`[HH:MM:SS] icon OPERATION: detail`); `Trail.HasLoopDetection(threshold)` detects N consecutive identical operations; `Trail.Reset()` clears all entries; `Meta` struct — system metrics (MsgCount int, ContextPct float64, Health SystemState, LastFail *time.Time, thread-safe via `sync.RWMutex`); `SystemState` type alias (Healthy/Degraded/Offline constants); `NewMeta()` constructor with Health=Healthy; `Meta.IncrementMsgCount()`; `Meta.UpdateContextPct(pct)`; `Meta.Serialize()` formatted text output; `Meta.Reset()` preserves Health and LastFail, resets MsgCount and ContextPct
+  - `pkg/pika/trail_meta_test.go` — NEW: tests for Trail (Add/Entries ordering, ring overflow at capacity 5, Serialize format, HasLoopDetection true/false, Reset clears entries), Meta (IncrementMsgCount, UpdateContextPct, Serialize with healthy/degraded+lastFail, Reset preserves Health/LastFail), concurrency (race detection via `go test -race` with parallel Add/Entries on Trail and IncrementMsgCount/Serialize on Meta)
+- **Breaking:** None (new files, additive only)
