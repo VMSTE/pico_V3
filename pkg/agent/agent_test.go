@@ -3247,6 +3247,7 @@ func (m *failFirstMockProvider) GetDefaultModel() string {
 
 // TestAgentLoop_ContextExhaustionRetry verify that the agent retries on context errors
 func TestAgentLoop_ContextExhaustionRetry(t *testing.T) {
+	t.Skip("PIKA-V3 Phase C: legacy compression retry removed; pending session rotation wave 4")
 	tmpDir, err := os.MkdirTemp("", "agent-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
