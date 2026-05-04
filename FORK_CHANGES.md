@@ -176,3 +176,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/memory_tools_test.go` — NEW: 10 tests (BasicQuery — 3 layers merged+scored+sorted, LimitClamp — 0→1/100→20, EmptySessionID — layer 1 empty/others work, LayerFailure — DROP TABLE → partial results, Timeout — context cancelled → valid JSON, Dedup — knowledge+archive no duplicates, EmptyDB → [], ScoringOrder — knowledge > registry, ArchivePipeline — atom → archive blob → decompress, ReasoningJsonEach — json_each LIKE match)
 - **Breaking:** None (new files, additive only). Consumer: `loop.go` (wave 4) via `toolRouter.RegisterBrain(ms)`
 - **Dependencies:** ТЗ-v2-1a (`botmemory.go` — BotMemory, ReadArchivedMessage, all row types), ТЗ-v2-0a (`migrate.go` — Migrate for tests)
+
+### [2026-05-04] feat(pika): clarify.go — HITL clarify tool — wave 3d
+
+- **ТЗ:** ТЗ-v2-3d: clarify.go — HITL clarify
+- **PR:** #24
+- **Files:**
+  - `pkg/pika/clarify.go` — NEW: `ClarifyHandler` struct implementing `toolshared.Tool` (D-NEW-2). HITL clarify with per-session state via `sync.Map`. Algorithm: (1) streak check → bypass FTS5 at MaxStreakBeforeBypass, (2) decision/confirmation regex patterns → immediate escalation, (3) FTS5 pre-check via knowledge_fts with configurable timeout, (4) escalation via `ClarifySender` interface (SendMessage + WaitForReply). Types: `ClarifyConfig`, `ClarifySender` interface, `ClarifyInput`, `ClarifyResult`, `knowledgeHit`. Helper functions: `escapeFTSSpecial`, `formatFTSResults`, `formatQuestionForManager`, `parseClarifyArgs`. Reuses `buildFTSQuery` and `SessionIDKey` from memory_tools.go. Registration: `toolRouter.RegisterBrain(ch)`.
+  - `pkg/pika/clarify_test.go` — NEW: 9 tests (MemoryHit — FTS5 hit → source=memory, EscalateToUser — empty knowledge → source=manager, Timeout — WaitForReply error → source=timeout, StreakBypass — streak≥2 → immediate escalation with history, DecisionQuestion — «делать?» regex → escalation, ResetStreak — streak=0+lastQuestions=nil, CleanupSession — sync.Map delete, IsAwaiting — true during WaitForReply, PrecheckTimeout — cancelled context → escalation)
+- **Breaking:** None (new files, additive only). Consumer: `loop.go` (wave 4) via `toolRouter.RegisterBrain(ch)`
+- **Dependencies:** ТЗ-v2-1a (`botmemory.go` — BotMemory.db for FTS5 queries), ТЗ-v2-3c (`memory_tools.go` — `buildFTSQuery`, `SessionIDKey`)
