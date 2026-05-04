@@ -135,9 +135,8 @@ func (t *Trail) Serialize() string {
 		statusIcon := "✅"
 		statusText := "ok"
 		if !e.OK {
-			statusIcon := "❌"
+			statusIcon = "❌"
 			statusText = "fail"
-			_ = statusIcon
 		}
 		fmt.Fprintf(
 			&sb, "%d. %s.%s → %s %s (%dms)\n",
