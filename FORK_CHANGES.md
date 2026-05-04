@@ -54,7 +54,7 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ---
 
-## Wave 1: CRUD Layer (botmemory + session store)
+## Wave 1: CRUD Layer (botmemory + session store + registry)
 
 ### [2026-05-02] feat(pika): botmemory.go — CRUD layer for bot_memory.db — wave 1a
 
@@ -77,7 +77,7 @@ Each entry maps to a single wave/phase and its merged PR.
 ### [2026-05-03] feat(pika): PikaSessionStore — session.SessionStore via BotMemory — wave 1b Phase 1
 
 - **ТЗ:** ТЗ-v2-1b-v2-A: session_store.go — создание (фаза 1 из 2)
-- **PR:** #8 (pending)
+- **PR:** #9
 - **Files:**
   - `pkg/pika/session_store.go` — NEW: `PikaSessionStore` struct implementing `session.SessionStore` interface via BotMemory; compile-time check `var _ session.SessionStore = (*PikaSessionStore)(nil)`; `NewPikaSessionStore(mem)` constructor; `messageMetadata` type for JSON serialization of all non-column Message fields (Media, Attachments, ReasoningContent, SystemParts, ToolCalls, ToolCallID); `buildMetadata()` helper; `currentTurnID()` with DB recovery; `addFullMessageLocked()` internal; `AddFullMessage()`, `AddMessage()` delegator; `GetHistory()` with full metadata deserialization; `GetSummary()`/`SetSummary()` in-memory cache; `SetHistory()` delete+re-insert; `TruncateHistory()` no-op (session rotation); `Save()` no-op (WAL); `ListSessions()` via `GetDistinctSessionIDs`; `Close()` no-op; token estimation via `tokenizer.EstimateMessageTokens`
   - `pkg/pika/session_store_test.go` — NEW: 8 tests (AddAndGetHistory with ToolCalls/ToolCallID round-trip, AttachmentsRoundTrip, TurnIDIncrement user→1/assistant→1/user→2, TurnIDRecovery from DB after restart, EmptySession returns non-nil empty slice, GetSetSummary, SetHistory delete+replace, ListSessions across 2 sessions)
@@ -86,7 +86,7 @@ Each entry maps to a single wave/phase and its merged PR.
 ### [2026-05-03] feat(pika): migration — switch to PikaSessionStore + delete pkg/memory — wave 1b Phase 2
 
 - **ТЗ:** ТЗ-v2-1b-v2-B: миграция — удаление pkg/memory + патчи (фаза 2 из 2)
-- **PR:** #8 (pending)
+- **PR:** #9
 - **Files:**
   - `pkg/agent/instance.go` — MODIFIED: `initSessionStore()` rewritten — now calls `pika.Migrate(dbPath)` → `pika.NewBotMemory(db)` → `pika.NewPikaSessionStore(mem)`; in-memory fallback on file-based init failure; removed imports `context`, `pkg/memory`; added import `pkg/pika`
   - `pkg/session/metadata.go` — NEW: extracted `MetadataAwareSessionStore` interface from deleted `jsonl_backend.go` (EnsureSessionMetadata, ResolveSessionKey, GetSessionScope)
@@ -102,19 +102,49 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/memory/migration_test.go` — DELETED: tests no longer applicable
 - **Breaking:** `pkg/memory` package removed entirely. `pkg/session/jsonl_backend.go` removed. All session persistence now via PikaSessionStore (SQLite bot_memory.db). `MetadataAwareSessionStore` interface moved to `pkg/session/metadata.go`. PikaSessionStore does NOT implement MetadataAwareSessionStore (steering.go uses type assertion — graceful degradation).
 
-### [2026-05-03] test: skip 3 legacy tests — transitional (D-136)
+### [2026-05-03] test: skip 4 legacy tests — transitional (D-136)
 
-- **ТЗ:** ТЗ-v2-1b-v2-B-fix4, fix5, fix6
-- **PR:** #8 (updated) / #9
+- **ТЗ:** ТЗ-v2-1b-v2-B-fix4, fix5, fix6, fix7
+- **PR:** #9, #12
 - **Files:**
-  - `pkg/agent/context_manager_test.go` — MODIFIED: t.Skip on
+  - `pkg/agent/context_manager_test.go` — MODIFIED (PR #9): t.Skip on
     `TestLegacyCompact_PostTurn_ExceedsMessageThreshold`
     (TruncateHistory is no-op in PikaSessionStore by design, D-136)
-  - `pkg/agent/agent_test.go` — MODIFIED: t.Skip on
+  - `pkg/agent/agent_test.go` — MODIFIED (PR #9): t.Skip on
     `TestProcessMessage_PersistsReasoningToolResponseAsSingleAssistantRecord`
     (expects JSONL file, PikaSessionStore uses SQLite)
-  - `pkg/agent/steering_test.go` — MODIFIED: t.Skip on
+  - `pkg/agent/steering_test.go` — MODIFIED (PR #9): t.Skip on
     `TestAgentLoop_Run_AutoContinuesLateSteeringMessage`
     (session persistence changed to SQLite)
+  - `pkg/agent/agent_test.go` — MODIFIED (PR #12): t.Skip on
+    `TestProcessMessage_PicoPublishesReasoningAsThoughtMessage`
+    (PikaSessionStore serializes ReasoningContent in metadata JSON,
+    Pico publisher pipeline doesn't find it in expected format)
 - **Breaking:** None (tests skipped, not removed). Will be removed
   in ТЗ-v2-2b (PikaContextManager replaces context_legacy.go).
+
+### [2026-05-03] fix(pika): remove linux/arm from build-all — CI fix
+
+- **ТЗ:** ТЗ-v2-fix-build: Убрать ARM из make build-all
+- **PR:** #11
+- **Files:**
+  - `Makefile` — MODIFIED: removed `GOARCH=arm GOARM=7` builds (`-linux-arm`, `-linux-armv7`) from `build-all` target; added comment explaining why ARM was removed. Cause: `modernc.org/libc@v1.70.0` (dep of `modernc.org/sqlite`) does not support `linux/arm` with `goolm,stdjson` build tags. Standalone `build-linux-arm` target preserved for manual use.
+- **Breaking:** None (`build-all` no longer produces ARM binaries; standalone target still available)
+
+### [2026-05-03] fix(pika): remove exotic archs from build-all — CI fix
+
+- **ТЗ:** ТЗ-v2-fix-build-2: Убрать экзотические архитектуры из build-all
+- **PR:** #13
+- **Files:**
+  - `Makefile` — MODIFIED: removed `linux/loong64` (+ PTY_PATCH_LOONG64), `linux/riscv64`, `linux/mipsle` (+ PATCH_MIPS_FLAGS), `netbsd/amd64`, `netbsd/arm64` from `build-all` target. Remaining platforms: `linux/amd64`, `linux/arm64`, `darwin/arm64`, `windows/amd64`. Cause: `modernc.org/libc v1.70.0` build constraints exclude all Go files on these platforms. Standalone targets preserved for manual use.
+- **Breaking:** None (`build-all` reduced to 4 platforms; standalone targets still available)
+
+### [2026-05-04] feat(pika): registry.go — Registry CRUD + AtomID generator — wave 1c
+
+- **ТЗ:** ТЗ-v2-1c: registry.go — Registry CRUD + валидация
+- **PR:** #14
+- **Files:**
+  - `pkg/pika/registry.go` — NEW: `AtomIDGenerator` struct — потокобезопасный генератор монотонных atom_id per category (sync.Mutex, lazy-init counters from DB via `BotMemory.GetMaxAtomN`); `NewAtomIDGenerator(mem)` constructor; `Next(ctx, category)` returns formatted ID (e.g. "P-1", "D-1") using `categoryPrefix` map from botmemory.go; `RegistryHandler` struct — валидированный CRUD поверх BotMemory; `NewRegistryHandler(mem)` constructor; `ValidRegistryKinds` whitelist (runbook, script, snapshot, correction_rule); `HandleWrite(ctx, kind, key, summary, data, tags)` — validation (kind in whitelist, key non-empty ≤255, data valid JSON if non-nil, tags valid JSON array if non-nil) + `bm.UpsertRegistry`; `HandleRead(ctx, kind, key)` — delegates to `bm.GetRegistry` + updates `last_used` via `bm.UpdateRegistryLastUsed`; `HandleSearch(ctx, kind, keyPattern)` — delegates to `bm.SearchRegistry`
+  - `pkg/pika/registry_test.go` — NEW: 13 tests (TestAtomIDGenerator_Sequential P-1/P-2/P-3, TestAtomIDGenerator_MultiCategory P-1/D-1/P-2, TestAtomIDGenerator_RecoveryFromDB insert P-1..P-5 then new generator → P-6, TestAtomIDGenerator_UnknownCategory → error, TestHandleWrite_Created, TestHandleWrite_Updated same key → created=false, TestHandleWrite_InvalidKind, TestHandleWrite_EmptyKey, TestHandleWrite_InvalidJSON, TestHandleWrite_InvalidTags not array, TestHandleRead_NotFound → nil/nil, TestHandleRead_UpdatesLastUsed, TestHandleSearch 3 entries filter by kind)
+- **Bug fix vs ТЗ:** `fmt.Sprintf("%s-%d", prefix, N)` → `fmt.Sprintf("%s%d", prefix, N)` — categoryPrefix already contains hyphen ("P-"), ТЗ format would produce "P--1"
+- **Breaking:** None (new files, additive only). Does not touch botmemory.go.
