@@ -260,14 +260,14 @@ func TestAlwaysHealthyProvider(t *testing.T) {
 
 func TestNoopArchivistCaller(t *testing.T) {
 	a := NewNoopArchivistCaller()
-	brief, err := a.BuildPrompt(
-		context.Background(), "s1",
+	result, err := a.BuildPrompt(
+		context.Background(), ArchivistInput{SessionKey: "s1"},
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if brief != "" {
-		t.Errorf("expected empty brief, got %q", brief)
+	if result != nil && result.BriefText != "" {
+		t.Errorf("expected empty brief, got %q", result.BriefText)
 	}
 }
 

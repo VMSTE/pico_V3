@@ -208,3 +208,18 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/agent/pipeline_setup.go` — MODIFIED: added PIKA-V3 BYPASS block — when `AssembleResponse.SystemPrompt` is non-empty, composes `[system, history..., user]` messages directly, skipping upstream `ContextBuilder.BuildMessagesFromPrompt()`; hoisted `resp` variable out of inner scope for bypass check; `resolveMediaRefs` called in both branches for future media compatibility; updated CompressReason comment to standard PIKA-V3 format
   - `FORK_CHANGES.md` — MODIFIED: fixed Trail.Serialize() format description (was `[HH:MM:SS] icon OPERATION: detail`, actual `N. tool.op → icon status (Nms)`); added Meta.Serialize() format description; fixed TrailEntry fields and Trail.Add/Meta.UpdateContextPct signatures to match code; added this entry
 - **Breaking:** None (bypass is conditional; fallback to upstream ContextBuilder when SystemPrompt is empty)
+
+---
+
+## Wave 3: Tools, Router, Archivist
+
+### [2026-05-04] feat(pika): archivist.go — Archivist agentic LLM session — wave 3a
+
+- **ТЗ:** ТЗ-v2-3a: archivist.go — Архивариус
+- **PR:** #21
+- **Files:**
+  - `pkg/pika/archivist.go` — NEW: `Archivist` struct implementing `ArchivistCaller` interface via agentic cheap LLM session (D-55, D-107). Single tool: `search_context` (read-only Go fan-out across knowledge_atoms FTS5, messages LIKE + last N cross-session, reasoning_keywords extraction, events_archive FTS5). `ArchivistConfig` with all config fields from spec (MaxToolCalls=4, BuildPromptTimeoutMs=30000, MemoryBriefSoftLimit=5000, MemoryBriefHardLimit=6000, CompressProtectedSections=[AVOID,CONSTRAINTS], MaxRetriesValidateBrief=3, ReasoningGuidedRetrieval=true, ReasoningDriftOverlapMin=0.2). Agentic loop: system prompt → LLM → tool_calls → executeSearchContext → tool result → LLM → parse JSON. `max_tool_calls` guard. Size control (F10-5): estimateTokens → if > soft_limit → retry compression via LLM (protected: AVOID, CONSTRAINTS). In-memory caching: `cachedBrief` + `cachedFocus` (fast path ~80% calls, 0 LLM). `InvalidateBrief()` for cache reset. Reasoning-guided retrieval boost (D-62): OR-composed FTS5 boost from reasoning_keywords, drift detection via keyword overlap threshold. `SerializeMemoryBrief()` text serialization (⛔ AVOID > 📋 CONSTRAINTS > ✅ PREFER > 📝 CONTEXT). `defaultArchivistPrompt` fallback. Helper types: `SearchContextParams`, `SearchContextResult`, `KnowledgeHit`, `MessageHit`, `archivistLLMOutput`.
+  - `pkg/pika/archivist_test.go` — NEW: 8 tests (TestArchivist_BuildPrompt_SingleToolCall — full 1 tool-call mock scenario with FOCUS 6 fields + MEMORY BRIEF 4 sections verification; TestArchivist_MaxToolCallsExceeded; TestArchivist_CachedBrief — second call returns cached 0 LLM calls + InvalidateBrief; TestArchivist_DegradedMode_LLMError; TestArchivist_InvalidJSON; TestSerializeMemoryBrief; TestSearchContext_EmptyDB — empty results not error; TestExtractJSON + TestEstimateTokens)
+  - `pkg/pika/interfaces.go` — MODIFIED: updated `ArchivistCaller` interface to `BuildPrompt(ctx, ArchivistInput) (*ArchivistResult, error)`; added types `ArchivistInput` (SessionKey, Message, IsRotation), `Focus` (6 fields: Task, Step, Mode, Blocked, Constraints, Decisions), `MemoryBrief` (4 sections: Avoid, Constraints, Prefer, Context), `ArchivistResult` (Focus, Brief, BriefText, ToolSet); updated `noopArchivistCaller` to match new interface
+  - `pkg/pika/context_manager.go` — MODIFIED: adapted `BuildSystemPrompt()` section 3 to new `ArchivistCaller` interface (1-line change: `ArchivistInput{SessionKey: sessionKey}` + nil-safe result extraction)
+- **Breaking:** `ArchivistCaller` interface signature changed (no external consumers — only `noopArchivistCaller` and new `Archivist` implement it)
