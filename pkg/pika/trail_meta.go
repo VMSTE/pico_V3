@@ -246,9 +246,9 @@ func (m *Meta) Serialize() string {
 	defer m.mu.RUnlock()
 
 	healthStr := m.Health.Status
-	if m.Health == StateDegraded {
+	if m.Health.Status == "degraded" {
 		healthStr = "⚠️ degraded"
-	} else if m.Health == StateOffline {
+	} else if m.Health.Status == "offline" {
 		healthStr = "🔴 offline"
 	}
 
