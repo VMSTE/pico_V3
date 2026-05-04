@@ -1,5 +1,6 @@
-// PIKA-V3: envelope.go — unified tool response envelope (D-8, F7-9)
 package pika
+
+// PIKA-V3: envelope.go — unified tool response envelope (D-8, F7-9)
 
 import (
 	"encoding/json"
@@ -9,7 +10,7 @@ import (
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
 )
 
-// PIKA-V3: ErrorKind classifies envelope errors for retry/propagation (F7-9).
+// ErrorKind classifies envelope errors for retry/propagation (F7-9, PIKA-V3).
 type ErrorKind int
 
 const (
