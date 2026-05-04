@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/constants"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
@@ -272,61 +271,17 @@ func (p *Pipeline) CallLLM(
 			continue
 		}
 
-		if isContextError && retry < maxRetries && !ts.opts.NoHistory {
-			al.emitEvent(
-				EventKindLLMRetry,
-				ts.eventMeta("runTurn", "turn.llm.retry"),
-				LLMRetryPayload{
-					Attempt:    retry + 1,
-					MaxRetries: maxRetries,
-					Reason:     "context_limit",
-					Error:      err.Error(),
-				},
-			)
-			logger.WarnCF(
-				"agent",
-				"Context window error detected, attempting compression",
+		// PIKA-V3: legacy CompressReasonRetry compression removed (Phase C, wave 2b).
+		// Context overflow was previously handled by Compact+re-Assemble here.
+		// Session rotation via SessionLifecycle will handle this (wave 4).
+		if isContextError {
+			logger.WarnCF("agent",
+				"PIKA-V3: context window exceeded, legacy compression removed; pending session rotation (wave 4)",
 				map[string]any{
-					"error": err.Error(),
-					"retry": retry,
-				},
-			)
-
-			if retry == 0 && !constants.IsInternalChannel(ts.channel) {
-				al.bus.PublishOutbound(ctx, outboundMessageForTurn(
-					ts,
-					"Context window exceeded. Compressing history and retrying...",
-				))
-			}
-
-			if compactErr := p.ContextManager.Compact(ctx, &CompactRequest{
-				SessionKey: ts.sessionKey,
-				Reason:     ContextCompressReasonRetry,
-				Budget:     ts.agent.ContextWindow,
-			}); compactErr != nil {
-				logger.WarnCF("agent", "Context overflow compact failed", map[string]any{
 					"session_key": ts.sessionKey,
-					"error":       compactErr.Error(),
+					"error":       err.Error(),
+					"retry":       retry,
 				})
-			}
-			ts.refreshRestorePointFromSession(ts.agent)
-			if asmResp, asmErr := p.ContextManager.Assemble(ctx, &AssembleRequest{
-				SessionKey: ts.sessionKey,
-				Budget:     ts.agent.ContextWindow,
-				MaxTokens:  ts.agent.MaxTokens,
-			}); asmErr == nil && asmResp != nil {
-				exec.history = asmResp.History
-				exec.summary = asmResp.Summary
-			}
-			exec.messages = ts.agent.ContextBuilder.BuildMessagesFromPrompt(
-				promptBuildRequestForTurn(ts, exec.history, exec.summary, "", nil),
-			)
-			exec.callMessages = exec.messages
-			if exec.gracefulTerminal {
-				msgs := append([]providers.Message(nil), exec.messages...)
-				exec.callMessages = append(msgs, ts.interruptHintMessage())
-			}
-			continue
 		}
 		break
 	}

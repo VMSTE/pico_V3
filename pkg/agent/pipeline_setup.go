@@ -19,7 +19,6 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 
 	var history []providers.Message
 	var summary string
-	var systemPrompt string // PIKA-V3: full system prompt from CM
 	if !ts.opts.NoHistory {
 		if resp, err := p.ContextManager.Assemble(ctx, &AssembleRequest{
 			SessionKey: ts.sessionKey,
@@ -28,63 +27,24 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 		}); err == nil && resp != nil {
 			history = resp.History
 			summary = resp.Summary
-			systemPrompt = resp.SystemPrompt // PIKA-V3
 		}
 	}
 	ts.captureRestorePoint(history, summary)
 
-	// PIKA-V3 BYPASS: if CM returned a ready system prompt,
-	// skip ContextBuilder and use it directly.
-	var messages []providers.Message
-	if systemPrompt != "" {
-		messages = []providers.Message{
-			{Role: "system", Content: systemPrompt},
-		}
-	} else {
-		messages = ts.agent.ContextBuilder.BuildMessagesFromPrompt(
-			promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
-		)
-	}
+	messages := ts.agent.ContextBuilder.BuildMessagesFromPrompt(
+		promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
+	)
 
 	messages = resolveMediaRefs(messages, p.MediaStore, maxMediaSize)
 
 	if !ts.opts.NoHistory {
 		toolDefs := ts.agent.Tools.ToProviderDefs()
 		if isOverContextBudget(ts.agent.ContextWindow, messages, toolDefs, ts.agent.MaxTokens) {
-			logger.WarnCF("agent", "Proactive compression: context budget exceeded before LLM call",
+			// PIKA-V3: legacy proactive CompressReasonProactive removed (Phase C, wave 2b).
+			// Context rotation via SessionLifecycle will handle budget overflow (wave 4).
+			logger.WarnCF("agent",
+				"PIKA-V3: context budget exceeded before LLM call, legacy compression removed; pending session rotation (wave 4)",
 				map[string]any{"session_key": ts.sessionKey})
-			if err := p.ContextManager.Compact(ctx, &CompactRequest{
-				SessionKey: ts.sessionKey,
-				Reason:     ContextCompressReasonProactive,
-				Budget:     ts.agent.ContextWindow,
-			}); err != nil {
-				logger.WarnCF("agent", "Proactive compact failed", map[string]any{
-					"session_key": ts.sessionKey,
-					"error":       err.Error(),
-				})
-			}
-			ts.refreshRestorePointFromSession(ts.agent)
-			systemPrompt = "" // PIKA-V3: reset for re-assembly
-			if resp, err := p.ContextManager.Assemble(ctx, &AssembleRequest{
-				SessionKey: ts.sessionKey,
-				Budget:     ts.agent.ContextWindow,
-				MaxTokens:  ts.agent.MaxTokens,
-			}); err == nil && resp != nil {
-				history = resp.History
-				summary = resp.Summary
-				systemPrompt = resp.SystemPrompt // PIKA-V3
-			}
-			// PIKA-V3 BYPASS: same bypass after re-assembly
-			if systemPrompt != "" {
-				messages = []providers.Message{
-					{Role: "system", Content: systemPrompt},
-				}
-			} else {
-				messages = ts.agent.ContextBuilder.BuildMessagesFromPrompt(
-					promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
-				)
-			}
-			messages = resolveMediaRefs(messages, p.MediaStore, maxMediaSize)
 		}
 	}
 
