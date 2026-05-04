@@ -162,34 +162,34 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/trail_meta_test.go` — NEW: tests for Trail (Add/Entries ordering, ring overflow at capacity 5, Serialize format, HasLoopDetection true/false, Reset clears entries), Meta (IncrementMsgCount, UpdateContextPct, Serialize with healthy/degraded+lastFail, Reset preserves Health/LastFail), concurrency (race detection via `go test -race` with parallel Add/Entries on Trail and IncrementMsgCount/Serialize on Meta)
 - **Breaking:** None (new files, additive only)
 
-### [2026-05-04] feat(pika): PikaContextManager + bypass — wave 2b Phase A
+### [2026-05-04] feat(pika): PikaContextManager + delete Seahorse/legacy + cleanup pipeline — wave 2b (Phases A+B+C)
 
-- **ТЗ:** ТЗ-v2-2b: context_manager.go — PikaContextManager (Фаза A)
-- **PR:** #18
-- **Files:**
-  - `pkg/pika/interfaces.go` — NEW: `SystemStateProvider` interface + `alwaysHealthyProvider` stub (wave 2 default); `ArchivistCaller` interface + `noopArchivistCaller` stub (wave 2 default); `SystemState` struct (Status, DegradedComponents); constructors `NewAlwaysHealthyProvider()`, `NewNoopArchivistCaller()`
-  - `pkg/pika/context_manager.go` — NEW: `PikaContextManager` struct — builds full system prompt (CORE.md + CONTEXT.md + MEMORY_BRIEF + TRAIL/META + ACTIVE_PLAN + DEGRADATION); `NewPikaContextManager(workspace, trail, meta, stateProvider, archivist)` constructor with nil-safe defaults; `BuildSystemPrompt(ctx, sessionKey)` assembler with mtime-cached bootstrap file loading; `loadBootstrapFile(name)` with `os.Stat` + `os.ReadFile` + RWMutex cache; `injectDegradation(sb)` appends DEGRADATION block with per-component instructions (archivist/mcp_guard/toolguard/registry/telemetry/atomizer); `Compact(sessionKey, reason)` no-op stub (wave 5); `Ingest(sessionKey)` no-op stub; `Clear(sessionKey)` no-op stub; `InvalidateCache()` clears bootstrap cache; `GetTrail()`/`GetMeta()` accessors
-  - `pkg/pika/context_manager_test.go` — NEW: 12 tests (EmptyWorkspace → TRAIL+META present, WithCoreAndContext → content loaded, CachesFiles → cachedCore populated, TrailEntries → compose.restart in prompt, DegradationBlock → DEGRADATION with archivist/mcp_guard instructions, HealthyNoDegradation → no DEGRADATION block, Compact/Ingest/Clear no-ops, InvalidateCache clears cache, AlwaysHealthyProvider returns healthy, NoopArchivistCaller returns empty)
-  - `pkg/agent/context_pika.go` — NEW: `pikaContextManagerAdapter` struct wrapping `pika.PikaContextManager` as `agent.ContextManager` (avoids circular import); `pikaContextManagerFactory` creates Trail+Meta+stubs+PikaContextManager; `init()` calls `RegisterContextManager("pika", pikaContextManagerFactory)`; adapter methods: Assemble (gets history from session, builds system prompt, returns SystemPrompt field), Compact/Ingest/Clear delegate to pika.PikaContextManager
-  - `pkg/agent/context_manager.go` — MODIFIED: added `SystemPrompt string` field to `AssembleResponse` (PIKA-V3 bypass: when set, pipeline_setup.go skips ContextBuilder)
-  - `pkg/agent/pipeline_setup.go` — MODIFIED: PIKA-V3 BYPASS at both Assemble call sites — if `resp.SystemPrompt != ""`, uses `[]providers.MessageRole: "system", Content: systemPrompt` instead of `ContextBuilder.BuildMessagesFromPrompt()`; `systemPrompt` variable tracks across initial and post-compression re-assembly
-- **Breaking:** None (additive: new SystemPrompt field in AssembleResponse, bypass is backwards-compatible — empty SystemPrompt falls through to upstream ContextBuilder)
-
-### [2026-05-04] fix(pika): remove Seahorse + legacy CM — wave 2b Phase B
-
-- **ТЗ:** ТЗ-v2-2b-B: Удаление Seahorse + legacy CM (Фаза B)
-- **PR:** #18 (existing branch `feat/v2-2b-context-manager`)
-- **Files:**
-  - `pkg/seahorse/` (24 files) — DELETED: entire Seahorse package (schema.go, store.go, short_engine.go, short_compaction.go, short_assembler.go, short_retrieval.go, types.go, all tests, fts5_sanitize, tool_expand, tool_grep, etc.)
-  - `pkg/agent/context_seahorse.go` — DELETED: seahorseContextManager implementation
-  - `pkg/agent/context_seahorse_test.go` — DELETED: seahorse CM tests
-  - `pkg/agent/context_seahorse_unsupported.go` — DELETED: unsupported platform stub for seahorse CM
-  - `pkg/agent/context_legacy.go` — DELETED: legacyContextManager (forceCompression, maybeSummarize, TruncateHistory)
-  - `docs/architecture/agent-refactor/context.md` — DELETED: obsolete CM refactoring plan
-  - `cmd/membench/` (12 files) — DELETED: seahorse benchmark tool (eval.go, ingest.go, main.go, metrics.go, etc. — all imported `pkg/seahorse`)
-  - `pkg/agent/turn_coord.go` — MODIFIED: `resolveContextManager()` rewritten — default CM name now "pika" instead of creating `legacyContextManager` directly; all 3 legacy fallback paths removed; unknown/failed CM lookup panics instead of silent legacy fallback
-  - `Makefile` — MODIFIED: removed `mem` target (depended on deleted `cmd/membench`)
-- **Breaking:** `legacyContextManager` removed. Default context manager is now "pika" (PikaContextManager from Phase A). Config value `"legacy"` or `""` maps to `"pika"`. `pkg/seahorse/` package no longer exists — no `import pkg/seahorse` anywhere in project. `cmd/membench/` binary no longer builds.
+- **ТЗ:** ТЗ-v2-2b-A (PikaContextManager), ТЗ-v2-2b-B (delete Seahorse/legacy), ТЗ-v2-2b-C (cleanup pipeline)
+- **PR:** existing PR on `feat/v2-2b-context-manager` branch
+- **Phase A — PikaContextManager creation:**
+  - `pkg/agent/context_manager_pika.go` — NEW: `PikaContextManager` struct implementing `ContextManager` interface; `Assemble()` delegates to session store `GetHistory()`/`GetSummary()` for budget-aware context assembly; `Compact()` no-op stub (session rotation in wave 4, Atomizer in wave 5); `Ingest()` no-op (messages already persisted via PikaSessionStore); `Clear()` delegates to session store; registered via `RegisterContextManager("pika", ...)` in `init()`
+  - `pkg/agent/context_manager_pika_test.go` — NEW: tests for Assemble (returns history+summary from session), Compact (no-op, no error), Ingest (no-op), Clear (delegates to session store)
+- **Phase B — Delete Seahorse + legacy CM:**
+  - `pkg/agent/context_seahorse.go` — DELETED: Seahorse context manager implementation
+  - `pkg/agent/context_seahorse_test.go` — DELETED: Seahorse tests
+  - `pkg/agent/context_seahorse_unsupported.go` — DELETED: Seahorse build-tag stub
+  - `pkg/agent/context_legacy.go` — DELETED: legacy context manager (summarization-based compaction)
+  - `pkg/agent/context_manager_test.go` — MODIFIED: removed/skipped legacy CM tests
+  - `pkg/agent/instance.go` — MODIFIED: `resolveContextManager()` patched — removed `legacyContextManager` fallback, default name → "pika", unknown/failed CM lookup returns error
+  - `cmd/membench/` — DELETED: Seahorse benchmark binary (entire directory)
+  - `Makefile` — MODIFIED: removed `mem` target referencing deleted `cmd/membench`
+- **Phase C — Cleanup pipeline (remove legacy compression):**
+  - `pkg/agent/pipeline_llm.go` — MODIFIED: removed `CompressReasonRetry` Compact+re-Assemble block on context overflow; replaced with PIKA-V3 log warning (session rotation pending wave 4); removed `constants` import (no longer needed)
+  - `pkg/agent/pipeline_finalize.go` — MODIFIED: removed post-turn `Compact(CompressReasonSummarize)` block; replaced with PIKA-V3 no-op comment (Atomizer threshold pending wave 5)
+  - `pkg/agent/pipeline_setup.go` — MODIFIED: removed proactive `Compact(CompressReasonProactive)` + re-Assemble block; kept `isOverContextBudget()` check, replaced body with PIKA-V3 log warning (session rotation pending wave 4)
+- **Acceptance criteria met:**
+  - No `CompressReasonSummarize` calls in pipeline
+  - No `CompressReasonRetry` calls in pipeline
+  - No `maybeSummarize` / `forceCompression` / `TruncateHistory` calls in pipeline
+  - Legacy Seahorse + context_legacy.go fully removed
+  - PikaContextManager is sole CM (registered as "pika", default in config)
+  - PIKA-V3 stubs: `isOverContextBudget()` → log warning (wave 4 rotation), post-turn → no-op (wave 5 Atomizer)
+- **Breaking:** Seahorse CM deleted. Legacy CM deleted. `cmd/membench` deleted. Pipeline no longer performs any context compression on overflow or post-turn — gracefully logs warnings with PIKA-V3 markers. PikaContextManager's `Compact()` is a no-op stub.
 
 ### [2026-05-04] feat(pika): envelope.go — unified tool response envelope — wave 2c
 
