@@ -778,7 +778,7 @@ func (a *Archivist) compressBrief(
 		[]byte(extractJSON(resp.Content)), &compressed,
 	); err != nil {
 		// Fallback to original on parse failure
-		return output.MemoryBrief, nil
+		return output.MemoryBrief, nil //nolint:nilerr // fallback to original on parse failure
 	}
 
 	// Protect AVOID and CONSTRAINTS
