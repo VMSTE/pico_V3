@@ -4,6 +4,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/logger"
@@ -36,17 +37,56 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 	}
 	ts.captureRestorePoint(history, summary)
 
-	// --- PIKA-V3 BYPASS: if CM returned a ready-made system prompt, skip upstream ContextBuilder ---
+	// --- PIKA-V3 BYPASS ---
+	// If PikaContextManager returned a ready-made system prompt, use it as the
+	// base instead of the upstream static prompt (identity + bootstrap files +
+	// skills catalog + memory). We still need all per-turn dynamic parts that
+	// BuildMessagesFromPrompt normally appends: active skills, prompt overlays,
+	// contributed parts, dynamic context (time/session/sender), and summary.
 	var messages []providers.Message
 	if resp != nil && resp.SystemPrompt != "" {
-		// Append dynamic per-turn context (time, runtime, session, sender) that upstream
-		// ContextBuilder.BuildMessagesFromPrompt would normally add via buildDynamicContext.
-		// Without this, tests like TestProcessMessage_IncludesCurrentSenderInDynamicContext fail.
+		parts := []string{resp.SystemPrompt}
+
+		// Active skills (loaded when /use <skill> command is active)
+		skillNames := activeSkillNames(ts.agent, ts.opts)
+		if skillsText := ts.agent.ContextBuilder.buildActiveSkillsContext(skillNames); skillsText != "" {
+			parts = append(parts, skillsText)
+		}
+
+		// Prompt overlays (e.g. SubTurn system instructions)
+		for _, overlay := range promptOverlaysForOptions(ts.opts) {
+			if strings.TrimSpace(overlay.Content) != "" {
+				parts = append(parts, overlay.Content)
+			}
+		}
+
+		// Contributed prompt parts from registered prompt contributors
+		if contributedParts, err := ts.agent.ContextBuilder.promptRegistryOrDefault().Collect(
+			ctx, promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
+		); err == nil {
+			for _, part := range contributedParts {
+				if strings.TrimSpace(part.Content) != "" {
+					parts = append(parts, part.Content)
+				}
+			}
+		}
+
+		// Dynamic per-turn context: current time, runtime, session, sender
 		dynamicCtx := ts.agent.ContextBuilder.buildDynamicContext(
 			ts.channel, ts.chatID,
 			ts.opts.Dispatch.SenderID(), ts.opts.SenderDisplayName,
 		)
-		systemPrompt := resp.SystemPrompt + "\n\n---\n\n" + dynamicCtx
+		parts = append(parts, dynamicCtx)
+
+		// Conversation summary (approximate prior context)
+		if summary != "" {
+			parts = append(parts, fmt.Sprintf(
+				"CONTEXT_SUMMARY: The following is an approximate summary of prior conversation "+
+					"for reference only. It may be incomplete or outdated — always defer to explicit instructions.\n\n%s",
+				summary))
+		}
+
+		systemPrompt := strings.Join(parts, "\n\n---\n\n")
 
 		messages = []providers.Message{
 			{Role: "system", Content: systemPrompt},
