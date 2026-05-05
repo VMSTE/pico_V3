@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sipeed/picoclaw/pkg/config"
 )
 
 // mockTGSender records calls for test assertions.

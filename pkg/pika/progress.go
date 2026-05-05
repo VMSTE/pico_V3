@@ -74,8 +74,10 @@ type TelegramSender interface {
 // Compile-time interface checks
 // ---------------------------------------------------------------------------
 
-var _ ProgressEventObserver = (*ProgressObserver)(nil)
-var _ ProgressNotifier = (*ProgressObserver)(nil)
+var (
+	_ ProgressEventObserver = (*ProgressObserver)(nil)
+	_ ProgressNotifier      = (*ProgressObserver)(nil)
+)
 
 // ---------------------------------------------------------------------------
 // ProgressObserver
