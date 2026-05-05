@@ -16,9 +16,10 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	
+
 	"golang.org/x/text/unicode/norm"
 )
+
 // SanitizeVerdict is the output sanitizer classification.
 type SanitizeVerdict string
 
@@ -170,10 +171,10 @@ type toolBaseline struct {
 
 // MCPSecurityPipeline implements 7-layer MCP security.
 type MCPSecurityPipeline struct {
-	mu        sync.Mutex
-	guardCfg  MCPGuardConfig
-	policies  map[string]*MCPServerPolicy
-	telemetry *Telemetry
+	mu                 sync.Mutex
+	guardCfg           MCPGuardConfig
+	policies           map[string]*MCPServerPolicy
+	telemetry          *Telemetry
 	blockPatterns      []*regexp.Regexp
 	credentialPatterns []*regexp.Regexp
 	base64Patterns     []*regexp.Regexp
@@ -271,10 +272,13 @@ func (p *MCPSecurityPipeline) SanitizeOutput(
 		maxB = pol.MaxOutputBytes
 	}
 	if len(raw) > maxB {
-		return SanitizeResult{Verdict: VerdictBlock,
+		return SanitizeResult{
+			Verdict: VerdictBlock,
 			Reasons: []string{fmt.Sprintf(
 				"output exceeds max_output_bytes (%d>%d)",
-				len(raw), maxB)}}
+				len(raw), maxB,
+			)},
+		}
 	}
 	normalized := norm.NFKC.String(raw)
 	sanitized := normalized
@@ -283,16 +287,20 @@ func (p *MCPSecurityPipeline) SanitizeOutput(
 	}
 	for _, re := range p.blockPatterns {
 		if re.MatchString(sanitized) {
-			return SanitizeResult{Verdict: VerdictBlock,
+			return SanitizeResult{
+				Verdict:   VerdictBlock,
 				Sanitized: sanitized,
-				Reasons:   []string{"block pattern: " + re.String()}}
+				Reasons:   []string{"block pattern: " + re.String()},
+			}
 		}
 	}
 	for _, re := range p.base64Patterns {
 		if re.MatchString(sanitized) {
-			return SanitizeResult{Verdict: VerdictBlock,
+			return SanitizeResult{
+				Verdict:   VerdictBlock,
 				Sanitized: sanitized,
-				Reasons:   []string{"base64 injection pattern"}}
+				Reasons:   []string{"base64 injection pattern"},
+			}
 		}
 	}
 	p.mu.Lock()
@@ -313,11 +321,13 @@ func (p *MCPSecurityPipeline) SanitizeOutput(
 	} else {
 		if tr > bl.AvgTextRatio*1.5 {
 			reasons = append(reasons, fmt.Sprintf(
-				"text ratio %.2f > baseline*1.5", tr))
+				"text ratio %.2f > baseline*1.5", tr,
+			))
 		}
 		if bl.AvgOutputSize > 0 && sz > bl.AvgOutputSize*sizeMul {
 			reasons = append(reasons, fmt.Sprintf(
-				"size %.0f > baseline*%.1f", sz, sizeMul))
+				"size %.0f > baseline*%.1f", sz, sizeMul,
+			))
 		}
 	}
 	const alpha = 0.1
@@ -529,7 +539,7 @@ func (p *MCPSecurityPipeline) CheckRugPull(
 			changed = append(changed, t.Name)
 		}
 	}
-	return
+	return changed, added
 }
 
 // UpdateToolHashes updates stored hashes after re-audit.
@@ -562,9 +572,11 @@ func MCPAutoEventMappings(
 		tg[pfx+".call"] = base
 		tg[pfx+".call_fail"] = base
 		tg[pfx+".blocked"] = append(
-			append([]string{}, base...), "security:taint_block")
+			append([]string{}, base...), "security:taint_block",
+		)
 		tg[pfx+".sanitized"] = append(
-			append([]string{}, base...), "security:sanitized")
+			append([]string{}, base...), "security:sanitized",
+		)
 	}
 	tm["rad.blocked"] = "rad_anomaly"
 	tm["rad.warning"] = "rad_warning"

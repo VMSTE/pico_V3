@@ -1,4 +1,4 @@
-// PIKA-V3: Tests for MCP Security Pipeline (ТЗ-v2-6b)
+// Tests for MCP Security Pipeline (ТЗ-v2-6b).
 package pika
 
 import (
@@ -50,7 +50,7 @@ func testPromptFile(t *testing.T) string {
 	t.Helper()
 	path := t.TempDir() + "/mcp_guard.md"
 	if err := os.WriteFile(
-		path, []byte("You are MCP Guard."), 0644,
+		path, []byte("You are MCP Guard."), 0o644,
 	); err != nil {
 		t.Fatalf("write prompt: %v", err)
 	}
