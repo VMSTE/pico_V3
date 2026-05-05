@@ -2,7 +2,6 @@ package pika
 
 import (
 	"context"
-	"database/sql"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -17,12 +16,9 @@ func setupTestSessionLifecycle(
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	if err := Migrate(dbPath); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := Migrate(dbPath)
 	if err != nil {
-		t.Fatalf("open db: %v", err)
+		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
 
