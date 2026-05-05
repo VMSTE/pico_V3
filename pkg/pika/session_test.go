@@ -216,6 +216,21 @@ func TestEnsureSession_DBResume(t *testing.T) {
 		t.Fatalf("save message: %v", err)
 	}
 
+	// Force ts to use the mocked baseTime. CURRENT_TIMESTAMP
+	// uses the real wall clock and some SQLite drivers
+	// (modernc.org/sqlite) may return DATETIME values in
+	// RFC3339 format when scanned to *string, which
+	// parseSQLiteTime cannot parse — causing a zero-time
+	// fallback and an enormous elapsed delta.
+	_, err = bm.db.ExecContext(
+		context.Background(),
+		`UPDATE messages SET ts = ? WHERE session_id = ?`,
+		baseTime.UTC().Format(sqliteTimeFmt), sid,
+	)
+	if err != nil {
+		t.Fatalf("update ts: %v", err)
+	}
+
 	// Simulate cold restart: new SessionLifecycle
 	sl2 := NewSessionLifecycle(bm, SessionConfig{
 		IdleTimeoutMin: 30,
