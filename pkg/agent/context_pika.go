@@ -49,7 +49,9 @@ func pikaContextManagerFactory(
 		botmem = ps.GetBotMemory()
 	}
 
-	// PIKA-V3 wave 4: Try to create real Archivist
+	// PIKA-V3 wave 4: Try to create real Archivist.
+	// Only uses dedicated "background" model — no fallback to main
+	// model to avoid interfering with test mock servers.
 	var arch pika.ArchivistCaller
 	if botmem != nil && al.cfg != nil {
 		archProvider := resolveArchivistProvider(al.cfg)
@@ -66,8 +68,8 @@ func pikaContextManagerFactory(
 	}
 	if arch == nil {
 		arch = pika.NewNoopArchivistCaller()
-		logger.WarnCF("pika",
-			"Using NoopArchivist (provider unavailable)",
+		logger.InfoCF("pika",
+			"Using NoopArchivist (no background model)",
 			nil,
 		)
 	}
@@ -94,25 +96,16 @@ func pikaContextManagerFactory(
 }
 
 // resolveArchivistProvider creates an LLM provider for the
-// "background" model from config. Returns nil on failure.
+// "background" model from config. Returns nil if the model
+// is not configured. Does NOT fall back to the main model
+// to avoid side effects in tests and production.
 func resolveArchivistProvider(
 	cfg *config.Config,
 ) providers.LLMProvider {
-	// Try "background" model first (cheap LLM for subagents)
 	mc, err := cfg.GetModelConfig("background")
 	if err != nil {
-		// Fallback: try the default agent's model
-		rc := cfg.ResolveAgentConfig("main")
-		if rc.ModelName != "" {
-			mc, err = cfg.GetModelConfig(rc.ModelName)
-		}
-		if err != nil {
-			logger.WarnCF("pika",
-				"Archivist model not found in config",
-				map[string]any{"error": err.Error()},
-			)
-			return nil
-		}
+		// "background" model not configured → no provider
+		return nil
 	}
 	p, _, pErr := providers.CreateProviderFromConfig(mc)
 	if pErr != nil {
