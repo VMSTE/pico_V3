@@ -1,4 +1,3 @@
-// Tests for MCP Security Pipeline (ТЗ-v2-6b).
 package pika
 
 import (
