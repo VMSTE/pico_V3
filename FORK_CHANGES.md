@@ -141,3 +141,17 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/confirm_gate_test.go` — NEW: 9 tests (DeployRequest_Approved, DeployRequest_Denied, ComposeRestart_Exited, ComposeRestart_Healthy, ComposeRestart_Degraded, FilesWrite_CriticalPath, FilesWrite_NonCritical, NotInTable, Timeout_Deny)
 - **Breaking:** None (new files, additive only). Consumer: instance.go (ТЗ-4a) via wiring adapter
 - **Dependencies:** `pkg/config` (SecurityConfig, DangerousOpsConfig, ConfirmMode), `pkg/logger`, `pkg/pika/interfaces.go` (SystemStateProvider)
+
+---
+
+## Wave 5: Sub-agents
+
+### [2026-05-05] feat(pika): atomizer.go — Atomizer pipeline — wave 5a
+
+- **ТЗ:** ТЗ-v2-5a: atomizer.go — Atomizer pipeline
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/atomizer.go` — NEW: `Atomizer` struct — Go-pipeline extracting knowledge atoms from hot buffer. `AtomizerConfig` (D-133: trigger_tokens=800k, chunk_max_tokens=200k, prompt_file, max_retries=2, model=background). `DefaultAtomizerConfig()`. `AtomLLMOutput` / `atomizerLLMResponse` — LLM structured output types. `NewAtomizer(mem, atomGen, provider, telemetry, cfg)` constructor. `ShouldAtomize(ctx, sessionID)` — threshold check. `Run(ctx, sessionID)` — full pipeline: chunk selection (oldest turns ≤ budget) → hot-reload prompt (`os.ReadFile`) → LLM call (structured output, 0 tool calls) → parse+validate (category/polarity/confidence/source_turns) → retry loop (up to MaxRetries with REPAIR prompt on validation error) → INSERT atoms (via `AtomIDGenerator.Next` + `BotMemory.InsertAtom`) → archive+delete (1 txn via `BotMemory.ArchiveAndDeleteTurns`). Tags inherited from events per turn (D-75: `collectTagsByTurn` + `mergeTagsForTurns`). Telemetry: `ReportComponentFailure/ReportComponentSuccess`. Helper: `getMessagesByTurns` (same-package access to `BotMemory.db`). JSON extraction: `extractAtomizerJSON` + `extractBalanced`. Default prompt constant `defaultAtomizerPrompt`.
+  - `pkg/pika/atomizer_test.go` — NEW: 16 tests (ShouldAtomize_BelowThreshold, ShouldAtomize_AboveThreshold, ShouldAtomize_Disabled, Run_HappyPath, Run_ValidationRetry, Run_AllRetriesExhausted, Run_EmptySession, Run_LLMError, ValidateAtoms_Valid, ValidateAtoms_InvalidCategory, ValidateAtoms_InvalidPolarity, ValidateAtoms_ConfidenceOutOfRange, ValidateAtoms_TurnNotInChunk, ValidateAtoms_Empty, ValidateAtoms_EmptySummary, ExtractAtomizerJSON, CollectTagsByTurn, MergeTagsForTurns, DefaultAtomizerConfig)
+- **Breaking:** None (new files, additive only)
+- **Dependencies:** `pkg/pika/botmemory.go` (BotMemory CRUD), `pkg/pika/registry.go` (AtomIDGenerator), `pkg/pika/telemetry.go` (Telemetry), `pkg/providers` (LLMProvider)
