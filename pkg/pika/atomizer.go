@@ -566,27 +566,44 @@ func deduplicateStrings(s []string) []string {
 
 // --- JSON extraction ---
 
-// extractAtomizerJSON finds balanced JSON object in text.
+// extractAtomizerJSON finds the outermost balanced JSON block.
+// Picks whichever delimiter ({ or [) appears first in the text.
 func extractAtomizerJSON(s string) string {
-	if r := extractBalanced(s, '{', '}'); r != "" {
-		return r
+	objIdx := strings.IndexByte(s, '{')
+	arrIdx := strings.IndexByte(s, '[')
+
+	// Neither found
+	if objIdx < 0 && arrIdx < 0 {
+		return ""
 	}
-	return extractBalanced(s, '[', ']')
+	// Only object found
+	if arrIdx < 0 {
+		return extractBalancedPair(s, '{', '}')
+	}
+	// Only array found
+	if objIdx < 0 {
+		return extractBalancedPair(s, '[', ']')
+	}
+	// Both found — use whichever comes first
+	if arrIdx < objIdx {
+		return extractBalancedPair(s, '[', ']')
+	}
+	return extractBalancedPair(s, '{', '}')
 }
 
-// extractBalanced finds first balanced open/close pair.
-func extractBalanced(
-	s string, open, close byte,
+// extractBalancedPair finds first balanced open/closeCh pair.
+func extractBalancedPair(
+	s string, openCh, closeCh byte,
 ) string {
-	start := strings.IndexByte(s, open)
+	start := strings.IndexByte(s, openCh)
 	if start < 0 {
 		return ""
 	}
 	depth := 0
 	for i := start; i < len(s); i++ {
-		if s[i] == open {
+		if s[i] == openCh {
 			depth++
-		} else if s[i] == close {
+		} else if s[i] == closeCh {
 			depth--
 			if depth == 0 {
 				return s[start : i+1]
