@@ -165,3 +165,17 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/reflector_test.go` — NEW: 14+ tests (EmptyDB, ParseJSON, Validation, ConfidenceClamp, MergePolarityMismatch, MergeSuccess, RunbookDraft, DailyPipeline, PromptHotReload, CronExpr, RegisterJobs valid/empty/invalid, HandleJob)
 - **Breaking:** None (new files, additive only)
 - **Dependencies:** `pkg/pika/botmemory.go`, `pkg/pika/registry.go` (AtomIDGenerator), `pkg/pika/telemetry.go`, `pkg/providers`, `pkg/cron` (upstream as-is)
+
+---
+
+## Wave 6: Security
+
+### [2026-05-05] feat(pika): rad.go — Reasoning Anomaly Detector — wave 6a
+
+- **ТЗ:** ТЗ-v2-6a: rad.go — Reasoning Anomaly Detector
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/rad.go` — NEW: `RAD` struct — fast pre-action security gate on reasoning tokens (D-SEC-v2, Layer 6). 0 LLM, sync. Types: `RADVerdict` (safe/warning/anomaly), `RADResult` (verdict+score+detectors+reason), `RADConfig` (enabled, pattern keywords RU/EN, drift_threshold, block/warn scores), `RADSession` (minimal session view: last_tool_source, prev_keywords), `RADToolCall` (minimal pending call: name, risk_level). `DefaultRADConfig()` with production keywords. `NewRAD(cfg)` — compiles regex at creation (fail-fast on invalid patterns). `Analyze(ctx, reasoning, session, pendingCall)` — main entry point, runs 3 detectors: (1) Pattern Detector (+3): case-insensitive regex on configurable RU/EN keywords; (2) Drift Detector (+2): Jaccard keyword overlap < threshold after MCP call, skips non-MCP; (3) Escalation Detector (+2): red-risk action after MCP output. Scoring: ≥block_score(3)→ANOMALY, ≥warn_score(2)→WARNING, else SAFE. Helpers: `jaccardIndex`, `extractKeywords` (Unicode-aware tokenizer). autoEvent mapping: `rad.blocked`→`rad_anomaly`, `rad.warning`→`rad_warning` (critical class, defined in config toolTypeMap).
+  - `pkg/pika/rad_test.go` — NEW: 15 tests (PatternDetect_RU, PatternDetect_EN, PatternDetect_CleanReasoning, DriftDetect_LowOverlap, DriftDetect_HighOverlap, DriftDetect_NonMCPSkip, EscalationDetect_RedAfterMCP, EscalationDetect_GreenAfterMCP, CompoundScoring_Safe, CompoundScoring_Warning, CompoundScoring_Anomaly, Disabled, JaccardIndex, ExtractKeywords, DriftPlusEscalation_Anomaly)
+- **Breaking:** None (new files, additive only)
+- **Dependencies:** None (standalone, 0 external imports from pkg/pika)
