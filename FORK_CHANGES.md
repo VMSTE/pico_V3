@@ -196,3 +196,18 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/autoevent_test.go` — NEW: 11 tests (WriteOp, ReadOpSkipped, FailSuffix, ConsecutiveDedup, HeartbeatCounter, HeartbeatFlush, HeartbeatFailEscalate, InvalidType, ValidateStartup, CoverageCheck, BrainTools)
 - **Breaking:** None (new files, additive only). Consumer: `loop.go` (wave 4)
 - **Dependencies:** ТЗ-v2-1a (`botmemory.go` — BotMemory.SaveEvent, EventRow), ТЗ-v2-0a (`migrate.go` — Migrate for tests)
+
+---
+
+## Wave 4: Pipeline Integration
+
+### [2026-05-05] feat(pika): telemetry.go — token accounting, budget, health, degradation — wave 4f
+
+- **ТЗ:** ТЗ-v2-4f: telemetry.go — Телеметрия, бюджет, health (direct, core infra)
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/telemetry.go` — NEW: `Telemetry` struct implementing `SystemStateProvider`; `TelemetryConfig`, `RecordLLMParams`, `CallResult` types; `ProgressNotifier` interface (for ТЗ-4e). `NewTelemetry(cfg, botmem, progress)`. `CheckBudget()` — daily budget gate with auto-reset on new day. `RecordLLMCall(ctx, params)` — persists to request_log via BotMemory, updates in-memory spend. `RecordToolCall(result)` — sliding window ring buffer + `evaluateHealth()` auto-degradation (failPct ≥ threshold → tool_executor degraded). `ReportComponentFailure/Success` — manual component state with change-only notifications. `GetSystemState()` — aggregates component states for META block. `GetBudgetRemaining()`. Private: `ensureBudgetDate()` (day-boundary reset from DB), `loadTodaySpent()` (via QueryTodayCostUSD), `evaluateHealth()` (window check + auto-recovery).
+  - `pkg/pika/telemetry_test.go` — NEW: 12 tests (RecordLLMCall_InsertsAndUpdatesSpent, CheckBudget_FreshDay, CheckBudget_Exceeded, CheckBudget_NewDayReset, RecordToolCall_HealthDegraded, RecordToolCall_HealthOK, RecordToolCall_NotEnoughData, ReportComponentFailure_NotifyOnChange, ReportComponentFailure_NoNotifyOnSameState, ReportComponentSuccess_NotifyOnRecovery, ReportComponentSuccess_NoNotifyIfAlreadyOK, GetSystemState_Healthy, GetSystemState_AfterRecovery, GetSystemState_Offline)
+  - `pkg/pika/botmemory_budget.go` — NEW: `BotMemory.QueryTodayCostUSD(ctx)` helper — `SELECT SUM(cost_usd) FROM request_log WHERE date(ts) = date('now')`
+- **Breaking:** None (new files, additive only). Consumer: pipeline_llm.go, pipeline_tool.go, turn_coord.go, context_manager.go
+- **Dependencies:** ТЗ-v2-1a (`botmemory.go` — BotMemory.InsertRequestLog, RequestLogRow), ТЗ-v2-2b (`interfaces.go` — SystemStateProvider)
