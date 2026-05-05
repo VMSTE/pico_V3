@@ -128,7 +128,6 @@ func TestConfirmGate_DeployRequest_Approved(t *testing.T) {
 			Arguments: map[string]any{"operation": "request"},
 		},
 	)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -153,7 +152,6 @@ func TestConfirmGate_DeployRequest_Denied(t *testing.T) {
 			Arguments: map[string]any{"operation": "request"},
 		},
 	)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -181,7 +179,6 @@ func TestConfirmGate_ComposeRestart_Exited(t *testing.T) {
 			},
 		},
 	)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -206,7 +203,6 @@ func TestConfirmGate_ComposeRestart_Healthy(t *testing.T) {
 			Arguments: map[string]any{"operation": "restart"},
 		},
 	)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -231,7 +227,6 @@ func TestConfirmGate_ComposeRestart_Degraded(t *testing.T) {
 			Arguments: map[string]any{"operation": "restart"},
 		},
 	)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -259,7 +254,6 @@ func TestConfirmGate_FilesWrite_CriticalPath(t *testing.T) {
 			},
 		},
 	)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -287,7 +281,6 @@ func TestConfirmGate_FilesWrite_NonCritical(t *testing.T) {
 			},
 		},
 	)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -312,7 +305,6 @@ func TestConfirmGate_NotInTable(t *testing.T) {
 			Arguments: map[string]any{"operation": "run"},
 		},
 	)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -339,7 +331,6 @@ func TestConfirmGate_Timeout_Deny(t *testing.T) {
 			Arguments: map[string]any{"operation": "request"},
 		},
 	)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
