@@ -337,17 +337,25 @@ func (sl *SessionLifecycle) findLastSessionLocked(
 // GetLastSessionByPrefix returns the most recent session_id
 // and its last message timestamp matching a LIKE pattern.
 // Returns ("", zero, nil) if no rows match.
+//
+// Uses CAST(strftime('%s',ts) AS INTEGER) to get Unix epoch
+// directly, avoiding driver-specific DATETIME type conversions
+// that may break parseSQLiteTime (e.g. modernc.org/sqlite
+// returns time.Time which database/sql formats as RFC3339Nano
+// when scanned into *string).
 func (bm *BotMemory) GetLastSessionByPrefix(
 	ctx context.Context, pattern string,
 ) (string, time.Time, error) {
-	var sid, ts string
+	var sid string
+	var epoch int64
 	err := bm.db.QueryRowContext(ctx,
-		`SELECT session_id, ts
+		`SELECT session_id,
+		        CAST(strftime('%s', ts) AS INTEGER)
 		 FROM messages
 		 WHERE session_id LIKE ?
 		 ORDER BY id DESC LIMIT 1`,
 		pattern,
-	).Scan(&sid, &ts)
+	).Scan(&sid, &epoch)
 	if err == sql.ErrNoRows {
 		return "", time.Time{}, nil
 	}
@@ -356,5 +364,5 @@ func (bm *BotMemory) GetLastSessionByPrefix(
 			"pika/botmemory: get last session: %w", err,
 		)
 	}
-	return sid, parseSQLiteTime(ts), nil
+	return sid, time.Unix(epoch, 0), nil
 }
