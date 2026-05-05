@@ -48,11 +48,9 @@ func setupReflectorTestDB(
 	t *testing.T,
 ) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := Migrate(dbPath)
 	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
