@@ -2,11 +2,8 @@ package pika
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
-
-	_ "modernc.org/sqlite"
 )
 
 // mockProgress records NotifyDegradation/NotifyRecovery calls.
@@ -35,11 +32,8 @@ func (m *mockProgress) NotifyRecovery(component string) {
 
 func setupTelemetryDB(t *testing.T) *BotMemory {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := Migrate(":memory:")
 	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	bm, err := NewBotMemory(db)
