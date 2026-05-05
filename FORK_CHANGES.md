@@ -149,9 +149,19 @@ Each entry maps to a single wave/phase and its merged PR.
 ### [2026-05-05] feat(pika): atomizer.go — Atomizer pipeline — wave 5a
 
 - **ТЗ:** ТЗ-v2-5a: atomizer.go — Atomizer pipeline
-- **PR:** #TBD
+- **PR:** #33 (merged)
 - **Files:**
   - `pkg/pika/atomizer.go` — NEW: `Atomizer` struct — Go-pipeline extracting knowledge atoms from hot buffer. `AtomizerConfig` (D-133: trigger_tokens=800k, chunk_max_tokens=200k, prompt_file, max_retries=2, model=background). `DefaultAtomizerConfig()`. `AtomLLMOutput` / `atomizerLLMResponse` — LLM structured output types. `NewAtomizer(mem, atomGen, provider, telemetry, cfg)` constructor. `ShouldAtomize(ctx, sessionID)` — threshold check. `Run(ctx, sessionID)` — full pipeline: chunk selection (oldest turns ≤ budget) → hot-reload prompt (`os.ReadFile`) → LLM call (structured output, 0 tool calls) → parse+validate (category/polarity/confidence/source_turns) → retry loop (up to MaxRetries with REPAIR prompt on validation error) → INSERT atoms (via `AtomIDGenerator.Next` + `BotMemory.InsertAtom`) → archive+delete (1 txn via `BotMemory.ArchiveAndDeleteTurns`). Tags inherited from events per turn (D-75: `collectTagsByTurn` + `mergeTagsForTurns`). Telemetry: `ReportComponentFailure/ReportComponentSuccess`. Helper: `getMessagesByTurns` (same-package access to `BotMemory.db`). JSON extraction: `extractAtomizerJSON` + `extractBalanced`. Default prompt constant `defaultAtomizerPrompt`.
-  - `pkg/pika/atomizer_test.go` — NEW: 16 tests (ShouldAtomize_BelowThreshold, ShouldAtomize_AboveThreshold, ShouldAtomize_Disabled, Run_HappyPath, Run_ValidationRetry, Run_AllRetriesExhausted, Run_EmptySession, Run_LLMError, ValidateAtoms_Valid, ValidateAtoms_InvalidCategory, ValidateAtoms_InvalidPolarity, ValidateAtoms_ConfidenceOutOfRange, ValidateAtoms_TurnNotInChunk, ValidateAtoms_Empty, ValidateAtoms_EmptySummary, ExtractAtomizerJSON, CollectTagsByTurn, MergeTagsForTurns, DefaultAtomizerConfig)
+  - `pkg/pika/atomizer_test.go` — NEW: 16 tests
 - **Breaking:** None (new files, additive only)
-- **Dependencies:** `pkg/pika/botmemory.go` (BotMemory CRUD), `pkg/pika/registry.go` (AtomIDGenerator), `pkg/pika/telemetry.go` (Telemetry), `pkg/providers` (LLMProvider)
+
+### [2026-05-05] feat(pika): reflector.go — Reflector pipeline — wave 5b
+
+- **ТЗ:** ТЗ-v2-5b: reflector.go — Reflector pipeline
+- **PR:** #34
+- **Files:**
+  - `pkg/pika/reflector.go` — NEW: `ReflectorPipeline` struct — Go-pipeline for behavioral optimization via cheap LLM (structured output, 0 tool calls). 3 modes (D-134): daily (1 day), weekly (7 days), monthly (full scan). 4 tasks: (1) Merge duplicates (D-147: polarity validation, 1 txn), (2) Pattern detection, (3) Confidence updates (D-59: clamp 0.0–1.0, no time decay F8-8), (4) Runbook drafts (D-87/F9-5). Monthly: crystallization + stale marking. Hot-reload prompt (D-90). Retry 1x on invalid JSON.
+  - `pkg/pika/reflector_cron.go` — NEW: `RegisterReflectorJobs(cronSvc, pipeline, schedule)` — registers 3 cron jobs in upstream CronService. `HandleReflectorJob(pipeline, job)` — dispatches to pipeline.Run. `schedToCronExpr` — schedule string → cron expression conversion.
+  - `pkg/pika/reflector_test.go` — NEW: 14+ tests (EmptyDB, ParseJSON, Validation, ConfidenceClamp, MergePolarityMismatch, MergeSuccess, RunbookDraft, DailyPipeline, PromptHotReload, CronExpr, RegisterJobs valid/empty/invalid, HandleJob)
+- **Breaking:** None (new files, additive only)
+- **Dependencies:** `pkg/pika/botmemory.go`, `pkg/pika/registry.go` (AtomIDGenerator), `pkg/pika/telemetry.go`, `pkg/providers`, `pkg/cron` (upstream as-is)
