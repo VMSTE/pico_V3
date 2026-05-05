@@ -12,11 +12,31 @@ import (
 // --- Test mocks ---
 
 // mockConfirmSender implements TelegramSender for testing.
+// Implements all 4 methods; only SendConfirmation is exercised
+// by ConfirmGate. The other 3 are stubs to satisfy the interface.
 type mockConfirmSender struct {
 	approved bool
 	err      error
 	called   bool
 	lastMsg  string
+}
+
+func (m *mockConfirmSender) SendMessage(
+	_ context.Context, text string,
+) (string, error) {
+	return "mock-msg-id", nil
+}
+
+func (m *mockConfirmSender) EditMessage(
+	_ context.Context, _ string, _ string,
+) error {
+	return nil
+}
+
+func (m *mockConfirmSender) DeleteMessage(
+	_ context.Context, _ string,
+) error {
+	return nil
 }
 
 func (m *mockConfirmSender) SendConfirmation(
@@ -98,7 +118,7 @@ func testDangerousOpsConfig() *config.Config {
 // deploy.request → confirm запрошен, approved=true → ApprovalDecision{Approved: true}
 func TestConfirmGate_DeployRequest_Approved(t *testing.T) {
 	sender := &mockConfirmSender{approved: true}
-	health := &mockHealthState{state: SystemState{Status: StateHealthy}}
+	health := &mockHealthState{state: StateHealthy}
 	cg := ConfirmGateFactory(testDangerousOpsConfig(), sender, health)
 
 	decision, err := cg.ApproveTool(
@@ -123,7 +143,7 @@ func TestConfirmGate_DeployRequest_Approved(t *testing.T) {
 // deploy.request → approved=false → ApprovalDecision{Approved: false}
 func TestConfirmGate_DeployRequest_Denied(t *testing.T) {
 	sender := &mockConfirmSender{approved: false}
-	health := &mockHealthState{state: SystemState{Status: StateHealthy}}
+	health := &mockHealthState{state: StateHealthy}
 	cg := ConfirmGateFactory(testDangerousOpsConfig(), sender, health)
 
 	decision, err := cg.ApproveTool(
@@ -148,7 +168,7 @@ func TestConfirmGate_DeployRequest_Denied(t *testing.T) {
 // compose.restart + exited → allow без Telegram
 func TestConfirmGate_ComposeRestart_Exited(t *testing.T) {
 	sender := &mockConfirmSender{approved: false}
-	health := &mockHealthState{state: SystemState{Status: StateHealthy}}
+	health := &mockHealthState{state: StateHealthy}
 	cg := ConfirmGateFactory(testDangerousOpsConfig(), sender, health)
 
 	decision, err := cg.ApproveTool(
@@ -176,7 +196,7 @@ func TestConfirmGate_ComposeRestart_Exited(t *testing.T) {
 // compose.restart + healthy → confirm
 func TestConfirmGate_ComposeRestart_Healthy(t *testing.T) {
 	sender := &mockConfirmSender{approved: true}
-	health := &mockHealthState{state: SystemState{Status: StateHealthy}}
+	health := &mockHealthState{state: StateHealthy}
 	cg := ConfirmGateFactory(testDangerousOpsConfig(), sender, health)
 
 	decision, err := cg.ApproveTool(
@@ -201,7 +221,7 @@ func TestConfirmGate_ComposeRestart_Healthy(t *testing.T) {
 // compose.restart + degraded → allow
 func TestConfirmGate_ComposeRestart_Degraded(t *testing.T) {
 	sender := &mockConfirmSender{approved: false}
-	health := &mockHealthState{state: SystemState{Status: StateDegraded}}
+	health := &mockHealthState{state: StateDegraded}
 	cg := ConfirmGateFactory(testDangerousOpsConfig(), sender, health)
 
 	decision, err := cg.ApproveTool(
@@ -226,7 +246,7 @@ func TestConfirmGate_ComposeRestart_Degraded(t *testing.T) {
 // files.write critical path → confirm
 func TestConfirmGate_FilesWrite_CriticalPath(t *testing.T) {
 	sender := &mockConfirmSender{approved: true}
-	health := &mockHealthState{state: SystemState{Status: StateHealthy}}
+	health := &mockHealthState{state: StateHealthy}
 	cg := ConfirmGateFactory(testDangerousOpsConfig(), sender, health)
 
 	decision, err := cg.ApproveTool(
@@ -254,7 +274,7 @@ func TestConfirmGate_FilesWrite_CriticalPath(t *testing.T) {
 // files.write non-critical → allow
 func TestConfirmGate_FilesWrite_NonCritical(t *testing.T) {
 	sender := &mockConfirmSender{approved: false}
-	health := &mockHealthState{state: SystemState{Status: StateHealthy}}
+	health := &mockHealthState{state: StateHealthy}
 	cg := ConfirmGateFactory(testDangerousOpsConfig(), sender, health)
 
 	decision, err := cg.ApproveTool(
@@ -282,7 +302,7 @@ func TestConfirmGate_FilesWrite_NonCritical(t *testing.T) {
 // sandbox.run (не в таблице) → allow
 func TestConfirmGate_NotInTable(t *testing.T) {
 	sender := &mockConfirmSender{approved: false}
-	health := &mockHealthState{state: SystemState{Status: StateHealthy}}
+	health := &mockHealthState{state: StateHealthy}
 	cg := ConfirmGateFactory(testDangerousOpsConfig(), sender, health)
 
 	decision, err := cg.ApproveTool(
@@ -309,7 +329,7 @@ func TestConfirmGate_Timeout_Deny(t *testing.T) {
 	sender := &mockConfirmSender{
 		err: errors.New("timeout waiting for reply (30 min)"),
 	}
-	health := &mockHealthState{state: SystemState{Status: StateHealthy}}
+	health := &mockHealthState{state: StateHealthy}
 	cg := ConfirmGateFactory(testDangerousOpsConfig(), sender, health)
 
 	decision, err := cg.ApproveTool(

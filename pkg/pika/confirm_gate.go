@@ -8,6 +8,10 @@
 // Wiring adapter in instance.go (ТЗ-4a) converts between
 // these types and agent.ToolApprover / agent.ToolApprovalRequest /
 // agent.ApprovalDecision.
+//
+// TelegramSender interface is defined in progress.go (shared across
+// progress, clarify, confirm_gate). This file uses it without
+// re-declaring.
 
 package pika
 
@@ -21,15 +25,6 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
 )
-
-// TelegramSender is the interface for sending confirmation requests
-// and waiting for yes/no replies via Telegram.
-// Shared with clarify.go (ТЗ-3d) — the concrete implementation
-// wraps ClarifySender's SendMessage + WaitForReply with yes/no parsing.
-// Context carries the timeout; cancellation → deny.
-type TelegramSender interface {
-	SendConfirmation(ctx context.Context, msg string) (approved bool, err error)
-}
 
 // ConfirmApprovalRequest is a local mirror of agent.ToolApprovalRequest.
 // pkg/pika cannot import pkg/agent (import cycle via context_pika.go).
@@ -188,7 +183,7 @@ func (cg *ConfirmGate) evaluateConfirmRule(
 		}
 		state := cg.healthGetter.GetSystemState()
 		// healthy → confirm; degraded/offline → allow (emergency fix)
-		needConfirm := state.Status == StateHealthy
+		needConfirm := state.Status == StateHealthy.Status
 		if !needConfirm {
 			logger.InfoCF("confirm_gate",
 				fmt.Sprintf("if_healthy: system %s → allow without confirmation",
