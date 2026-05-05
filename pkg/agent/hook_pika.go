@@ -10,7 +10,6 @@ package agent
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/sipeed/picoclaw/pkg/pika"
 )
@@ -106,9 +105,7 @@ func (a *confirmGateAdapter) ApproveTool(
 		return ApprovalDecision{
 			Approved: false,
 			Reason:   err.Error(),
-		}, fmt.Errorf(
-			"pika/confirm_gate: approve: %w", err,
-		)
+		}, err
 	}
 	return ApprovalDecision{
 		Approved: d.Approved,
