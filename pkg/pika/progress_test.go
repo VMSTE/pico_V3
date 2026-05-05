@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/agent"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,7 +60,7 @@ func (m *mockTGSender) DeleteMessage(_ context.Context, messageID string) error 
 	return m.deleteErr
 }
 
-func (m *mockTGSender) SendConfirmation(_ context.Context, text string) (bool, error) {
+func (m *mockTGSender) SendConfirmation(_ context.Context, _ string) (bool, error) {
 	return true, nil
 }
 
@@ -94,15 +93,15 @@ func makeProgressConfig(throttleSec int, deleteOnComplete, showStepText bool) *c
 	return cfg
 }
 
-// Test 1: EventToolExecStart → SendMessage called.
+// Test 1: ProgressEventToolExecStart → SendMessage called.
 func TestProgress_ToolExecStart_SendMessage(t *testing.T) {
 	mock := newMockTGSender()
 	cfg := makeProgressConfig(2, true, true)
 	po := ProgressObserverFactory(cfg, mock)
 
-	evt := agent.Event{
-		Kind:    agent.EventKindToolExecStart,
-		Payload: agent.ToolExecStartPayload{Tool: "read_file"},
+	evt := ProgressEvent{
+		Kind:    ProgressEventToolExecStart,
+		Payload: ToolExecStartPayload{Tool: "read_file"},
 	}
 
 	err := po.OnEvent(context.Background(), evt)
@@ -114,7 +113,7 @@ func TestProgress_ToolExecStart_SendMessage(t *testing.T) {
 	mock.mu.Unlock()
 }
 
-// Test 2: EventToolExecEnd → EditMessage called.
+// Test 2: ProgressEventToolExecEnd → EditMessage called.
 func TestProgress_ToolExecEnd_EditMessage(t *testing.T) {
 	mock := newMockTGSender()
 	// Use throttle=0 so events are not throttled.
@@ -122,9 +121,9 @@ func TestProgress_ToolExecEnd_EditMessage(t *testing.T) {
 	po := ProgressObserverFactory(cfg, mock)
 
 	// First: tool start → sends message, gets activeMessageID.
-	startEvt := agent.Event{
-		Kind:    agent.EventKindToolExecStart,
-		Payload: agent.ToolExecStartPayload{Tool: "exec"},
+	startEvt := ProgressEvent{
+		Kind:    ProgressEventToolExecStart,
+		Payload: ToolExecStartPayload{Tool: "exec"},
 	}
 	_ = po.OnEvent(context.Background(), startEvt)
 	assert.Equal(t, 1, mock.getSendCount())
@@ -135,9 +134,9 @@ func TestProgress_ToolExecEnd_EditMessage(t *testing.T) {
 	po.mu.Unlock()
 
 	// Second: tool end → edits the active message.
-	endEvt := agent.Event{
-		Kind: agent.EventKindToolExecEnd,
-		Payload: agent.ToolExecEndPayload{
+	endEvt := ProgressEvent{
+		Kind: ProgressEventToolExecEnd,
+		Payload: ToolExecEndPayload{
 			Tool:     "exec",
 			Duration: 150 * time.Millisecond,
 		},
@@ -152,24 +151,24 @@ func TestProgress_ToolExecEnd_EditMessage(t *testing.T) {
 	mock.mu.Unlock()
 }
 
-// Test 3: EventTurnEnd + deleteOnDone → DeleteMessage called.
+// Test 3: ProgressEventTurnEnd + deleteOnDone → DeleteMessage called.
 func TestProgress_TurnEnd_DeleteOnDone(t *testing.T) {
 	mock := newMockTGSender()
 	cfg := makeProgressConfig(0, true, true)
 	po := ProgressObserverFactory(cfg, mock)
 
 	// First: tool start → creates active message.
-	startEvt := agent.Event{
-		Kind:    agent.EventKindToolExecStart,
-		Payload: agent.ToolExecStartPayload{Tool: "list_dir"},
+	startEvt := ProgressEvent{
+		Kind:    ProgressEventToolExecStart,
+		Payload: ToolExecStartPayload{Tool: "list_dir"},
 	}
 	_ = po.OnEvent(context.Background(), startEvt)
 	assert.Equal(t, 1, mock.getSendCount())
 
 	// Turn end → delete message.
-	turnEndEvt := agent.Event{
-		Kind:    agent.EventKindTurnEnd,
-		Payload: agent.TurnEndPayload{},
+	turnEndEvt := ProgressEvent{
+		Kind:    ProgressEventTurnEnd,
+		Payload: TurnEndPayload{},
 	}
 	err := po.OnEvent(context.Background(), turnEndEvt)
 	require.NoError(t, err)
@@ -194,24 +193,24 @@ func TestProgress_Throttle_MultipleEventsSkipped(t *testing.T) {
 	ctx := context.Background()
 
 	// Event 1: should send.
-	evt1 := agent.Event{
-		Kind:    agent.EventKindToolExecStart,
-		Payload: agent.ToolExecStartPayload{Tool: "tool1"},
+	evt1 := ProgressEvent{
+		Kind:    ProgressEventToolExecStart,
+		Payload: ToolExecStartPayload{Tool: "tool1"},
 	}
 	_ = po.OnEvent(ctx, evt1)
 	assert.Equal(t, 1, mock.getSendCount())
 
 	// Event 2: within throttle window → skipped.
-	evt2 := agent.Event{
-		Kind:    agent.EventKindToolExecStart,
-		Payload: agent.ToolExecStartPayload{Tool: "tool2"},
+	evt2 := ProgressEvent{
+		Kind:    ProgressEventToolExecStart,
+		Payload: ToolExecStartPayload{Tool: "tool2"},
 	}
 	_ = po.OnEvent(ctx, evt2)
 
 	// Event 3: still within throttle window → skipped.
-	evt3 := agent.Event{
-		Kind:    agent.EventKindToolExecStart,
-		Payload: agent.ToolExecStartPayload{Tool: "tool3"},
+	evt3 := ProgressEvent{
+		Kind:    ProgressEventToolExecStart,
+		Payload: ToolExecStartPayload{Tool: "tool3"},
 	}
 	_ = po.OnEvent(ctx, evt3)
 
@@ -276,9 +275,9 @@ func TestProgress_SenderError_NoPanic(t *testing.T) {
 	po := ProgressObserverFactory(cfg, mock)
 
 	// Should not panic on sender error.
-	evt := agent.Event{
-		Kind:    agent.EventKindToolExecStart,
-		Payload: agent.ToolExecStartPayload{Tool: "read_file"},
+	evt := ProgressEvent{
+		Kind:    ProgressEventToolExecStart,
+		Payload: ToolExecStartPayload{Tool: "read_file"},
 	}
 	err := po.OnEvent(context.Background(), evt)
 	assert.NoError(t, err)
