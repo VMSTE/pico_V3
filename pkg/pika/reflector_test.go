@@ -4,16 +4,15 @@ package pika
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/sipeed/picoclaw/pkg/cron"
 	"github.com/sipeed/picoclaw/pkg/providers"
-
-	_ "modernc.org/sqlite"
 )
 
 // --- Mock LLM Provider ---
@@ -501,14 +500,22 @@ func TestScheduleToCronExpr(t *testing.T) {
 		wantErr         bool
 	}{
 		{"03:00", ReflectorDaily, "0 3 * * *", false},
-		{"Sun 04:00", ReflectorWeekly,
-			"0 4 * * 0", false},
-		{"1st 05:00", ReflectorMonthly,
-			"0 5 1 * *", false},
-		{"Mon 08:30", ReflectorWeekly,
-			"30 8 * * 1", false},
-		{"15th 12:00", ReflectorMonthly,
-			"0 12 15 * *", false},
+		{
+			"Sun 04:00", ReflectorWeekly,
+			"0 4 * * 0", false,
+		},
+		{
+			"1st 05:00", ReflectorMonthly,
+			"0 5 1 * *", false,
+		},
+		{
+			"Mon 08:30", ReflectorWeekly,
+			"30 8 * * 1", false,
+		},
+		{
+			"15th 12:00", ReflectorMonthly,
+			"0 12 15 * *", false,
+		},
 		{"bad", ReflectorDaily, "", true},
 		{"", ReflectorDaily, "", true},
 	}
