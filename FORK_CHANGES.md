@@ -179,3 +179,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/rad_test.go` — NEW: 15 tests (PatternDetect_RU, PatternDetect_EN, PatternDetect_CleanReasoning, DriftDetect_LowOverlap, DriftDetect_HighOverlap, DriftDetect_NonMCPSkip, EscalationDetect_RedAfterMCP, EscalationDetect_GreenAfterMCP, CompoundScoring_Safe, CompoundScoring_Warning, CompoundScoring_Anomaly, Disabled, JaccardIndex, ExtractKeywords, DriftPlusEscalation_Anomaly)
 - **Breaking:** None (new files, additive only)
 - **Dependencies:** None (standalone, 0 external imports from pkg/pika)
+
+### [2026-05-06] feat(pika): mcp_security.go — MCP Security Pipeline — wave 6b
+
+- **ТЗ:** ТЗ-v2-6b: mcp_security.go — MCP Security
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/mcp_security.go` — MODIFIED: rename extractJSON→extractGuardJSON (conflict with archivist.go)
+  - `pkg/pika/mcp_security_test.go` — NEW: 24 tests covering all 15 acceptance criteria (Output Sanitizer, NFKC, credentials, taint tracking, ACL, capability negotiation, MCP Guard startup/canary, Rug Pull Guard, adaptive baseline, degraded mode, audit trail, prompt versioning)
+- **Breaking:** None (new files, additive only)
+- **Dependencies:** `pkg/pika/telemetry.go` (ReportComponentFailure/Success), `pkg/pika/autoevent.go` (EventClasses)
