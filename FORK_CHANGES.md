@@ -211,3 +211,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/botmemory_budget.go` — NEW: `BotMemory.QueryTodayCostUSD(ctx)` helper — `SELECT SUM(cost_usd) FROM request_log WHERE date(ts) = date('now')`
 - **Breaking:** None (new files, additive only). Consumer: pipeline_llm.go, pipeline_tool.go, turn_coord.go, context_manager.go
 - **Dependencies:** ТЗ-v2-1a (`botmemory.go` — BotMemory.InsertRequestLog, RequestLogRow), ТЗ-v2-2b (`interfaces.go` — SystemStateProvider)
+
+### [2026-05-05] feat(pika): session.go — SessionLifecycle FSM — wave 4b
+
+- **ТЗ:** ТЗ-v2-4b: session.go — SessionLifecycle FSM
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/session.go` — NEW: `SessionLifecycle` struct (in-memory FSM with 4 states: active/idle/rotating/closed); `SessionState` type + constants; `RotateCallback` type; `SessionConfig` struct; `NewSessionLifecycle(botmem, cfg)`; `EnsureSession(baseKey)` — 5-step algorithm (reuse active/idle → DB recovery → new session); `StartSession(baseKey)` — format `{baseKey}:{unix}`; `CloseSession(reason)`; `RotateSession()` — fire callbacks + start new; `CheckRotationTriggers(contextPct, chainCalls)` — context_pct ≥ 90% or chain ≥ 8; `Touch()` — update lastActivity, reactivate idle; `OnRotate(cb)` — register side-effect callbacks (panic-safe); `IsIdle()` — lazy idle detection via nowFunc; `State()`, `SessionID()` getters; `BotMemory.GetLastSessionByPrefix(ctx, pattern)` — DB query for cold-start session recovery
+  - `pkg/pika/session_test.go` — NEW: 13 tests (NewBaseKey, Repeat, IdleTimeout, CheckRotationTriggers_ContextPct/ChainCalls/Below, RotateCallbacks, RotateNewTimestamp, CloseSession, DBResume, SessionFormat, TouchReactivatesIdle, CloseCallbacks, Defaults)
+- **Breaking:** None (new files, additive only)
+- **Dependencies:** ТЗ-v2-1a (`botmemory.go` — BotMemory, SaveMessage, parseSQLiteTime), ТЗ-v2-0a (`migrate.go` — Migrate for tests)
