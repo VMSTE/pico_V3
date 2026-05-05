@@ -28,6 +28,10 @@ type PikaContextManager struct {
 	stateProvider SystemStateProvider
 	archivist     ArchivistCaller
 
+	// PIKA-V3 wave 4: BotMemory for ACTIVE_PLAN queries
+	botmem    *BotMemory
+	planStore *ActivePlanStore
+
 	// Bootstrap file cache (mtime-based invalidation)
 	mu             sync.RWMutex
 	cachedCore     string
@@ -58,6 +62,18 @@ func NewPikaContextManager(
 		stateProvider: stateProvider,
 		archivist:     archivist,
 	}
+}
+
+// SetBotMemory sets the BotMemory for ACTIVE_PLAN queries.
+// Called from context_pika.go after construction.
+func (cm *PikaContextManager) SetBotMemory(bm *BotMemory) {
+	cm.botmem = bm
+}
+
+// SetPlanStore sets the ActivePlanStore for ACTIVE_PLAN.
+// Called from context_pika.go after construction.
+func (cm *PikaContextManager) SetPlanStore(ps *ActivePlanStore) {
+	cm.planStore = ps
 }
 
 // BuildSystemPrompt assembles the full system prompt string.
@@ -119,13 +135,43 @@ func (cm *PikaContextManager) BuildSystemPrompt(
 		}
 	}
 
-	// 6. ACTIVE_PLAN (stub in wave 2: empty)
-	// TODO(pika-v3-wave4): extract <plan> from last reasoning
+	// 6. ACTIVE_PLAN — extract from last reasoning (wave 4)
+	planText := cm.extractActivePlan(ctx, sessionKey)
+	if planText != "" {
+		sb.WriteString("--- ACTIVE_PLAN ---\n")
+		sb.WriteString(planText)
+		sb.WriteString("\n\n")
+		if cm.planStore != nil {
+			cm.planStore.SetActivePlan(planText)
+		}
+	} else if cm.planStore != nil {
+		cm.planStore.SetActivePlan("")
+	}
 
 	// 7. DEGRADATION block (if system is not healthy)
 	cm.injectDegradation(&sb)
 
 	return strings.TrimRight(sb.String(), "\n"), nil
+}
+
+// extractActivePlan queries reasoning_log for the last
+// reasoning_text and extracts <plan> block from it.
+// Returns "" if BotMemory is nil, no reasoning found, or
+// no <plan> block present.
+func (cm *PikaContextManager) extractActivePlan(
+	ctx context.Context,
+	sessionKey string,
+) string {
+	if cm.botmem == nil {
+		return ""
+	}
+	text, err := cm.botmem.GetLastReasoningText(
+		ctx, sessionKey,
+	)
+	if err != nil || text == "" {
+		return ""
+	}
+	return ExtractActivePlan(text)
 }
 
 // loadBootstrapFile reads a file from workspace with mtime caching.
