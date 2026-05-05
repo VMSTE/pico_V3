@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/pika"
+	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
 func init() {
@@ -39,14 +41,49 @@ func pikaContextManagerFactory(
 	trail := pika.NewTrail()
 	meta := pika.NewMeta()
 	sp := pika.NewAlwaysHealthyProvider()
-	arch := pika.NewNoopArchivistCaller()
+	planStore := pika.NewActivePlanStore()
+
+	// PIKA-V3 wave 4: Get BotMemory from PikaSessionStore
+	var botmem *pika.BotMemory
+	if ps, ok := agent.Sessions.(*pika.PikaSessionStore); ok {
+		botmem = ps.GetBotMemory()
+	}
+
+	// PIKA-V3 wave 4: Try to create real Archivist
+	var arch pika.ArchivistCaller
+	if botmem != nil && al.cfg != nil {
+		archProvider := resolveArchivistProvider(al.cfg)
+		if archProvider != nil {
+			arch = pika.NewArchivist(
+				botmem, archProvider, trail, meta,
+				pika.DefaultArchivistConfig(),
+			)
+			logger.InfoCF("pika",
+				"Real Archivist wired successfully",
+				nil,
+			)
+		}
+	}
+	if arch == nil {
+		arch = pika.NewNoopArchivistCaller()
+		logger.WarnCF("pika",
+			"Using NoopArchivist (provider unavailable)",
+			nil,
+		)
+	}
 
 	cm := pika.NewPikaContextManager(
 		agent.Workspace, trail, meta, sp, arch,
 	)
 
+	// PIKA-V3 wave 4: Wire BotMemory and PlanStore
+	if botmem != nil {
+		cm.SetBotMemory(botmem)
+	}
+	cm.SetPlanStore(planStore)
+
 	logger.InfoCF("pika",
-		"PikaContextManager initialized",
+		"PikaContextManager initialized (wave 4)",
 		map[string]any{"workspace": agent.Workspace},
 	)
 
@@ -54,6 +91,38 @@ func pikaContextManagerFactory(
 		cm: cm,
 		al: al,
 	}, nil
+}
+
+// resolveArchivistProvider creates an LLM provider for the
+// "background" model from config. Returns nil on failure.
+func resolveArchivistProvider(
+	cfg *config.Config,
+) providers.LLMProvider {
+	// Try "background" model first (cheap LLM for subagents)
+	mc, err := cfg.GetModelConfig("background")
+	if err != nil {
+		// Fallback: try the default agent's model
+		rc := cfg.ResolveAgentConfig("main")
+		if rc.ModelName != "" {
+			mc, err = cfg.GetModelConfig(rc.ModelName)
+		}
+		if err != nil {
+			logger.WarnCF("pika",
+				"Archivist model not found in config",
+				map[string]any{"error": err.Error()},
+			)
+			return nil
+		}
+	}
+	p, _, pErr := providers.CreateProviderFromConfig(mc)
+	if pErr != nil {
+		logger.WarnCF("pika",
+			"Archivist provider creation failed",
+			map[string]any{"error": pErr.Error()},
+		)
+		return nil
+	}
+	return p
 }
 
 // pikaContextManagerAdapter wraps pika.PikaContextManager as
