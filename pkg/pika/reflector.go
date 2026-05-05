@@ -13,7 +13,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/providers"
@@ -633,11 +632,12 @@ func (r *ReflectorPipeline) applyMerge(
 		return fmt.Errorf("gen atom_id: %w", err)
 	}
 
+	now := time.Now().UTC().Format(time.RFC3339)
 	histEntry := map[string]any{
 		"v":           1,
 		"confidence":  avgConf,
 		"by":          "reflector",
-		"at":          time.Now().UTC().Format(time.RFC3339),
+		"at":          now,
 		"merged_from": allIDs,
 		"parent_avg":  avgConf,
 	}
@@ -744,11 +744,12 @@ func (r *ReflectorPipeline) applyConfUpdate(
 	// Clamp confidence to [0, 1]
 	newConf := math.Max(0, math.Min(1, upd.NewConf))
 
+	now := time.Now().UTC().Format(time.RFC3339)
 	histEntry, _ := json.Marshal(map[string]any{
 		"v":          existing.Confidence,
 		"confidence": newConf,
 		"by":         "reflector",
-		"at":         time.Now().UTC().Format(time.RFC3339),
+		"at":         now,
 	})
 
 	return r.mem.UpdateAtomConfidence(
@@ -805,13 +806,12 @@ func (r *ReflectorPipeline) runMonthlyTasks(
 	for _, a := range atoms {
 		if a.Confidence >= 0.8 &&
 			a.Category == "pattern" {
+			now := time.Now().UTC().Format(time.RFC3339)
 			histEntry, _ := json.Marshal(map[string]any{
 				"v":          a.Confidence,
 				"confidence": 1.0,
 				"by":         "reflector_crystallize",
-				"at":         time.Now().UTC().Format(
-					time.RFC3339,
-				),
+				"at":         now,
 			})
 			if err := r.mem.UpdateAtomConfidence(
 				ctx, a.AtomID, 1.0, histEntry,
@@ -877,10 +877,6 @@ func (r *ReflectorPipeline) reportSuccess() {
 		)
 	}
 }
-
-// --- Unused import suppression ---
-
-var _ = strings.TrimSpace
 
 // --- Default Prompt ---
 
