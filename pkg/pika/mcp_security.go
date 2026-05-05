@@ -16,10 +16,9 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-
+	
 	"golang.org/x/text/unicode/norm"
 )
-
 // SanitizeVerdict is the output sanitizer classification.
 type SanitizeVerdict string
 
@@ -435,7 +434,7 @@ func (p *MCPSecurityPipeline) StartupAudit(
 		return p.allSuspicious(tools, "guard LLM error"), nil
 	}
 	var result GuardStartupResult
-	if err := json.Unmarshal([]byte(extractJSON(rawResp)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extractGuardJSON(rawResp)), &result); err != nil {
 		p.reportGuardFailure(err)
 		return p.allSuspicious(tools, "guard JSON parse error"), nil
 	}
@@ -613,7 +612,7 @@ func computeToolHash(t MCPToolDef) string {
 	return sha256Hex([]byte(t.Name + "|" + t.Description + "|" + string(t.InputSchema)))
 }
 
-func extractJSON(raw string) string {
+func extractGuardJSON(raw string) string {
 	start := strings.Index(raw, "{")
 	if start < 0 {
 		return raw
