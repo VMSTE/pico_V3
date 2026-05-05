@@ -221,3 +221,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/session_test.go` — NEW: 13 tests (NewBaseKey, Repeat, IdleTimeout, CheckRotationTriggers_ContextPct/ChainCalls/Below, RotateCallbacks, RotateNewTimestamp, CloseSession, DBResume, SessionFormat, TouchReactivatesIdle, CloseCallbacks, Defaults)
 - **Breaking:** None (new files, additive only)
 - **Dependencies:** ТЗ-v2-1a (`botmemory.go` — BotMemory, SaveMessage, parseSQLiteTime), ТЗ-v2-0a (`migrate.go` — Migrate for tests)
+
+### [2026-05-05] feat(pika): toolguard.go — ToolGuard AfterLLM builtin hook — wave 4c
+
+- **ТЗ:** ТЗ-v2-4c: toolguard.go — ToolGuard (AfterLLM builtin hook)
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/toolguard.go` — NEW: `ToolGuard` struct implementing `agent.LLMInterceptor` (D-136a). `ActivePlanGetter` interface (implemented by PikaContextManager). `ToolGuardFactory(cfg, planGetter)` constructor. `BeforeLLM()` no-op. `AfterLLM()` — detects missing tool call when ACTIVE_PLAN active: plan=="" → continue, ToolCalls present → continue, Content=="" → continue, retryCount≥max → continue (exhausted), otherwise → HookActionModify with reminder reason. `ResetTurn()` — per-turn retry counter reset. Max 1 retry.
+  - `pkg/pika/toolguard_test.go` — NEW: 8 tests (ActivePlanTextNoTools_Modify, ActivePlanWithToolCalls_Continue, NoPlan_Continue, RetryExhausted_Continue, EmptyResponse_Continue, NilPlanGetter_Continue, BeforeLLM_NoOp, ResetTurn)
+- **Breaking:** None (new files, additive only). Consumer: instance.go (ТЗ-4a) via `hookManager.Mount(agent.NamedHook("pika.toolguard", tg))`
+- **Dependencies:** `pkg/agent/hooks.go` (LLMInterceptor, HookDecision, HookActionModify/Continue)
