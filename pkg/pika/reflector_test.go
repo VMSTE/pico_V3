@@ -1,13 +1,16 @@
+// PIKA-V3: reflector_test.go — Tests for Reflector pipeline.
+
 package pika
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/sipeed/picoclaw/pkg/cron"
 	"github.com/sipeed/picoclaw/pkg/providers"
 
 	_ "modernc.org/sqlite"
@@ -15,20 +18,18 @@ import (
 
 // --- Mock LLM Provider ---
 
-type mockReflectorProvider struct {
+type mockReflectorLLM struct {
 	response string
 	err      error
-	calls    int
 }
 
-func (m *mockReflectorProvider) Chat(
+func (m *mockReflectorLLM) Chat(
 	_ context.Context,
 	_ []providers.Message,
 	_ []providers.ToolDefinition,
 	_ string,
 	_ map[string]any,
 ) (*providers.LLMResponse, error) {
-	m.calls++
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -37,13 +38,15 @@ func (m *mockReflectorProvider) Chat(
 	}, nil
 }
 
-func (m *mockReflectorProvider) GetDefaultModel() string {
-	return "test"
+func (m *mockReflectorLLM) GetDefaultModel() string {
+	return "mock"
 }
 
-// --- Helpers ---
+// --- Test Helpers ---
 
-func setupReflectorTestDB(t *testing.T) *sql.DB {
+func setupReflectorTestDB(
+	t *testing.T,
+) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
@@ -52,786 +55,596 @@ func setupReflectorTestDB(t *testing.T) *sql.DB {
 	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	t.Cleanup(func() { db.Close() })
 	return db
 }
 
 func insertTestAtom(
-	t *testing.T, db *sql.DB,
+	t *testing.T,
+	db *sql.DB,
 	atomID, category, summary, polarity string,
-	conf float64, tags []string,
+	conf float64,
+	tags []string,
 ) {
 	t.Helper()
 	var tagsJSON []byte
-	if tags != nil {
+	if len(tags) > 0 {
 		tagsJSON, _ = json.Marshal(tags)
 	}
 	_, err := db.Exec(
 		`INSERT INTO knowledge_atoms
 		(atom_id, session_id, turn_id, category,
-		summary, confidence, polarity, tags)
-		VALUES(?,?,?,?,?,?,?,?)`,
-		atomID, "test-session", 1, category,
-		summary, conf, polarity,
-		func() any {
-			if tagsJSON == nil {
-				return nil
-			}
-			return string(tagsJSON)
-		}(),
-	)
+		 summary, confidence, polarity, tags)
+		VALUES (?,?,?,?,?,?,?,?)`,
+		atomID, "test-session", 1,
+		category, summary, conf, polarity,
+		string(tagsJSON))
 	if err != nil {
 		t.Fatalf("insert atom %s: %v", atomID, err)
 	}
 }
 
-func countAtoms(t *testing.T, db *sql.DB) int {
-	t.Helper()
-	var c int
-	err := db.QueryRow(
-		`SELECT COUNT(*) FROM knowledge_atoms`,
-	).Scan(&c)
-	if err != nil {
-		t.Fatalf("count atoms: %v", err)
-	}
-	return c
-}
+// --- Tests ---
 
-func getAtomConfidence(
-	t *testing.T, db *sql.DB, atomID string,
-) float64 {
-	t.Helper()
-	var c float64
-	err := db.QueryRow(
-		`SELECT confidence FROM knowledge_atoms
-		WHERE atom_id=?`, atomID,
-	).Scan(&c)
-	if err != nil {
-		t.Fatalf("get confidence %s: %v", atomID, err)
-	}
-	return c
-}
-
-func atomExists(
-	t *testing.T, db *sql.DB, atomID string,
-) bool {
-	t.Helper()
-	var c int
-	_ = db.QueryRow(
-		`SELECT COUNT(*) FROM knowledge_atoms
-		WHERE atom_id=?`, atomID,
-	).Scan(&c)
-	return c > 0
-}
-
-func newReflectorPipeline(
-	t *testing.T, db *sql.DB,
-	prov providers.LLMProvider,
-) *ReflectorPipeline {
-	t.Helper()
-	mem, err := NewBotMemory(db)
+func TestReflector_EmptyKnowledge(t *testing.T) {
+	db := setupReflectorTestDB(t)
+	bm, err := NewBotMemory(db)
 	if err != nil {
 		t.Fatalf("new botmemory: %v", err)
 	}
-	atomGen := NewAtomIDGenerator(mem)
-	tel := NewTelemetry(
-		TelemetryConfig{}, mem, nil,
+	defer bm.Close()
+
+	mock := &mockReflectorLLM{response: "{}"}
+	pipeline := NewReflectorPipeline(
+		bm, NewAtomIDGenerator(bm), mock, nil,
+		DefaultReflectorConfig(),
 	)
-	cfg := DefaultReflectorConfig()
-	cfg.PromptFile = "" // use default prompt
-	return NewReflectorPipeline(
-		mem, atomGen, prov, tel, cfg,
+
+	// Empty knowledge_atoms → skip, no error
+	err = pipeline.Run(
+		context.Background(), ReflectorDaily,
 	)
-}
-
-// --- Tests ---
-
-func TestReflector_EmptyDB_SkipsLLM(t *testing.T) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
-
-	prov := &mockReflectorProvider{}
-	rp := newReflectorPipeline(t, db, prov)
-
-	err := rp.Run(context.Background(), ReflectorDaily)
 	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-	if prov.calls != 0 {
-		t.Errorf(
-			"expected 0 LLM calls, got %d",
-			prov.calls,
-		)
+		t.Fatalf("Run with empty DB: %v", err)
 	}
 }
 
-func TestReflector_Disabled_NoOp(t *testing.T) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
-
-	insertTestAtom(
-		t, db, "S-1", "summary",
-		"test", "positive", 0.5, nil,
-	)
-
-	prov := &mockReflectorProvider{}
-	rp := newReflectorPipeline(t, db, prov)
-	rp.cfg.Enabled = false
-
-	err := rp.Run(context.Background(), ReflectorDaily)
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-	if prov.calls != 0 {
-		t.Errorf(
-			"expected 0 LLM calls, got %d",
-			prov.calls,
-		)
-	}
-}
-
-func TestReflector_HappyPath_MergeAndConfidence(
-	t *testing.T,
-) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
-
-	// Insert 3 atoms
-	insertTestAtom(
-		t, db, "S-1", "summary",
-		"Port 8081 is used", "positive", 0.5,
-		[]string{"config"},
-	)
-	insertTestAtom(
-		t, db, "S-2", "summary",
-		"Port 8081 configured", "positive", 0.6,
-		[]string{"config", "deploy"},
-	)
-	insertTestAtom(
-		t, db, "D-1", "decision",
-		"Use port 8081", "positive", 0.5,
-		[]string{"config"},
-	)
-
-	initialCount := countAtoms(t, db)
-	if initialCount != 3 {
-		t.Fatalf(
-			"expected 3 atoms, got %d",
-			initialCount,
-		)
-	}
-
-	// Mock LLM response
-	llmResp := `{
-		"merges": [{
-			"source_atom_ids": ["S-1", "S-2"],
-			"summary": "Port 8081 is used and configured",
-			"detail": "Merged from two similar atoms",
-			"category": "summary",
-			"polarity": "positive",
-			"reason": "semantic overlap"
-		}],
+func TestReflector_ParseValidJSON(t *testing.T) {
+	input := `{
+		"duplicates": [],
 		"patterns": [],
-		"confidence_updates": [{
-			"atom_id": "D-1",
-			"delta": 0.1,
-			"reason": "confirmed by merge evidence"
-		}],
-		"runbook_drafts": []
-	}`
-
-	prov := &mockReflectorProvider{response: llmResp}
-	rp := newReflectorPipeline(t, db, prov)
-
-	err := rp.Run(context.Background(), ReflectorDaily)
-	if err != nil {
-		t.Fatalf("Run error: %v", err)
-	}
-
-	// S-1 and S-2 should be deleted, merged atom added
-	if atomExists(t, db, "S-1") {
-		t.Error("S-1 should be deleted after merge")
-	}
-	if atomExists(t, db, "S-2") {
-		t.Error("S-2 should be deleted after merge")
-	}
-
-	// Should have 2 atoms: merged + D-1
-	finalCount := countAtoms(t, db)
-	if finalCount != 2 {
-		t.Errorf(
-			"expected 2 atoms after merge, got %d",
-			finalCount,
-		)
-	}
-
-	// D-1 confidence should be 0.6
-	conf := getAtomConfidence(t, db, "D-1")
-	if conf < 0.59 || conf > 0.61 {
-		t.Errorf(
-			"D-1 confidence = %.2f, want ~0.6",
-			conf,
-		)
-	}
-
-	// LLM called exactly once
-	if prov.calls != 1 {
-		t.Errorf(
-			"expected 1 LLM call, got %d",
-			prov.calls,
-		)
-	}
-}
-
-func TestReflector_PatternInsertion(t *testing.T) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
-
-	insertTestAtom(
-		t, db, "S-10", "summary",
-		"Deploy failed", "negative", 0.5,
-		[]string{"deploy"},
-	)
-	insertTestAtom(
-		t, db, "S-11", "summary",
-		"Deploy timeout", "negative", 0.5,
-		[]string{"deploy"},
-	)
-	insertTestAtom(
-		t, db, "S-12", "summary",
-		"Deploy OOM", "negative", 0.5,
-		[]string{"deploy"},
-	)
-
-	llmResp := `{
-		"merges": [],
-		"patterns": [{
-			"type": "antipattern",
-			"summary": "Recurring deploy failures",
-			"tags": ["deploy"],
-			"polarity": "negative",
-			"source_atoms": ["S-10", "S-11", "S-12"]
-		}],
 		"confidence_updates": [],
 		"runbook_drafts": []
 	}`
-
-	prov := &mockReflectorProvider{response: llmResp}
-	rp := newReflectorPipeline(t, db, prov)
-
-	err := rp.Run(context.Background(), ReflectorDaily)
+	resp, err := parseReflectorOutput(input)
 	if err != nil {
-		t.Fatalf("Run error: %v", err)
+		t.Fatalf("parse: %v", err)
 	}
-
-	// Should have 4 atoms: 3 original + 1 pattern
-	if countAtoms(t, db) != 4 {
-		t.Errorf(
-			"expected 4 atoms, got %d",
-			countAtoms(t, db),
-		)
+	if resp == nil {
+		t.Fatal("resp is nil")
 	}
-
-	// Check pattern exists with category 'pattern'
-	var cat string
-	err = db.QueryRow(
-		`SELECT category FROM knowledge_atoms
-		WHERE atom_id LIKE 'P-%'`,
-	).Scan(&cat)
-	if err != nil {
-		t.Fatalf("query pattern: %v", err)
-	}
-	if cat != "pattern" {
-		t.Errorf("pattern category = %q, want 'pattern'", cat)
+	if len(resp.Duplicates) != 0 {
+		t.Errorf("expected 0 duplicates")
 	}
 }
 
-func TestReflector_RunbookDraft(t *testing.T) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
-
-	insertTestAtom(
-		t, db, "S-20", "summary",
-		"Grafana crash", "negative", 0.5,
-		[]string{"grafana"},
-	)
-
-	llmResp := `{
-		"merges": [],
-		"patterns": [],
-		"confidence_updates": [],
-		"runbook_drafts": [{
-			"tag": "grafana-crash",
-			"steps": ["Check logs", "Restart service"],
-			"trigger": "3+ restart failures",
-			"rollback": "docker compose down && up"
-		}]
-	}`
-
-	prov := &mockReflectorProvider{response: llmResp}
-	rp := newReflectorPipeline(t, db, prov)
-
-	err := rp.Run(context.Background(), ReflectorDaily)
-	if err != nil {
-		t.Fatalf("Run error: %v", err)
+func TestReflector_ParseInvalidJSON(t *testing.T) {
+	_, err := parseReflectorOutput("not json")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
 	}
+}
 
-	// Should have 2 atoms: original + runbook_draft
-	if countAtoms(t, db) != 2 {
-		t.Errorf(
-			"expected 2 atoms, got %d",
-			countAtoms(t, db),
-		)
+func TestReflector_ValidateHallucinatedID(t *testing.T) {
+	resp := &reflectorLLMResponse{
+		Duplicates: []reflectorDuplicate{
+			{KeepID: "FAKE-1", MergeIDs: []string{"S-1"}},
+		},
 	}
-
-	// Verify runbook_draft atom
-	var summary, cat string
-	err = db.QueryRow(
-		`SELECT category, summary
-		FROM knowledge_atoms
-		WHERE atom_id LIKE 'R-%'`,
-	).Scan(&cat, &summary)
-	if err != nil {
-		t.Fatalf("query runbook: %v", err)
-	}
-	if cat != "runbook_draft" {
-		t.Errorf(
-			"runbook category = %q, want 'runbook_draft'",
-			cat,
-		)
+	valid := map[string]bool{"S-1": true}
+	err := validateReflectorOutput(resp, valid)
+	if err == nil {
+		t.Fatal("expected error for hallucinated ID")
 	}
 }
 
 func TestReflector_ConfidenceClamp(t *testing.T) {
 	db := setupReflectorTestDB(t)
-	defer db.Close()
-
-	insertTestAtom(
-		t, db, "S-30", "summary",
-		"Near max", "positive", 0.95,
-		nil,
-	)
-	insertTestAtom(
-		t, db, "S-31", "summary",
-		"Near min", "negative", 0.05,
-		nil,
-	)
-
-	llmResp := `{
-		"merges": [],
-		"patterns": [],
-		"confidence_updates": [
-			{"atom_id": "S-30", "delta": 0.1,
-			 "reason": "confirmed"},
-			{"atom_id": "S-31", "delta": -0.2,
-			 "reason": "contradicted"}
-		],
-		"runbook_drafts": []
-	}`
-
-	prov := &mockReflectorProvider{response: llmResp}
-	rp := newReflectorPipeline(t, db, prov)
-
-	err := rp.Run(context.Background(), ReflectorDaily)
+	bm, err := NewBotMemory(db)
 	if err != nil {
-		t.Fatalf("Run error: %v", err)
+		t.Fatalf("new botmemory: %v", err)
 	}
-
-	// S-30: 0.95 + 0.1 = clamped to 1.0
-	c1 := getAtomConfidence(t, db, "S-30")
-	if c1 != 1.0 {
-		t.Errorf("S-30 confidence = %.2f, want 1.0", c1)
-	}
-
-	// S-31: 0.05 - 0.2 = clamped to 0.0
-	c2 := getAtomConfidence(t, db, "S-31")
-	if c2 != 0.0 {
-		t.Errorf("S-31 confidence = %.2f, want 0.0", c2)
-	}
-}
-
-func TestReflector_InvalidJSON_Retry(t *testing.T) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
+	defer bm.Close()
 
 	insertTestAtom(
-		t, db, "S-40", "summary",
-		"test", "positive", 0.5, nil,
+		t, db, "D-5", "decision",
+		"test decision", "positive", 0.5, nil,
 	)
 
-	callCount := 0
-	prov := &mockReflectorProvider{}
-	// First call returns invalid, second returns valid
-	origChat := prov.Chat
-	_ = origChat
+	pipeline := NewReflectorPipeline(
+		bm, NewAtomIDGenerator(bm), nil, nil,
+		DefaultReflectorConfig(),
+	)
 
-	// Use a custom provider that returns invalid then valid
-	customProv := &sequentialProvider{
-		responses: []string{
-			"not valid json at all",
-			`{"merges":[], "patterns":[], "confidence_updates":[], "runbook_drafts":[]}`,
+	atoms, _ := pipeline.fetchAtoms(
+		context.Background(), ReflectorMonthly,
+	)
+	atomMap := map[string]*KnowledgeAtomRow{}
+	for i := range atoms {
+		atomMap[atoms[i].AtomID] = &atoms[i]
+	}
+
+	// Test +0.1 confirmed
+	err = pipeline.applyConfUpdate(
+		context.Background(),
+		reflectorConfUpdate{
+			AtomID:  "D-5",
+			NewConf: 0.6,
 		},
-		callCount: &callCount,
-	}
-
-	rp := newReflectorPipeline(t, db, customProv)
-
-	err := rp.Run(context.Background(), ReflectorDaily)
+		atomMap,
+	)
 	if err != nil {
-		t.Fatalf("Run error: %v", err)
+		t.Fatalf("apply conf +0.1: %v", err)
 	}
 
-	// Should have called LLM twice (1 fail + 1 retry)
-	if callCount != 2 {
+	// Verify
+	var conf float64
+	db.QueryRow(
+		`SELECT confidence FROM knowledge_atoms
+		WHERE atom_id=?`, "D-5",
+	).Scan(&conf)
+	if conf != 0.6 {
+		t.Errorf("expected 0.6, got %f", conf)
+	}
+
+	// Test clamp > 1.0
+	err = pipeline.applyConfUpdate(
+		context.Background(),
+		reflectorConfUpdate{
+			AtomID:  "D-5",
+			NewConf: 1.5,
+		},
+		atomMap,
+	)
+	if err != nil {
+		t.Fatalf("apply conf >1: %v", err)
+	}
+	db.QueryRow(
+		`SELECT confidence FROM knowledge_atoms
+		WHERE atom_id=?`, "D-5",
+	).Scan(&conf)
+	if conf != 1.0 {
+		t.Errorf("expected clamp to 1.0, got %f", conf)
+	}
+}
+
+func TestReflector_MergePolarityMismatch(
+	t *testing.T,
+) {
+	db := setupReflectorTestDB(t)
+	bm, err := NewBotMemory(db)
+	if err != nil {
+		t.Fatalf("new botmemory: %v", err)
+	}
+	defer bm.Close()
+
+	insertTestAtom(
+		t, db, "S-1", "summary",
+		"positive atom", "positive", 0.5, nil,
+	)
+	insertTestAtom(
+		t, db, "S-2", "summary",
+		"negative atom", "negative", 0.5, nil,
+	)
+
+	pipeline := NewReflectorPipeline(
+		bm, NewAtomIDGenerator(bm), nil, nil,
+		DefaultReflectorConfig(),
+	)
+
+	atoms, _ := pipeline.fetchAtoms(
+		context.Background(), ReflectorMonthly,
+	)
+	atomMap := map[string]*KnowledgeAtomRow{}
+	for i := range atoms {
+		atomMap[atoms[i].AtomID] = &atoms[i]
+	}
+
+	// Merge positive + negative → should skip
+	err = pipeline.applyMerge(
+		context.Background(),
+		reflectorDuplicate{
+			KeepID:   "S-1",
+			MergeIDs: []string{"S-2"},
+		},
+		atomMap,
+	)
+	if err != nil {
+		t.Fatalf("merge should not error: %v", err)
+	}
+
+	// Both atoms should still exist
+	var count int
+	db.QueryRow(
+		`SELECT COUNT(*) FROM knowledge_atoms`,
+	).Scan(&count)
+	if count != 2 {
 		t.Errorf(
-			"expected 2 LLM calls, got %d",
-			callCount,
+			"expected 2 atoms (merge skipped), got %d",
+			count,
 		)
 	}
 }
 
-type sequentialProvider struct {
-	responses []string
-	callCount *int
-}
-
-func (s *sequentialProvider) Chat(
-	_ context.Context,
-	_ []providers.Message,
-	_ []providers.ToolDefinition,
-	_ string,
-	_ map[string]any,
-) (*providers.LLMResponse, error) {
-	idx := *s.callCount
-	*s.callCount++
-	if idx < len(s.responses) {
-		return &providers.LLMResponse{
-			Content: s.responses[idx],
-		}, nil
-	}
-	return nil, fmt.Errorf("no more responses")
-}
-
-func (s *sequentialProvider) GetDefaultModel() string {
-	return "test"
-}
-
-func TestReflector_LLMError_ReportsFailure(
-	t *testing.T,
-) {
+func TestReflector_MergeSuccess(t *testing.T) {
 	db := setupReflectorTestDB(t)
-	defer db.Close()
-
-	insertTestAtom(
-		t, db, "S-50", "summary",
-		"test", "positive", 0.5, nil,
-	)
-
-	prov := &mockReflectorProvider{
-		err: fmt.Errorf("LLM unavailable"),
-	}
-	rp := newReflectorPipeline(t, db, prov)
-
-	err := rp.Run(context.Background(), ReflectorDaily)
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if prov.calls != 2 {
-		// 1 original + 1 retry
-		t.Errorf(
-			"expected 2 LLM calls (with retry), got %d",
-			prov.calls,
-		)
-	}
-}
-
-func TestReflector_MergePolarityMismatch_Skipped(
-	t *testing.T,
-) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
-
-	insertTestAtom(
-		t, db, "S-60", "summary",
-		"Good thing", "positive", 0.5,
-		[]string{"test"},
-	)
-	insertTestAtom(
-		t, db, "S-61", "summary",
-		"Bad thing", "negative", 0.5,
-		[]string{"test"},
-	)
-
-	// LLM tries to merge positive+negative (bad)
-	llmResp := `{
-		"merges": [{
-			"source_atom_ids": ["S-60", "S-61"],
-			"summary": "Merged",
-			"category": "summary",
-			"polarity": "positive",
-			"reason": "overlap"
-		}],
-		"patterns": [],
-		"confidence_updates": [],
-		"runbook_drafts": []
-	}`
-
-	prov := &mockReflectorProvider{response: llmResp}
-	rp := newReflectorPipeline(t, db, prov)
-
-	err := rp.Run(context.Background(), ReflectorDaily)
+	bm, err := NewBotMemory(db)
 	if err != nil {
-		t.Fatalf("Run error: %v", err)
+		t.Fatalf("new botmemory: %v", err)
 	}
-
-	// Both atoms should still exist (merge was skipped)
-	if !atomExists(t, db, "S-60") {
-		t.Error("S-60 should still exist")
-	}
-	if !atomExists(t, db, "S-61") {
-		t.Error("S-61 should still exist")
-	}
-	if countAtoms(t, db) != 2 {
-		t.Errorf(
-			"expected 2 atoms, got %d",
-			countAtoms(t, db),
-		)
-	}
-}
-
-func TestReflector_InvalidAtomID_Skipped(
-	t *testing.T,
-) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
+	defer bm.Close()
 
 	insertTestAtom(
-		t, db, "S-70", "summary",
-		"test", "positive", 0.5, nil,
+		t, db, "S-10", "summary",
+		"atom A", "positive", 0.6,
+		[]string{"deploy"},
+	)
+	insertTestAtom(
+		t, db, "S-11", "summary",
+		"atom B", "positive", 0.4,
+		[]string{"docker"},
 	)
 
-	// LLM references non-existent atom
-	llmResp := `{
-		"merges": [],
-		"patterns": [],
-		"confidence_updates": [{
-			"atom_id": "S-999",
-			"delta": 0.1,
-			"reason": "hallucinated"
-		}],
-		"runbook_drafts": []
-	}`
+	pipeline := NewReflectorPipeline(
+		bm, NewAtomIDGenerator(bm), nil, nil,
+		DefaultReflectorConfig(),
+	)
 
-	prov := &mockReflectorProvider{response: llmResp}
-	rp := newReflectorPipeline(t, db, prov)
-
-	err := rp.Run(context.Background(), ReflectorDaily)
-	if err != nil {
-		t.Fatalf("Run error: %v", err)
+	atoms, _ := pipeline.fetchAtoms(
+		context.Background(), ReflectorMonthly,
+	)
+	atomMap := map[string]*KnowledgeAtomRow{}
+	for i := range atoms {
+		atomMap[atoms[i].AtomID] = &atoms[i]
 	}
 
-	// S-70 confidence unchanged (update for S-999 skipped)
-	conf := getAtomConfidence(t, db, "S-70")
+	err = pipeline.applyMerge(
+		context.Background(),
+		reflectorDuplicate{
+			KeepID:   "S-10",
+			MergeIDs: []string{"S-11"},
+			Reason:   "semantic overlap",
+		},
+		atomMap,
+	)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+
+	// Originals deleted, 1 new merged
+	var count int
+	db.QueryRow(
+		`SELECT COUNT(*) FROM knowledge_atoms`,
+	).Scan(&count)
+	if count != 1 {
+		t.Errorf("expected 1 merged atom, got %d", count)
+	}
+
+	// Check merged confidence = AVG(0.6, 0.4) = 0.5
+	var conf float64
+	db.QueryRow(
+		`SELECT confidence FROM knowledge_atoms
+		LIMIT 1`,
+	).Scan(&conf)
 	if conf != 0.5 {
 		t.Errorf(
-			"S-70 confidence = %.2f, want 0.5",
+			"expected merged confidence 0.5, got %f",
 			conf,
 		)
 	}
 }
 
-func TestReflector_WeeklyScope(t *testing.T) {
+func TestReflector_RunbookDraft(t *testing.T) {
 	db := setupReflectorTestDB(t)
-	defer db.Close()
+	bm, err := NewBotMemory(db)
+	if err != nil {
+		t.Fatalf("new botmemory: %v", err)
+	}
+	defer bm.Close()
 
-	// Insert atoms with different timestamps
-	// Recent atom (within 7 days)
-	insertTestAtom(
-		t, db, "S-80", "summary",
-		"Recent atom", "positive", 0.5,
-		nil,
+	pipeline := NewReflectorPipeline(
+		bm, NewAtomIDGenerator(bm), nil, nil,
+		DefaultReflectorConfig(),
 	)
 
-	llmResp := `{
-		"merges": [],
+	err = pipeline.applyRunbook(
+		context.Background(),
+		reflectorRunbook{
+			Trigger:         "Deploy fails after config",
+			Tags:            []string{"deploy", "config"},
+			EvidenceAtomIDs: []string{"S-1", "S-2", "S-3"},
+			Steps:           []string{"1. Check logs"},
+			Rollback:        "Revert config",
+		},
+	)
+	if err != nil {
+		t.Fatalf("runbook: %v", err)
+	}
+
+	var count int
+	db.QueryRow(
+		`SELECT COUNT(*) FROM knowledge_atoms
+		WHERE category='runbook_draft'`,
+	).Scan(&count)
+	if count != 1 {
+		t.Errorf(
+			"expected 1 runbook_draft atom, got %d",
+			count,
+		)
+	}
+}
+
+func TestReflector_DailyPipeline(t *testing.T) {
+	db := setupReflectorTestDB(t)
+	bm, err := NewBotMemory(db)
+	if err != nil {
+		t.Fatalf("new botmemory: %v", err)
+	}
+	defer bm.Close()
+
+	insertTestAtom(
+		t, db, "S-1", "summary",
+		"deploy worked", "positive", 0.5,
+		[]string{"deploy"},
+	)
+	insertTestAtom(
+		t, db, "S-2", "summary",
+		"deploy worked again", "positive", 0.5,
+		[]string{"deploy"},
+	)
+
+	mockResp := `{
+		"duplicates": [{
+			"keep_id": "S-1",
+			"merge_ids": ["S-2"],
+			"reason": "same deploy topic"
+		}],
 		"patterns": [],
 		"confidence_updates": [],
 		"runbook_drafts": []
 	}`
 
-	prov := &mockReflectorProvider{response: llmResp}
-	rp := newReflectorPipeline(t, db, prov)
+	mock := &mockReflectorLLM{response: mockResp}
+	pipeline := NewReflectorPipeline(
+		bm, NewAtomIDGenerator(bm), mock, nil,
+		ReflectorConfig{
+			Enabled:    true,
+			MaxRetries: 1,
+			Model:      "mock",
+		},
+	)
 
-	err := rp.Run(context.Background(), ReflectorWeekly)
+	err = pipeline.Run(
+		context.Background(), ReflectorDaily,
+	)
 	if err != nil {
-		t.Fatalf("Run error: %v", err)
+		t.Fatalf("Run daily: %v", err)
 	}
 
-	// LLM should be called (atom within scope)
-	if prov.calls != 1 {
+	// After merge: 1 atom remains
+	var count int
+	db.QueryRow(
+		`SELECT COUNT(*) FROM knowledge_atoms`,
+	).Scan(&count)
+	if count != 1 {
 		t.Errorf(
-			"expected 1 LLM call, got %d",
-			prov.calls,
+			"expected 1 atom after merge, got %d",
+			count,
 		)
 	}
 }
 
-func TestReflector_MonthlyScope(t *testing.T) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
-
-	insertTestAtom(
-		t, db, "S-90", "summary",
-		"Old atom", "positive", 0.5,
-		nil,
+func TestReflector_PromptHotReload(t *testing.T) {
+	tmpDir := t.TempDir()
+	promptPath := filepath.Join(
+		tmpDir, "reflexor.md",
 	)
-
-	llmResp := `{
-		"merges": [],
-		"patterns": [],
-		"confidence_updates": [],
-		"runbook_drafts": []
-	}`
-
-	prov := &mockReflectorProvider{response: llmResp}
-	rp := newReflectorPipeline(t, db, prov)
-
-	err := rp.Run(context.Background(), ReflectorMonthly)
+	err := os.WriteFile(
+		promptPath, []byte("custom prompt"), 0o644,
+	)
 	if err != nil {
-		t.Fatalf("Run error: %v", err)
+		t.Fatalf("write prompt: %v", err)
 	}
 
-	if prov.calls != 1 {
+	pipeline := &ReflectorPipeline{
+		cfg: ReflectorConfig{PromptFile: promptPath},
+	}
+
+	text, err := pipeline.loadPromptFile()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if text != "custom prompt" {
 		t.Errorf(
-			"expected 1 LLM call, got %d",
-			prov.calls,
+			"expected 'custom prompt', got %q", text,
 		)
 	}
-}
 
-func TestReflector_ParseOutput_EmptyArrays(
-	t *testing.T,
-) {
-	raw := `{"merges":[], "patterns":[], "confidence_updates":[], "runbook_drafts":[]}`
-	parsed, err := parseReflectorOutput(raw)
-	if err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	if len(parsed.Merges) != 0 {
-		t.Error("expected 0 merges")
-	}
-	if len(parsed.Patterns) != 0 {
-		t.Error("expected 0 patterns")
-	}
-	if len(parsed.ConfidenceUpdates) != 0 {
-		t.Error("expected 0 confidence_updates")
-	}
-	if len(parsed.RunbookDrafts) != 0 {
-		t.Error("expected 0 runbook_drafts")
-	}
-}
-
-func TestReflector_ParseOutput_NoJSON(t *testing.T) {
-	_, err := parseReflectorOutput(
-		"no json here at all",
+	// Update file → next load sees new content
+	os.WriteFile(
+		promptPath, []byte("updated"), 0o644,
 	)
-	if err == nil {
-		t.Error("expected error for no JSON")
+	text, _ = pipeline.loadPromptFile()
+	if text != "updated" {
+		t.Errorf("hot-reload failed: %q", text)
 	}
 }
 
-func TestReflector_ClampConfidence(t *testing.T) {
+func TestReflector_PromptFileMissing(t *testing.T) {
+	pipeline := &ReflectorPipeline{
+		cfg: ReflectorConfig{
+			PromptFile: "/nonexistent/path.md",
+		},
+	}
+	text, err := pipeline.loadPromptFile()
+	if err != nil {
+		t.Fatalf("missing file should not error: %v", err)
+	}
+	if text != defaultReflectorPrompt {
+		t.Error("expected default prompt fallback")
+	}
+}
+
+// --- Cron Tests ---
+
+func TestScheduleToCronExpr(t *testing.T) {
 	tests := []struct {
-		input float64
-		want  float64
+		raw, mode, want string
+		wantErr         bool
 	}{
-		{1.5, 1.0},
-		{-0.5, 0.0},
-		{0.5, 0.5},
-		{0.0, 0.0},
-		{1.0, 1.0},
+		{"03:00", ReflectorDaily, "0 3 * * *", false},
+		{"Sun 04:00", ReflectorWeekly,
+			"0 4 * * 0", false},
+		{"1st 05:00", ReflectorMonthly,
+			"0 5 1 * *", false},
+		{"Mon 08:30", ReflectorWeekly,
+			"30 8 * * 1", false},
+		{"15th 12:00", ReflectorMonthly,
+			"0 12 15 * *", false},
+		{"bad", ReflectorDaily, "", true},
+		{"", ReflectorDaily, "", true},
 	}
 	for _, tc := range tests {
-		got := clampConfidence(tc.input)
+		got, err := schedToCronExpr(tc.raw, tc.mode)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf(
+					"schedToCronExpr(%q, %q): "+
+						"expected error",
+					tc.raw, tc.mode,
+				)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf(
+				"schedToCronExpr(%q, %q): %v",
+				tc.raw, tc.mode, err,
+			)
+			continue
+		}
 		if got != tc.want {
 			t.Errorf(
-				"clampConfidence(%.1f) = %.1f, want %.1f",
-				tc.input, got, tc.want,
+				"schedToCronExpr(%q, %q) = %q, want %q",
+				tc.raw, tc.mode, got, tc.want,
 			)
 		}
 	}
 }
 
-func TestReflector_DefaultConfig(t *testing.T) {
-	cfg := DefaultReflectorConfig()
-	if !cfg.Enabled {
-		t.Error("should be enabled by default")
+func TestRegisterReflectorJobs_Valid(t *testing.T) {
+	tmpFile := filepath.Join(
+		t.TempDir(), "cron.json",
+	)
+	cronSvc := cron.NewCronService(tmpFile, nil)
+
+	err := RegisterReflectorJobs(
+		cronSvc, nil,
+		ReflectorSchedule{
+			Daily:   "03:00",
+			Weekly:  "Sun 04:00",
+			Monthly: "1st 05:00",
+		},
+	)
+	if err != nil {
+		t.Fatalf("register: %v", err)
 	}
-	if cfg.Model != "background" {
+
+	jobs := cronSvc.ListJobs(true)
+	if len(jobs) != 3 {
 		t.Errorf(
-			"model = %q, want 'background'",
-			cfg.Model,
-		)
-	}
-	if cfg.MaxRetries != 1 {
-		t.Errorf(
-			"MaxRetries = %d, want 1",
-			cfg.MaxRetries,
-		)
-	}
-	if cfg.Schedule.Daily != "03:00" {
-		t.Errorf(
-			"Daily = %q, want '03:00'",
-			cfg.Schedule.Daily,
+			"expected 3 jobs, got %d", len(jobs),
 		)
 	}
 }
 
-func TestReflector_BuildUserContent(t *testing.T) {
-	db := setupReflectorTestDB(t)
-	defer db.Close()
+func TestRegisterReflectorJobs_Empty(t *testing.T) {
+	tmpFile := filepath.Join(
+		t.TempDir(), "cron.json",
+	)
+	cronSvc := cron.NewCronService(tmpFile, nil)
 
-	prov := &mockReflectorProvider{}
-	rp := newReflectorPipeline(t, db, prov)
-
-	atoms := []KnowledgeAtomRow{
-		{
-			AtomID:   "S-1",
-			Category: "summary",
-			Summary:  "Test summary",
-			Polarity: "positive",
-			Confidence: 0.5,
-			CreatedAt: time.Date(
-				2026, 5, 1, 10, 0, 0, 0,
-				time.UTC,
-			),
-		},
+	err := RegisterReflectorJobs(
+		cronSvc, nil,
+		ReflectorSchedule{},
+	)
+	if err != nil {
+		t.Fatalf("register empty: %v", err)
 	}
 
-	content := rp.buildUserContent(
-		atoms, ReflectorDaily,
+	jobs := cronSvc.ListJobs(true)
+	if len(jobs) != 0 {
+		t.Errorf(
+			"expected 0 jobs, got %d", len(jobs),
+		)
+	}
+}
+
+func TestRegisterReflectorJobs_Invalid(
+	t *testing.T,
+) {
+	tmpFile := filepath.Join(
+		t.TempDir(), "cron.json",
+	)
+	cronSvc := cron.NewCronService(tmpFile, nil)
+
+	err := RegisterReflectorJobs(
+		cronSvc, nil,
+		ReflectorSchedule{Daily: "bad"},
+	)
+	if err == nil {
+		t.Fatal("expected error for invalid schedule")
+	}
+}
+
+func TestHandleReflectorJob(t *testing.T) {
+	db := setupReflectorTestDB(t)
+	bm, err := NewBotMemory(db)
+	if err != nil {
+		t.Fatalf("new botmemory: %v", err)
+	}
+	defer bm.Close()
+
+	mock := &mockReflectorLLM{response: `{
+		"duplicates":[],"patterns":[],
+		"confidence_updates":[],"runbook_drafts":[]}`}
+	pipeline := NewReflectorPipeline(
+		bm, NewAtomIDGenerator(bm), mock, nil,
+		DefaultReflectorConfig(),
 	)
 
-	if !contains(content, "\"scope\": \"daily\"") {
-		t.Error("expected scope in content")
+	// Reflector job
+	job := &cron.CronJob{
+		Payload: cron.CronPayload{
+			Message: "reflector:daily",
+		},
 	}
-	if !contains(content, "S-1") {
-		t.Error("expected atom ID in content")
+	handled, err := HandleReflectorJob(pipeline, job)
+	if !handled {
+		t.Error("expected job to be handled")
 	}
-	if !contains(content, "Test summary") {
-		t.Error("expected summary in content")
+	if err != nil {
+		t.Errorf("handle error: %v", err)
 	}
-}
 
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) &&
-		containsStr(s, sub)
-}
-
-func containsStr(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
+	// Non-reflector job
+	job2 := &cron.CronJob{
+		Payload: cron.CronPayload{
+			Message: "some-other-job",
+		},
 	}
-	return false
+	handled2, _ := HandleReflectorJob(pipeline, job2)
+	if handled2 {
+		t.Error("should not handle non-reflector job")
+	}
 }

@@ -1,7 +1,7 @@
-// PIKA-V3: Reflector — Go pipeline for behavioral optimization.
-// Analyzes knowledge_atoms via cheap LLM (structured output,
-// 0 tool calls). 3 modes: daily/weekly/monthly.
-// Decisions: D-134, D-147, D-59, D-87, F9-5, F8-8, F8-18.
+// PIKA-V3: Reflector — Go pipeline analyzing knowledge_atoms.
+// Cheap LLM (structured output, 0 tool calls). 3 modes:
+// daily/weekly/monthly. Cron-driven.
+// Decision: D-134, D-26, F9-5, D-147, D-59.
 
 package pika
 
@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"strings"
@@ -18,16 +19,34 @@ import (
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
+// --- Mode constants ---
+
+const (
+	ReflectorDaily   = "daily"
+	ReflectorWeekly  = "weekly"
+	ReflectorMonthly = "monthly"
+)
+
 // --- Configuration ---
 
 // ReflectorConfig holds reflector-specific parameters.
 type ReflectorConfig struct {
 	Enabled    bool
-	PromptFile string // hot-reload prompt path (D-90)
+	PromptFile string // hot-reload path (D-90)
+	MaxRetries int    // LLM validation retries
 	Model      string // LLM model name
-	MaxRetries int    // LLM retry on invalid JSON
-	TimeoutMs  int    // per-LLM-call timeout
-	Schedule   ReflectorSchedule
+	TimeoutMs  int    // per-run timeout
+}
+
+// DefaultReflectorConfig returns defaults per ТЗ-v2-5b.
+func DefaultReflectorConfig() ReflectorConfig {
+	return ReflectorConfig{
+		Enabled:    true,
+		PromptFile: "/workspace/prompts/reflexor.md",
+		MaxRetries: 1,
+		Model:      "background",
+		TimeoutMs:  120000,
+	}
 }
 
 // ReflectorSchedule holds cron schedule strings.
@@ -37,67 +56,64 @@ type ReflectorSchedule struct {
 	Monthly string // e.g. "1st 05:00"
 }
 
-// DefaultReflectorConfig returns defaults per ТЗ spec.
-func DefaultReflectorConfig() ReflectorConfig {
-	return ReflectorConfig{
-		Enabled:    true,
-		PromptFile: "/workspace/prompts/reflexor.md",
-		Model:      "background",
-		MaxRetries: 1,
-		TimeoutMs:  60000,
-		Schedule: ReflectorSchedule{
-			Daily:   "03:00",
-			Weekly:  "Sun 04:00",
-			Monthly: "1st 05:00",
-		},
-	}
-}
+// --- LLM Output Types ---
 
-// --- LLM Structured Output Types ---
-
-// reflectorLLMResponse is the unified JSON from LLM.
-type reflectorLLMResponse struct {
-	Merges            []reflectorMerge      `json:"merges"`
-	Patterns          []reflectorPattern    `json:"patterns"`
-	ConfidenceUpdates []reflectorConfUpdate `json:"confidence_updates"`
-	RunbookDrafts     []reflectorRunbook    `json:"runbook_drafts"`
-}
-
-type reflectorMerge struct {
-	SourceAtomIDs []string `json:"source_atom_ids"`
-	Summary       string   `json:"summary"`
-	Detail        string   `json:"detail,omitempty"`
-	Category      string   `json:"category"`
-	Polarity      string   `json:"polarity"`
-	Reason        string   `json:"reason"`
+type reflectorDuplicate struct {
+	KeepID   string   `json:"keep_id"`
+	MergeIDs []string `json:"merge_ids"`
+	Reason   string   `json:"reason"`
 }
 
 type reflectorPattern struct {
-	Type        string   `json:"type"` // "antipattern" | "recurring_failure"
-	Summary     string   `json:"summary"`
-	Tags        []string `json:"tags"`
-	Polarity    string   `json:"polarity"`
-	SourceAtoms []string `json:"source_atoms"`
+	Type            string   `json:"type"`
+	Summary         string   `json:"summary"`
+	EvidenceAtomIDs []string `json:"evidence_atom_ids"`
+	Tags            []string `json:"tags"`
+	Polarity        string   `json:"polarity"`
+	SuggestedAction string   `json:"suggested_action"`
 }
 
 type reflectorConfUpdate struct {
-	AtomID string  `json:"atom_id"`
-	Delta  float64 `json:"delta"`
-	Reason string  `json:"reason"`
+	AtomID         string  `json:"atom_id"`
+	CurrentConf    float64 `json:"current_confidence"`
+	NewConf        float64 `json:"new_confidence"`
+	Direction      string  `json:"direction"`
+	Reason         string  `json:"reason"`
+	EvidenceAtomID string  `json:"evidence_atom_id"`
 }
 
 type reflectorRunbook struct {
-	Tag      string   `json:"tag"`
-	Steps    []string `json:"steps"`
-	Trigger  string   `json:"trigger"`
-	Rollback string   `json:"rollback"`
+	Trigger         string   `json:"trigger"`
+	Tags            []string `json:"tags"`
+	EvidenceAtomIDs []string `json:"evidence_atom_ids"`
+	Steps           []string `json:"steps"`
+	Rollback        string   `json:"rollback"`
+}
+
+type reflectorLLMResponse struct {
+	Duplicates  []reflectorDuplicate  `json:"duplicates"`
+	Patterns    []reflectorPattern    `json:"patterns"`
+	ConfUpdates []reflectorConfUpdate `json:"confidence_updates"`
+	Runbooks    []reflectorRunbook    `json:"runbook_drafts"`
+}
+
+// --- atomForLLM is the JSON shape sent to LLM ---
+
+type reflectorAtomForLLM struct {
+	ID         string   `json:"id"`
+	Category   string   `json:"category"`
+	Summary    string   `json:"summary"`
+	Detail     string   `json:"detail,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
+	Polarity   string   `json:"polarity"`
+	Confidence float64  `json:"confidence"`
+	CreatedAt  string   `json:"created_at"`
 }
 
 // --- Reflector Pipeline ---
 
-// ReflectorPipeline orchestrates the reflector Go-pipeline.
-// Stateless between calls — all state in bot_memory.db.
-// Thread-safe: no mutable state.
+// ReflectorPipeline orchestrates the reflector.
+// Stateless between calls (D-90). Thread-safe.
 type ReflectorPipeline struct {
 	mem       *BotMemory
 	atomGen   *AtomIDGenerator
@@ -120,9 +136,6 @@ func NewReflectorPipeline(
 	if cfg.Model == "" {
 		cfg.Model = "background"
 	}
-	if cfg.TimeoutMs <= 0 {
-		cfg.TimeoutMs = 60000
-	}
 	return &ReflectorPipeline{
 		mem:       mem,
 		atomGen:   atomGen,
@@ -132,41 +145,29 @@ func NewReflectorPipeline(
 	}
 }
 
-// reflectorMode defines the scope of a reflector run.
-type reflectorMode string
-
-const (
-	ReflectorDaily   reflectorMode = "daily"
-	ReflectorWeekly  reflectorMode = "weekly"
-	ReflectorMonthly reflectorMode = "monthly"
-)
-
-// Run executes the full reflector pipeline for the given mode.
-// Pipeline: data prep (SQL) → prompt load → LLM call →
-// parse+validate → apply (INSERT/UPDATE/DELETE in 1 txn).
+// Run executes the reflector pipeline for the given mode.
+// Pipeline: data prep → LLM → parse → apply.
 func (r *ReflectorPipeline) Run(
-	ctx context.Context, mode reflectorMode,
+	ctx context.Context, mode string,
 ) error {
 	if !r.cfg.Enabled {
 		return nil
 	}
 
-	// Step 1: Data prep — load knowledge_atoms for scope
-	atoms, err := r.loadAtomsForScope(ctx, mode)
+	// Step 1: Data prep — fetch knowledge_atoms by scope
+	atoms, err := r.fetchAtoms(ctx, mode)
 	if err != nil {
 		r.reportFailure()
 		return fmt.Errorf(
-			"pika/reflector: load atoms: %w", err,
+			"pika/reflector: fetch atoms: %w", err,
 		)
 	}
-
-	// Cold start: 0 atoms → skip LLM, not an error
 	if len(atoms) == 0 {
-		r.reportSuccess()
+		// Empty knowledge_atoms → skip LLM call (normal)
 		return nil
 	}
 
-	// Step 2: Load prompt file (hot-reload, D-90)
+	// Step 2: Load prompt (hot-reload, 0 restart)
 	promptText, err := r.loadPromptFile()
 	if err != nil {
 		r.reportFailure()
@@ -175,12 +176,12 @@ func (r *ReflectorPipeline) Run(
 		)
 	}
 
-	// Step 3: Build user content from atoms
+	// Step 3: Build user content
 	userContent := r.buildUserContent(atoms, mode)
 
 	// Step 4: LLM call with retry on invalid JSON
 	output, err := r.callWithRetry(
-		ctx, promptText, userContent,
+		ctx, promptText, userContent, atoms,
 	)
 	if err != nil {
 		r.reportFailure()
@@ -189,24 +190,25 @@ func (r *ReflectorPipeline) Run(
 		)
 	}
 
-	// Step 5: Build atom index for validation
-	atomIndex := buildAtomIndex(atoms)
-
-	// Step 6: Apply results in transaction
-	if err := r.applyResults(
-		ctx, output, atomIndex, atoms,
-	); err != nil {
+	// Step 5: Apply results
+	if applyErr := r.applyResults(
+		ctx, output, atoms,
+	); applyErr != nil {
 		r.reportFailure()
 		return fmt.Errorf(
-			"pika/reflector: apply: %w", err,
+			"pika/reflector: apply: %w", applyErr,
 		)
 	}
 
-	// Step 7: Monthly extras
+	// Step 6: Monthly-specific tasks
 	if mode == ReflectorMonthly {
-		if err := r.markStaleAtoms(ctx); err != nil {
-			// Non-fatal: log but continue
-			_ = err
+		if mErr := r.runMonthlyTasks(
+			ctx, atoms,
+		); mErr != nil {
+			log.Printf(
+				"[reflector] monthly tasks warning: %v",
+				mErr,
+			)
 		}
 	}
 
@@ -216,60 +218,50 @@ func (r *ReflectorPipeline) Run(
 
 // --- Data Prep ---
 
-// loadAtomsForScope returns knowledge_atoms based on mode.
-func (r *ReflectorPipeline) loadAtomsForScope(
-	ctx context.Context, mode reflectorMode,
+func (r *ReflectorPipeline) fetchAtoms(
+	ctx context.Context, mode string,
 ) ([]KnowledgeAtomRow, error) {
 	var query string
 	switch mode {
 	case ReflectorDaily:
 		query = `SELECT id, atom_id, session_id, turn_id,
-			source_event_id, source_message_id,
-			category, summary, detail, confidence,
-			polarity, verified, tags, source_turns,
-			history, created_at, updated_at
+			source_event_id, source_message_id, category,
+			summary, detail, confidence, polarity, verified,
+			tags, source_turns, history,
+			created_at, updated_at
 			FROM knowledge_atoms
 			WHERE created_at > datetime('now', '-1 day')
 			ORDER BY id ASC`
 	case ReflectorWeekly:
 		query = `SELECT id, atom_id, session_id, turn_id,
-			source_event_id, source_message_id,
-			category, summary, detail, confidence,
-			polarity, verified, tags, source_turns,
-			history, created_at, updated_at
+			source_event_id, source_message_id, category,
+			summary, detail, confidence, polarity, verified,
+			tags, source_turns, history,
+			created_at, updated_at
 			FROM knowledge_atoms
 			WHERE created_at > datetime('now', '-7 days')
 			ORDER BY id ASC`
 	case ReflectorMonthly:
 		query = `SELECT id, atom_id, session_id, turn_id,
-			source_event_id, source_message_id,
-			category, summary, detail, confidence,
-			polarity, verified, tags, source_turns,
-			history, created_at, updated_at
+			source_event_id, source_message_id, category,
+			summary, detail, confidence, polarity, verified,
+			tags, source_turns, history,
+			created_at, updated_at
 			FROM knowledge_atoms
 			ORDER BY id ASC`
 	default:
 		return nil, fmt.Errorf("unknown mode %q", mode)
 	}
-	return r.queryAtoms(ctx, query)
-}
 
-// queryAtoms executes a SELECT on knowledge_atoms and scans.
-func (r *ReflectorPipeline) queryAtoms(
-	ctx context.Context, query string,
-) ([]KnowledgeAtomRow, error) {
 	rows, err := r.mem.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"pika/reflector: query atoms: %w", err,
-		)
+		return nil, fmt.Errorf("query atoms: %w", err)
 	}
 	defer rows.Close()
-	return scanAtomRows(rows)
+	return scanKnowledgeAtomRows(rows)
 }
 
-// scanAtomRows scans sql.Rows into []KnowledgeAtomRow.
-func scanAtomRows(
+func scanKnowledgeAtomRows(
 	rows *sql.Rows,
 ) ([]KnowledgeAtomRow, error) {
 	var out []KnowledgeAtomRow
@@ -284,9 +276,7 @@ func scanAtomRows(
 			&a.Confidence, &a.Polarity, &a.Verified,
 			&tg, &st, &hi, &ca, &ua,
 		); err != nil {
-			return nil, fmt.Errorf(
-				"pika/reflector: scan atom: %w", err,
-			)
+			return nil, fmt.Errorf("scan atom: %w", err)
 		}
 		if se.Valid {
 			a.SourceEventID = &se.Int64
@@ -311,74 +301,55 @@ func scanAtomRows(
 	return out, rows.Err()
 }
 
-// --- Prompt ---
+// --- User Content Builder ---
 
-// loadPromptFile reads reflector prompt from disk.
-// Hot-reload: read on every call, 0 restart (D-90).
-func (r *ReflectorPipeline) loadPromptFile() (string, error) {
-	path := r.cfg.PromptFile
-	if path == "" {
-		return defaultReflectorPrompt, nil
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return defaultReflectorPrompt, nil
-		}
-		return "", fmt.Errorf("read %s: %w", path, err)
-	}
-	return string(data), nil
-}
-
-// buildUserContent formats atoms for LLM input.
 func (r *ReflectorPipeline) buildUserContent(
-	atoms []KnowledgeAtomRow, mode reflectorMode,
+	atoms []KnowledgeAtomRow, mode string,
 ) string {
-	var sb strings.Builder
-
-	fmt.Fprintf(&sb, "{\n  \"scope\": %q,\n  \"atoms\": [\n",
-		string(mode))
-
-	for i, a := range atoms {
-		if i > 0 {
-			sb.WriteString(",\n")
+	type payload struct {
+		Scope string                `json:"scope"`
+		Atoms []reflectorAtomForLLM `json:"atoms"`
+	}
+	p := payload{
+		Scope: mode,
+		Atoms: make(
+			[]reflectorAtomForLLM, 0, len(atoms),
+		),
+	}
+	for _, a := range atoms {
+		item := reflectorAtomForLLM{
+			ID:         a.AtomID,
+			Category:   a.Category,
+			Summary:    a.Summary,
+			Detail:     a.Detail,
+			Polarity:   a.Polarity,
+			Confidence: a.Confidence,
+			CreatedAt:  a.CreatedAt.Format(time.RFC3339),
 		}
-		// Build atom JSON manually for compactness
-		fmt.Fprintf(&sb,
-			`    {"id": %q, "category": %q, `+
-				`"summary": %q, "detail": %q, `+
-				`"tags": %s, "polarity": %q, `+
-				`"confidence": %.2f, `+
-				`"created_at": %q}`,
-			a.AtomID, a.Category,
-			a.Summary, a.Detail,
-			coalesceJSON(a.Tags, "[]"),
-			a.Polarity, a.Confidence,
-			a.CreatedAt.Format(time.RFC3339),
-		)
+		if a.Tags != nil {
+			var tags []string
+			if json.Unmarshal(a.Tags, &tags) == nil {
+				item.Tags = tags
+			}
+		}
+		p.Atoms = append(p.Atoms, item)
 	}
-
-	sb.WriteString("\n  ]\n}")
-	return sb.String()
-}
-
-// coalesceJSON returns raw JSON or fallback if nil.
-func coalesceJSON(
-	j json.RawMessage, fallback string,
-) string {
-	if j == nil || len(j) == 0 {
-		return fallback
-	}
+	j, _ := json.Marshal(p)
 	return string(j)
 }
 
 // --- LLM Call ---
 
-// callWithRetry calls LLM with repair retry on parse failure.
 func (r *ReflectorPipeline) callWithRetry(
 	ctx context.Context,
 	promptText, userContent string,
+	atoms []KnowledgeAtomRow,
 ) (*reflectorLLMResponse, error) {
+	atomIDs := make(map[string]bool, len(atoms))
+	for _, a := range atoms {
+		atomIDs[a.AtomID] = true
+	}
+
 	var lastErr error
 	for attempt := 0; attempt <= r.cfg.MaxRetries; attempt++ {
 		sysPrompt := promptText
@@ -386,7 +357,7 @@ func (r *ReflectorPipeline) callWithRetry(
 			sysPrompt += "\n\n## REPAIR\n" +
 				"Previous output had a validation error:\n" +
 				lastErr.Error() + "\n" +
-				"Fix the error and respond with valid JSON."
+				"Fix the error and return valid JSON."
 		}
 
 		raw, callErr := r.callLLM(
@@ -403,21 +374,22 @@ func (r *ReflectorPipeline) callWithRetry(
 			continue
 		}
 
+		if valErr := validateReflectorOutput(
+			parsed, atomIDs,
+		); valErr != nil {
+			lastErr = valErr
+			continue
+		}
+
 		return parsed, nil
 	}
 	return nil, fmt.Errorf("retries exhausted: %w", lastErr)
 }
 
-// callLLM sends system+user to LLM, returns raw content.
 func (r *ReflectorPipeline) callLLM(
 	ctx context.Context,
 	sysPrompt, userContent string,
 ) (string, error) {
-	timeoutDur := time.Duration(r.cfg.TimeoutMs) *
-		time.Millisecond
-	ctx, cancel := context.WithTimeout(ctx, timeoutDur)
-	defer cancel()
-
 	msgs := []providers.Message{
 		{Role: "system", Content: sysPrompt},
 		{Role: "user", Content: userContent},
@@ -431,11 +403,11 @@ func (r *ReflectorPipeline) callLLM(
 	return resp.Content, nil
 }
 
-// parseReflectorOutput extracts and parses JSON from LLM.
 func parseReflectorOutput(
 	raw string,
 ) (*reflectorLLMResponse, error) {
-	jsonStr := extractReflectorJSON(raw)
+	// Reuse extractBalancedPair from atomizer.go
+	jsonStr := extractBalancedPair(raw, '{', '}')
 	if jsonStr == "" {
 		return nil, fmt.Errorf(
 			"no JSON found in LLM response",
@@ -447,373 +419,346 @@ func parseReflectorOutput(
 	); err != nil {
 		return nil, fmt.Errorf("parse JSON: %w", err)
 	}
-	// Ensure nil slices become empty slices
-	if out.Merges == nil {
-		out.Merges = []reflectorMerge{}
-	}
-	if out.Patterns == nil {
-		out.Patterns = []reflectorPattern{}
-	}
-	if out.ConfidenceUpdates == nil {
-		out.ConfidenceUpdates = []reflectorConfUpdate{}
-	}
-	if out.RunbookDrafts == nil {
-		out.RunbookDrafts = []reflectorRunbook{}
-	}
 	return &out, nil
 }
 
-// extractReflectorJSON reuses the balanced-pair extraction.
-func extractReflectorJSON(s string) string {
-	return extractBalancedPair(s, '{', '}')
+func validateReflectorOutput(
+	resp *reflectorLLMResponse,
+	validIDs map[string]bool,
+) error {
+	// Validate duplicates
+	for i, d := range resp.Duplicates {
+		if d.KeepID == "" {
+			return fmt.Errorf(
+				"duplicates[%d]: empty keep_id", i,
+			)
+		}
+		if !validIDs[d.KeepID] {
+			return fmt.Errorf(
+				"duplicates[%d]: keep_id %q not found",
+				i, d.KeepID,
+			)
+		}
+		if len(d.MergeIDs) == 0 {
+			return fmt.Errorf(
+				"duplicates[%d]: empty merge_ids", i,
+			)
+		}
+		for _, mid := range d.MergeIDs {
+			if !validIDs[mid] {
+				return fmt.Errorf(
+					"duplicates[%d]: merge_id %q not found",
+					i, mid,
+				)
+			}
+		}
+	}
+	// Validate patterns
+	for i, p := range resp.Patterns {
+		if p.Summary == "" {
+			return fmt.Errorf(
+				"patterns[%d]: empty summary", i,
+			)
+		}
+		if !validPolarities[p.Polarity] {
+			return fmt.Errorf(
+				"patterns[%d]: invalid polarity %q",
+				i, p.Polarity,
+			)
+		}
+	}
+	// Validate confidence updates
+	for i, u := range resp.ConfUpdates {
+		if u.AtomID == "" {
+			return fmt.Errorf(
+				"confidence_updates[%d]: empty atom_id", i,
+			)
+		}
+		if !validIDs[u.AtomID] {
+			// Hallucinated ID — warn, will skip in apply
+			log.Printf(
+				"[reflector] warn: confidence_updates[%d]: "+
+					"atom_id %q not found, will skip",
+				i, u.AtomID,
+			)
+		}
+		if u.NewConf < 0 || u.NewConf > 1 {
+			return fmt.Errorf(
+				"confidence_updates[%d]: confidence %.2f "+
+					"out of [0,1]",
+				i, u.NewConf,
+			)
+		}
+	}
+	// Validate runbook drafts
+	for i, rd := range resp.Runbooks {
+		if len(rd.Steps) == 0 {
+			return fmt.Errorf(
+				"runbook_drafts[%d]: empty steps", i,
+			)
+		}
+		if rd.Trigger == "" {
+			return fmt.Errorf(
+				"runbook_drafts[%d]: empty trigger", i,
+			)
+		}
+	}
+	return nil
 }
 
 // --- Apply Results ---
 
-// buildAtomIndex creates atom_id → KnowledgeAtomRow lookup.
-func buildAtomIndex(
+func (r *ReflectorPipeline) applyResults(
+	ctx context.Context,
+	resp *reflectorLLMResponse,
 	atoms []KnowledgeAtomRow,
-) map[string]*KnowledgeAtomRow {
-	idx := make(
+) error {
+	atomMap := make(
 		map[string]*KnowledgeAtomRow, len(atoms),
 	)
 	for i := range atoms {
-		idx[atoms[i].AtomID] = &atoms[i]
+		atomMap[atoms[i].AtomID] = &atoms[i]
 	}
-	return idx
-}
 
-// applyResults applies LLM output to bot_memory.db.
-func (r *ReflectorPipeline) applyResults(
-	ctx context.Context,
-	output *reflectorLLMResponse,
-	atomIndex map[string]*KnowledgeAtomRow,
-	atoms []KnowledgeAtomRow,
-) error {
-	// Apply merges
-	for _, m := range output.Merges {
+	// 1. Merge duplicates (D-147)
+	for _, dup := range resp.Duplicates {
 		if err := r.applyMerge(
-			ctx, m, atomIndex,
+			ctx, dup, atomMap,
 		); err != nil {
-			// Log and skip invalid merges
-			continue
+			log.Printf(
+				"[reflector] merge error: %v", err,
+			)
 		}
 	}
 
-	// Apply patterns
-	for _, p := range output.Patterns {
+	// 2. Insert patterns
+	for _, pat := range resp.Patterns {
 		if err := r.applyPattern(
-			ctx, p, atomIndex,
+			ctx, pat,
 		); err != nil {
-			continue
+			log.Printf(
+				"[reflector] pattern error: %v", err,
+			)
 		}
 	}
 
-	// Apply confidence updates
-	for _, u := range output.ConfidenceUpdates {
-		if err := r.applyConfidenceUpdate(
-			ctx, u, atomIndex,
+	// 3. Confidence updates (D-59)
+	for _, upd := range resp.ConfUpdates {
+		if err := r.applyConfUpdate(
+			ctx, upd, atomMap,
 		); err != nil {
-			continue
+			log.Printf(
+				"[reflector] confidence error: %v", err,
+			)
 		}
 	}
 
-	// Apply runbook drafts
-	for _, rb := range output.RunbookDrafts {
+	// 4. Runbook drafts (D-87, F9-5)
+	for _, rd := range resp.Runbooks {
 		if err := r.applyRunbook(
-			ctx, rb,
+			ctx, rd,
 		); err != nil {
-			continue
+			log.Printf(
+				"[reflector] runbook error: %v", err,
+			)
 		}
 	}
 
 	return nil
 }
 
-// applyMerge merges duplicate atoms (D-147).
-// 1 txn: INSERT merged → UPDATE atom_usage → DELETE originals.
+// applyMerge: INSERT merged + UPDATE atom_usage + DELETE.
+// Merge contract (D-147): only same polarity.
 func (r *ReflectorPipeline) applyMerge(
 	ctx context.Context,
-	m reflectorMerge,
-	atomIndex map[string]*KnowledgeAtomRow,
+	dup reflectorDuplicate,
+	atomMap map[string]*KnowledgeAtomRow,
 ) error {
-	if len(m.SourceAtomIDs) < 2 {
-		return fmt.Errorf("merge needs >= 2 source atoms")
-	}
-	if m.Summary == "" {
-		return fmt.Errorf("merge summary empty")
+	keeper := atomMap[dup.KeepID]
+	if keeper == nil {
+		return fmt.Errorf(
+			"keeper %q not in map", dup.KeepID,
+		)
 	}
 
-	// Validate all source atoms exist and same polarity
-	var parents []*KnowledgeAtomRow
-	var polarity string
-	for _, aid := range m.SourceAtomIDs {
-		a, ok := atomIndex[aid]
-		if !ok {
-			return fmt.Errorf(
-				"atom %q not found", aid,
-			)
+	// D-147: polarity validation
+	for _, mid := range dup.MergeIDs {
+		m := atomMap[mid]
+		if m == nil {
+			continue
 		}
-		if polarity == "" {
-			polarity = a.Polarity
-		} else if a.Polarity != polarity {
-			// D-147: different polarity = contradiction
-			return fmt.Errorf(
-				"polarity mismatch: %q vs %q",
-				polarity, a.Polarity,
+		if m.Polarity != keeper.Polarity {
+			log.Printf(
+				"[reflector] skip merge %q+%q: "+
+					"polarity mismatch (%s vs %s)",
+				dup.KeepID, mid,
+				keeper.Polarity, m.Polarity,
 			)
+			return nil
 		}
-		parents = append(parents, a)
 	}
 
-	// Use LLM's polarity if valid, else parent polarity
-	mergedPolarity := m.Polarity
-	if !validPolarities[mergedPolarity] {
-		mergedPolarity = polarity
-	}
-
-	// Use LLM's category if valid, else first parent
-	mergedCategory := m.Category
-	if !validReflectorCategories[mergedCategory] {
-		mergedCategory = parents[0].Category
-	}
-
-	// Confidence = AVG of parents (D-147)
-	var confSum float64
-	for _, p := range parents {
-		confSum += p.Confidence
-	}
-	avgConf := confSum / float64(len(parents))
-
-	// Tags = UNION of all parent tags
-	mergedTags := unionTags(parents)
-
-	// Source turns = UNION
-	mergedSourceTurns := unionSourceTurns(parents)
-
-	// History: add merge record
-	histEntry := map[string]interface{}{
-		"merged_from": m.SourceAtomIDs,
-		"parent_avg":  avgConf,
-		"by":          "reflexor",
-		"at": time.Now().UTC().Format(
-			time.RFC3339,
-		),
-		"reason": m.Reason,
-	}
-	histJSON, _ := json.Marshal(
-		[]interface{}{histEntry},
+	// Collect stats from all parents
+	allIDs := append(
+		[]string{dup.KeepID}, dup.MergeIDs...,
 	)
+	var confSum float64
+	var confCount int
+	var allTags []string
+	for _, aid := range allIDs {
+		a := atomMap[aid]
+		if a == nil {
+			continue
+		}
+		confSum += a.Confidence
+		confCount++
+		if a.Tags != nil {
+			var tags []string
+			if json.Unmarshal(a.Tags, &tags) == nil {
+				allTags = append(allTags, tags...)
+			}
+		}
+	}
+	if confCount == 0 {
+		confCount = 1
+	}
+	avgConf := confSum / float64(confCount)
+	mergedTags := deduplicateStrings(allTags)
+
+	// Generate new atom_id
+	newAtomID, err := r.atomGen.Next(
+		ctx, keeper.Category,
+	)
+	if err != nil {
+		return fmt.Errorf("gen atom_id: %w", err)
+	}
+
+	histEntry := map[string]any{
+		"v":           1,
+		"confidence":  avgConf,
+		"by":          "reflector",
+		"at":          time.Now().UTC().Format(time.RFC3339),
+		"merged_from": allIDs,
+		"parent_avg":  avgConf,
+	}
+	histJSON, _ := json.Marshal([]any{histEntry})
 
 	var tagsJSON json.RawMessage
 	if len(mergedTags) > 0 {
 		tagsJSON, _ = json.Marshal(mergedTags)
 	}
 
-	var stJSON json.RawMessage
-	if len(mergedSourceTurns) > 0 {
-		stJSON, _ = json.Marshal(mergedSourceTurns)
-	}
-
-	// Generate new atom ID
-	newAtomID, err := r.atomGen.Next(
-		ctx, mergedCategory,
-	)
-	if err != nil {
-		return fmt.Errorf("gen atom_id: %w", err)
-	}
-
-	// Execute in transaction
+	// Transaction: INSERT + UPDATE + DELETE
 	tx, err := r.mem.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin merge tx: %w", err)
+		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	// INSERT merged atom
 	_, err = tx.ExecContext(ctx,
 		`INSERT INTO knowledge_atoms
-		(atom_id, session_id, turn_id,
-		category, summary, detail, confidence,
-		polarity, verified, tags,
-		source_turns, history)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-		newAtomID, parents[0].SessionID,
-		parents[0].TurnID,
-		mergedCategory, m.Summary,
-		strOrNil(m.Detail), avgConf,
-		mergedPolarity, 0,
-		jsonArg(tagsJSON),
-		jsonArg(stJSON),
-		string(histJSON),
-	)
+		(atom_id, session_id, turn_id, category,
+		 summary, detail, confidence, polarity,
+		 tags, source_turns, history)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		newAtomID, keeper.SessionID, keeper.TurnID,
+		keeper.Category, keeper.Summary,
+		strOrNil(keeper.Detail), avgConf,
+		keeper.Polarity, jsonArg(tagsJSON),
+		jsonArg(keeper.SourceTurns), string(histJSON))
 	if err != nil {
-		return fmt.Errorf(
-			"insert merged atom: %w", err,
-		)
+		return fmt.Errorf("insert merged: %w", err)
 	}
 
-	// UPDATE atom_usage: relink to new atom
-	for _, aid := range m.SourceAtomIDs {
+	for _, aid := range allIDs {
 		_, err = tx.ExecContext(ctx,
 			`UPDATE atom_usage SET atom_id=?
-			WHERE atom_id=?`,
-			newAtomID, aid,
-		)
+			WHERE atom_id=?`, newAtomID, aid)
 		if err != nil {
 			return fmt.Errorf(
-				"relink atom_usage: %w", err,
+				"update atom_usage: %w", err,
 			)
 		}
 	}
 
-	// DELETE originals
-	ph := placeholders(len(m.SourceAtomIDs))
-	delArgs := make([]any, len(m.SourceAtomIDs))
-	for i, aid := range m.SourceAtomIDs {
-		delArgs[i] = aid
-	}
-	_, err = tx.ExecContext(ctx,
-		`DELETE FROM knowledge_atoms
-		WHERE atom_id IN (`+ph+`)`,
-		delArgs...,
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"delete originals: %w", err,
-		)
+	for _, aid := range allIDs {
+		_, err = tx.ExecContext(ctx,
+			`DELETE FROM knowledge_atoms
+			WHERE atom_id=?`, aid)
+		if err != nil {
+			return fmt.Errorf(
+				"delete original %s: %w", aid, err,
+			)
+		}
 	}
 
 	return tx.Commit()
 }
 
-// applyPattern inserts a new pattern atom.
 func (r *ReflectorPipeline) applyPattern(
-	ctx context.Context,
-	p reflectorPattern,
-	atomIndex map[string]*KnowledgeAtomRow,
+	ctx context.Context, pat reflectorPattern,
 ) error {
-	if p.Summary == "" {
-		return fmt.Errorf("pattern summary empty")
-	}
-
-	// Validate source atoms exist
-	for _, aid := range p.SourceAtoms {
-		if _, ok := atomIndex[aid]; !ok {
-			return fmt.Errorf(
-				"source atom %q not found", aid,
-			)
-		}
-	}
-
-	polarity := p.Polarity
-	if !validPolarities[polarity] {
-		polarity = "negative" // patterns are usually issues
-	}
-
 	atomID, err := r.atomGen.Next(ctx, "pattern")
 	if err != nil {
 		return fmt.Errorf("gen atom_id: %w", err)
 	}
 
 	var tagsJSON json.RawMessage
-	if len(p.Tags) > 0 {
-		tagsJSON, _ = json.Marshal(p.Tags)
+	if len(pat.Tags) > 0 {
+		tagsJSON, _ = json.Marshal(pat.Tags)
 	}
-
-	var srcJSON json.RawMessage
-	if len(p.SourceAtoms) > 0 {
-		srcJSON, _ = json.Marshal(p.SourceAtoms)
-	}
-
-	// Determine session_id/turn_id from first source atom
-	sid := "reflector"
-	tid := 0
-	if len(p.SourceAtoms) > 0 {
-		if a, ok := atomIndex[p.SourceAtoms[0]]; ok {
-			sid = a.SessionID
-			tid = a.TurnID
-		}
-	}
-
-	histEntry := map[string]interface{}{
-		"v": 1, "confidence": 0.5,
-		"by": "reflexor",
-		"at": time.Now().UTC().Format(
-			time.RFC3339,
-		),
-	}
-	histJSON, _ := json.Marshal(
-		[]interface{}{histEntry},
+	evidenceJSON, _ := json.Marshal(
+		pat.EvidenceAtomIDs,
 	)
+
+	polarity := pat.Polarity
+	if !validPolarities[polarity] {
+		polarity = "negative"
+	}
 
 	row := KnowledgeAtomRow{
 		AtomID:      atomID,
-		SessionID:   sid,
-		TurnID:      tid,
+		SessionID:   "reflector",
+		TurnID:      0,
 		Category:    "pattern",
-		Summary:     p.Summary,
-		Detail:      fmt.Sprintf("type: %s", p.Type),
+		Summary:     pat.Summary,
+		Detail:      pat.SuggestedAction,
 		Confidence:  0.5,
 		Polarity:    polarity,
 		Tags:        tagsJSON,
-		SourceTurns: srcJSON,
-		History:     histJSON,
+		SourceTurns: evidenceJSON,
 	}
 	return r.mem.InsertAtom(ctx, row)
 }
 
-// applyConfidenceUpdate updates confidence for an atom (D-59).
-func (r *ReflectorPipeline) applyConfidenceUpdate(
+func (r *ReflectorPipeline) applyConfUpdate(
 	ctx context.Context,
-	u reflectorConfUpdate,
-	atomIndex map[string]*KnowledgeAtomRow,
+	upd reflectorConfUpdate,
+	atomMap map[string]*KnowledgeAtomRow,
 ) error {
-	a, ok := atomIndex[u.AtomID]
-	if !ok {
-		return fmt.Errorf(
-			"atom %q not found", u.AtomID,
-		)
+	existing := atomMap[upd.AtomID]
+	if existing == nil {
+		return nil // hallucinated ID — skip
 	}
 
-	// Validate delta range
-	if u.Delta < -1.0 || u.Delta > 1.0 {
-		return fmt.Errorf(
-			"delta %.2f out of range", u.Delta,
-		)
-	}
+	// Clamp confidence to [0, 1]
+	newConf := math.Max(0, math.Min(1, upd.NewConf))
 
-	// Clamp new confidence to [0.0, 1.0]
-	newConf := clampConfidence(
-		a.Confidence + u.Delta,
-	)
-
-	histEntry := map[string]interface{}{
-		"v":          len(a.History)/50 + 2,
+	histEntry, _ := json.Marshal(map[string]any{
+		"v":          existing.Confidence,
 		"confidence": newConf,
-		"by":         "reflexor",
-		"at": time.Now().UTC().Format(
-			time.RFC3339,
-		),
-		"reason": u.Reason,
-		"delta":  u.Delta,
-	}
-	histJSON, _ := json.Marshal(histEntry)
+		"by":         "reflector",
+		"at":         time.Now().UTC().Format(time.RFC3339),
+	})
 
 	return r.mem.UpdateAtomConfidence(
-		ctx, u.AtomID, newConf, histJSON,
+		ctx, upd.AtomID, newConf, histEntry,
 	)
 }
 
-// applyRunbook inserts a runbook_draft atom (D-87, F9-5).
 func (r *ReflectorPipeline) applyRunbook(
-	ctx context.Context,
-	rb reflectorRunbook,
+	ctx context.Context, rd reflectorRunbook,
 ) error {
-	if rb.Tag == "" || len(rb.Steps) == 0 {
-		return fmt.Errorf("runbook missing tag or steps")
-	}
-
 	atomID, err := r.atomGen.Next(
 		ctx, "runbook_draft",
 	)
@@ -821,136 +766,98 @@ func (r *ReflectorPipeline) applyRunbook(
 		return fmt.Errorf("gen atom_id: %w", err)
 	}
 
-	detailMap := map[string]interface{}{
-		"steps":    rb.Steps,
-		"trigger":  rb.Trigger,
-		"rollback": rb.Rollback,
+	var tagsJSON json.RawMessage
+	if len(rd.Tags) > 0 {
+		tagsJSON, _ = json.Marshal(rd.Tags)
 	}
-	detailJSON, _ := json.Marshal(detailMap)
 
-	tagsJSON, _ := json.Marshal([]string{rb.Tag})
-
-	histEntry := map[string]interface{}{
-		"v": 1, "confidence": 0.5,
-		"by": "reflexor",
-		"at": time.Now().UTC().Format(
-			time.RFC3339,
-		),
-	}
-	histJSON, _ := json.Marshal(
-		[]interface{}{histEntry},
+	detail, _ := json.Marshal(map[string]any{
+		"trigger":  rd.Trigger,
+		"steps":    rd.Steps,
+		"rollback": rd.Rollback,
+	})
+	evidenceJSON, _ := json.Marshal(
+		rd.EvidenceAtomIDs,
 	)
 
 	row := KnowledgeAtomRow{
-		AtomID:     atomID,
-		SessionID:  "reflector",
-		TurnID:     0,
-		Category:   "runbook_draft",
-		Summary:    fmt.Sprintf("Runbook: %s", rb.Tag),
-		Detail:     string(detailJSON),
-		Confidence: 0.5,
-		Polarity:   "neutral",
-		Tags:       tagsJSON,
-		History:    histJSON,
+		AtomID:      atomID,
+		SessionID:   "reflector",
+		TurnID:      0,
+		Category:    "runbook_draft",
+		Summary:     rd.Trigger,
+		Detail:      string(detail),
+		Confidence:  0.5,
+		Polarity:    "negative",
+		Tags:        tagsJSON,
+		SourceTurns: evidenceJSON,
 	}
 	return r.mem.InsertAtom(ctx, row)
 }
 
-// markStaleAtoms marks atoms with confidence < 0.2 (D-147).
-// Monthly only. Does not delete or escalate.
-func (r *ReflectorPipeline) markStaleAtoms(
+// --- Monthly Tasks ---
+
+func (r *ReflectorPipeline) runMonthlyTasks(
 	ctx context.Context,
+	atoms []KnowledgeAtomRow,
 ) error {
-	// Stale = confidence < 0.2 — no action needed,
-	// they naturally fall below retrieval threshold.
-	// This is a no-op marker for diagnostics.
-	// Future: could add a 'stale' flag if needed.
+	// 1. Crystallization: confidence >= 0.8 → max
+	for _, a := range atoms {
+		if a.Confidence >= 0.8 &&
+			a.Category == "pattern" {
+			histEntry, _ := json.Marshal(map[string]any{
+				"v":          a.Confidence,
+				"confidence": 1.0,
+				"by":         "reflector_crystallize",
+				"at":         time.Now().UTC().Format(
+					time.RFC3339,
+				),
+			})
+			if err := r.mem.UpdateAtomConfidence(
+				ctx, a.AtomID, 1.0, histEntry,
+			); err != nil {
+				log.Printf(
+					"[reflector] crystallize %s: %v",
+					a.AtomID, err,
+				)
+			}
+		}
+	}
+
+	// 2. Stale marking (D-147): confidence < 0.2
+	// Log only — no deletion, no escalation
+	for _, a := range atoms {
+		if a.Confidence < 0.2 {
+			log.Printf(
+				"[reflector] stale atom: %s "+
+					"(confidence=%.2f)",
+				a.AtomID, a.Confidence,
+			)
+		}
+	}
+
 	return nil
 }
 
-// --- Tag/SourceTurns Helpers ---
+// --- Prompt Loading ---
 
-// unionTags collects unique tags from all parents.
-func unionTags(
-	parents []*KnowledgeAtomRow,
-) []string {
-	seen := make(map[string]bool)
-	var result []string
-	for _, p := range parents {
-		if p.Tags == nil {
-			continue
-		}
-		var tags []string
-		if err := json.Unmarshal(
-			p.Tags, &tags,
-		); err != nil {
-			continue
-		}
-		for _, t := range tags {
-			if !seen[t] {
-				seen[t] = true
-				result = append(result, t)
-			}
-		}
+func (r *ReflectorPipeline) loadPromptFile() (
+	string, error,
+) {
+	path := r.cfg.PromptFile
+	if path == "" {
+		return defaultReflectorPrompt, nil
 	}
-	return result
-}
-
-// unionSourceTurns collects unique source turns.
-func unionSourceTurns(
-	parents []*KnowledgeAtomRow,
-) []json.RawMessage {
-	type turnRef struct {
-		SessionID string `json:"session_id"`
-		TurnID    int    `json:"turn_id"`
-	}
-	seen := make(map[string]bool)
-	var result []turnRef
-	for _, p := range parents {
-		if p.SourceTurns == nil {
-			continue
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return defaultReflectorPrompt, nil
 		}
-		var turns []turnRef
-		if err := json.Unmarshal(
-			p.SourceTurns, &turns,
-		); err != nil {
-			continue
-		}
-		for _, t := range turns {
-			key := fmt.Sprintf(
-				"%s:%d", t.SessionID, t.TurnID,
-			)
-			if !seen[key] {
-				seen[key] = true
-				result = append(result, t)
-			}
-		}
+		return "", fmt.Errorf(
+			"read %s: %w", path, err,
+		)
 	}
-	if len(result) == 0 {
-		return nil
-	}
-	var out []json.RawMessage
-	for _, r := range result {
-		j, _ := json.Marshal(r)
-		out = append(out, j)
-	}
-	return out
-}
-
-// clampConfidence clamps v to [0.0, 1.0].
-func clampConfidence(v float64) float64 {
-	return math.Max(0.0, math.Min(1.0, v))
-}
-
-// --- Valid categories for reflector ---
-
-var validReflectorCategories = map[string]bool{
-	"pattern":       true,
-	"constraint":    true,
-	"decision":      true,
-	"tool_pref":     true,
-	"summary":       true,
-	"runbook_draft": true,
+	return string(data), nil
 }
 
 // --- Telemetry ---
@@ -965,63 +872,64 @@ func (r *ReflectorPipeline) reportFailure() {
 
 func (r *ReflectorPipeline) reportSuccess() {
 	if r.telemetry != nil {
-		r.telemetry.ReportComponentSuccess("reflector")
+		r.telemetry.ReportComponentSuccess(
+			"reflector",
+		)
 	}
 }
 
-// --- Default prompt ---
+// --- Unused import suppression ---
+
+var _ = strings.TrimSpace
+
+// --- Default Prompt ---
 
 const defaultReflectorPrompt = `<role>
 You are REFLEXOR — a behavioral optimization engine.
-You receive knowledge atoms and return structured JSON analysis.
-You do NOT have tools. You do NOT interact with users.
-You only analyze data.
+You receive knowledge atoms and return structured JSON.
+You do NOT have tools. You only analyze data.
 </role>
 
 <instructions>
-Analyze the provided knowledge_atoms and produce a JSON response with these sections:
+Analyze the provided knowledge_atoms and produce JSON:
 
-1. MERGES — find semantically identical atoms.
-   Merge only atoms with the same polarity.
-   For each group: list source_atom_ids, provide merged summary.
+1. DUPLICATES — semantically identical atoms.
+2. PATTERNS — recurring themes (3+ atoms).
+3. CONFIDENCE_UPDATES — confirmed (+0.1) or
+   contradicted (-0.2) atoms.
+4. RUNBOOK_DRAFTS — 3+ negative atoms with same tag.
 
-2. PATTERNS — detect recurring themes across atoms.
-   Anti-patterns: 3+ negative atoms with same tags.
-   Positive patterns: consistently successful strategies.
-
-3. CONFIDENCE_UPDATES — atoms whose confidence should change.
-   Increase (+0.1): atom confirmed by new evidence.
-   Decrease (-0.2): atom contradicted by newer evidence.
-   NEVER change confidence based on time alone.
-
-4. RUNBOOK_DRAFTS — draft runbooks for recurring failures.
-   Trigger: 3+ negative-polarity atoms with overlapping tags.
-   Format: steps, trigger condition, rollback procedure.
+For every finding, verify evidence is sufficient.
 </instructions>
 
 <output_format>
-Return a single JSON object. Empty arrays are valid.
-Do NOT fabricate findings. Silence > noise.
-
 {
-  "merges": [{"source_atom_ids": [...], "summary": "...",
-    "detail": "...", "category": "...", "polarity": "...",
-    "reason": "..."}],
-  "patterns": [{"type": "antipattern"|"recurring_failure",
-    "summary": "...", "tags": [...], "polarity": "...",
-    "source_atoms": [...]}],
-  "confidence_updates": [{"atom_id": "...",
-    "delta": 0.1, "reason": "..."}],
-  "runbook_drafts": [{"tag": "...", "steps": [...],
-    "trigger": "...", "rollback": "..."}]
+  "duplicates": [{"keep_id": "C-12",
+    "merge_ids": ["S-7"], "reason": "..."}],
+  "patterns": [{"type": "anti_pattern",
+    "summary": "...",
+    "evidence_atom_ids": ["S-10"],
+    "tags": ["deploy"],
+    "polarity": "negative",
+    "suggested_action": "..."}],
+  "confidence_updates": [{"atom_id": "D-5",
+    "current_confidence": 0.5,
+    "new_confidence": 0.6,
+    "direction": "increase",
+    "reason": "...",
+    "evidence_atom_id": "S-44"}],
+  "runbook_drafts": [{"trigger": "...",
+    "tags": ["deploy"],
+    "evidence_atom_ids": ["S-10","S-23","S-31"],
+    "steps": ["1. Check logs"],
+    "rollback": "Revert config"}]
 }
 </output_format>
 
 <rules>
-- Atom IDs: use exact IDs from input. NEVER invent IDs.
-- Confidence: ONLY based on evidence. No time-based decay.
-- Merges: ONLY same-polarity atoms.
-- Runbook drafts: ONLY when 3+ negative atoms share tags.
-- Empty sections: return empty array [], not omit the key.
+- Empty arrays are valid. Silence > noise.
+- Atom IDs: use exact IDs from input.
+- Confidence: evidence-based only. No time decay.
+- Runbooks: only when 3+ negative atoms share tags.
 </rules>
 `
