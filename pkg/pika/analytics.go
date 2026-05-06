@@ -51,102 +51,102 @@ const (
 // ---------------------------------------------------------------------------
 
 type AnalyticsPeriod struct {
-	Start time.Time
-	End   time.Time
+	Start time.Time `json:"start"`
+	End time.Time `json:"end"`
 }
 
 type AnalyticsNameCount struct {
-	Name  string
-	Count int
+	Name string `json:"name"`
+	Count int `json:"count"`
 }
 
 type LLMMetrics struct {
-	TotalRequests   int
-	TotalTokens     int64
-	TotalCostUSD    float64
-	CostByComponent map[string]float64
-	AvgResponseMs   int
-	P95ResponseMs   int
-	ErrorRatePct    float64
-	ReasoningRatio  float64
+	TotalRequests int `json:"total_requests"`
+	TotalTokens int64 `json:"total_tokens"`
+	TotalCostUSD float64 `json:"total_cost_usd"`
+	CostByComponent map[string]float64 `json:"cost_by_component"`
+	AvgResponseMs int `json:"avg_response_ms"`
+	P95ResponseMs int `json:"p95_response_ms"`
+	ErrorRatePct float64 `json:"error_rate_pct"`
+	ReasoningRatio float64 `json:"reasoning_ratio"`
 }
 
 type ToolMetrics struct {
-	TotalRequested int
-	TotalSuccess   int
-	TotalFailed    int
-	SuccessRatePct float64
-	TopTools       []AnalyticsNameCount
+	TotalRequested int `json:"total_requested"`
+	TotalSuccess int `json:"total_success"`
+	TotalFailed int `json:"total_failed"`
+	SuccessRatePct float64 `json:"success_rate_pct"`
+	TopTools []AnalyticsNameCount `json:"top_tools"`
 }
 
 type ChainMetrics struct {
-	TotalChains    int
-	AvgChainLength float64
-	AvgChainCost   float64
+	TotalChains int `json:"total_chains"`
+	AvgChainLength float64 `json:"avg_chain_length"`
+	AvgChainCost float64 `json:"avg_chain_cost"`
 }
 
 type SubagentMetrics struct {
-	Component     string
-	TotalSpans    int
-	ErrorCount    int
-	TimeoutCount  int
-	AvgDurationMs int
-	P95DurationMs int
+	Component string `json:"component"`
+	TotalSpans int `json:"total_spans"`
+	ErrorCount int `json:"error_count"`
+	TimeoutCount int `json:"timeout_count"`
+	AvgDurationMs int `json:"avg_duration_ms"`
+	P95DurationMs int `json:"p95_duration_ms"`
 }
 
 type KnowledgeMetrics struct {
-	TotalAtoms  int
-	NewInPeriod int
-	ByCategory  map[string]int
-	ByPolarity  map[string]int
-	ConfHigh    int
-	ConfMedium  int
-	ConfLow     int
-	ConfStale   int
+	TotalAtoms int `json:"total_atoms"`
+	NewInPeriod int `json:"new_in_period"`
+	ByCategory map[string]int `json:"by_category"`
+	ByPolarity map[string]int `json:"by_polarity"`
+	ConfHigh int `json:"conf_high"`
+	ConfMedium int `json:"conf_medium"`
+	ConfLow int `json:"conf_low"`
+	ConfStale int `json:"conf_stale"`
 }
 
 type AtomUsageMetrics struct {
-	TotalUsages      int
-	UniqueAtomsUsed  int
-	EffectivenessPct float64
-	TopAtoms         []AnalyticsNameCount
-	UnusedCount      int
-	UnusedPct        float64
+	TotalUsages int `json:"total_usages"`
+	UniqueAtomsUsed int `json:"unique_atoms_used"`
+	EffectivenessPct float64 `json:"effectiveness_pct"`
+	TopAtoms []AnalyticsNameCount `json:"top_atoms"`
+	UnusedCount int `json:"unused_count"`
+	UnusedPct float64 `json:"unused_pct"`
 }
 
 type AnalyticsTaskMetrics struct {
-	TaskTag      string
-	RequestCount int
-	AvgTokens    float64
-	AvgTools     float64
-	TotalCost    float64
-	AvgCost      float64
+	TaskTag string `json:"task_tag"`
+	RequestCount int `json:"request_count"`
+	AvgTokens float64 `json:"avg_tokens"`
+	AvgTools float64 `json:"avg_tools"`
+	TotalCost float64 `json:"total_cost"`
+	AvgCost float64 `json:"avg_cost"`
 }
 
 type AnalyticsPeriodMetrics struct {
-	Period    AnalyticsPeriod
-	LLM       LLMMetrics
-	Tools     ToolMetrics
-	Chains    ChainMetrics
-	Subagents []SubagentMetrics
-	Knowledge KnowledgeMetrics
-	AtomUsage AtomUsageMetrics
-	Tasks     []AnalyticsTaskMetrics
+	Period AnalyticsPeriod `json:"period"`
+	LLM LLMMetrics `json:"llm"`
+	Tools ToolMetrics `json:"tools"`
+	Chains ChainMetrics `json:"chains"`
+	Subagents []SubagentMetrics `json:"subagents"`
+	Knowledge KnowledgeMetrics `json:"knowledge"`
+	AtomUsage AtomUsageMetrics `json:"atom_usage"`
+	Tasks []AnalyticsTaskMetrics `json:"tasks"`
 }
 
 type AnalyticsDelta struct {
-	Current   float64
-	Previous  float64
-	DeltaPct  float64
-	Direction string
+	Current float64 `json:"current"`
+	Previous float64 `json:"previous"`
+	DeltaPct float64 `json:"delta_pct"`
+	Direction string `json:"direction"`
 }
 
 type AnalyticsAnomaly struct {
-	Severity  string
-	Metric    string
-	Message   string
-	Value     float64
-	Threshold float64
+	Severity string `json:"severity"`
+	Metric string `json:"metric"`
+	Message string `json:"message"`
+	Value float64 `json:"value"`
+	Threshold float64 `json:"threshold"`
 }
 
 type AnalyticsReport struct {
@@ -163,10 +163,10 @@ type AnalyticsReport struct {
 // ---------------------------------------------------------------------------
 
 type AnalyticsEngine struct {
-	mem        *BotMemory
-	sender     TelegramSender
-	mgrSender  TelegramSender
-	queriesDir string
+	mem *BotMemory `json:"mem"`
+	sender TelegramSender `json:"sender"`
+	mgrSender TelegramSender `json:"mgr_sender"`
+	queriesDir string `json:"queries_dir"`
 }
 
 func NewAnalyticsEngine(
@@ -362,11 +362,15 @@ func (ae *AnalyticsEngine) queryLLMMetrics(ctx context.Context, start, end strin
 		if qErr == nil {
 			for rows.Next() {
 				var comp string
+		defer rows.Close()
 				var cost float64
 				var cnt int
 				if rows.Scan(&comp, &cost, &cnt) == nil {
 					out.CostByComponent[comp] = cost
 				}
+			}
+			if rErr := rows.Err(); rErr != nil {
+				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
 			rows.Close()
 		}
@@ -377,10 +381,14 @@ func (ae *AnalyticsEngine) queryLLMMetrics(ctx context.Context, start, end strin
 		if qErr == nil {
 			var latencies []int
 			for rows.Next() {
+		defer rows.Close()
 				var ms int
 				if rows.Scan(&ms) == nil {
 					latencies = append(latencies, ms)
 				}
+			}
+			if rErr := rows.Err(); rErr != nil {
+				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
 			rows.Close()
 			if len(latencies) > 0 {
@@ -401,7 +409,8 @@ func (ae *AnalyticsEngine) queryToolMetrics(ctx context.Context, start, end stri
 	if len(queries) > 0 {
 		row := ae.mem.db.QueryRowContext(ctx, queries[0], start, end)
 		var sr sql.NullFloat64
-		if scanErr := row.Scan(&out.TotalRequested, &out.TotalSuccess, &out.TotalFailed, &sr); scanErr != nil && scanErr != sql.ErrNoRows {
+		if scanErr := row.Scan(&out.TotalRequested, &out.TotalSuccess, &out.TotalFailed, &sr); scanErr != nil &&
+			scanErr != sql.ErrNoRows {
 			log.Printf("[analytics] WARN tools main: %v", scanErr)
 		}
 		if sr.Valid {
@@ -414,9 +423,13 @@ func (ae *AnalyticsEngine) queryToolMetrics(ctx context.Context, start, end stri
 		if qErr == nil {
 			for rows.Next() {
 				var nc AnalyticsNameCount
+		defer rows.Close()
 				if rows.Scan(&nc.Name, &nc.Count) == nil {
 					out.TopTools = append(out.TopTools, nc)
 				}
+			}
+			if rErr := rows.Err(); rErr != nil {
+				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
 			rows.Close()
 		}
@@ -460,9 +473,13 @@ func (ae *AnalyticsEngine) querySubagentMetrics(ctx context.Context, start, end 
 		if qErr == nil {
 			for rows.Next() {
 				var s SubagentMetrics
+		defer rows.Close()
 				if rows.Scan(&s.Component, &s.TotalSpans, &s.ErrorCount, &s.TimeoutCount, &s.AvgDurationMs) == nil {
 					compMap[s.Component] = &s
 				}
+			}
+			if rErr := rows.Err(); rErr != nil {
+				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
 			rows.Close()
 		}
@@ -473,11 +490,15 @@ func (ae *AnalyticsEngine) querySubagentMetrics(ctx context.Context, start, end 
 		if qErr == nil {
 			durMap := make(map[string][]int)
 			for rows.Next() {
+		defer rows.Close()
 				var comp string
 				var ms int
 				if rows.Scan(&comp, &ms) == nil {
 					durMap[comp] = append(durMap[comp], ms)
 				}
+			}
+			if rErr := rows.Err(); rErr != nil {
+				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
 			rows.Close()
 			for comp, durs := range durMap {
@@ -541,7 +562,8 @@ func (ae *AnalyticsEngine) queryAtomUsageMetrics(ctx context.Context, start, end
 	if len(queries) > 0 {
 		row := ae.mem.db.QueryRowContext(ctx, queries[0], start, end)
 		var eff sql.NullFloat64
-		if scanErr := row.Scan(&out.TotalUsages, &out.UniqueAtomsUsed, &eff); scanErr != nil && scanErr != sql.ErrNoRows {
+		if scanErr := row.Scan(&out.TotalUsages, &out.UniqueAtomsUsed, &eff); scanErr != nil &&
+			scanErr != sql.ErrNoRows {
 			log.Printf("[analytics] WARN atom_usage main: %v", scanErr)
 		}
 		if eff.Valid {
@@ -554,9 +576,13 @@ func (ae *AnalyticsEngine) queryAtomUsageMetrics(ctx context.Context, start, end
 		if qErr == nil {
 			for rows.Next() {
 				var nc AnalyticsNameCount
+		defer rows.Close()
 				if rows.Scan(&nc.Name, &nc.Count) == nil {
 					out.TopAtoms = append(out.TopAtoms, nc)
 				}
+			}
+			if rErr := rows.Err(); rErr != nil {
+				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
 			rows.Close()
 		}
@@ -587,13 +613,16 @@ func (ae *AnalyticsEngine) queryTaskMetrics(ctx context.Context, start, end stri
 		if qErr != nil {
 			return nil, qErr
 		}
+		defer rows.Close()
 		for rows.Next() {
 			var t AnalyticsTaskMetrics
 			if rows.Scan(&t.TaskTag, &t.RequestCount, &t.AvgTokens, &t.AvgTools, &t.TotalCost, &t.AvgCost) == nil {
 				out = append(out, t)
 			}
 		}
-		rows.Close()
+		if rErr := rows.Err(); rErr != nil {
+			log.Printf("[analytics] WARN rows.Err: %v", rErr)
+		}
 	}
 	return out, nil
 }
@@ -665,7 +694,11 @@ func analyticsDetectAnomalies(cur *AnalyticsPeriodMetrics, deltas map[string]Ana
 	if cur.LLM.ErrorRatePct > thresholdErrorRatePct {
 		out = append(out, AnalyticsAnomaly{
 			Severity: "🔴", Metric: "llm_error_rate",
-			Message:   fmt.Sprintf("LLM error rate %.1f%% превышает порог %.0f%%", cur.LLM.ErrorRatePct, thresholdErrorRatePct),
+			Message: fmt.Sprintf(
+				"LLM error rate %.1f%% превышает порог %.0f%%",
+				cur.LLM.ErrorRatePct,
+				thresholdErrorRatePct,
+			),
 			Value:     cur.LLM.ErrorRatePct,
 			Threshold: thresholdErrorRatePct,
 		})
@@ -685,7 +718,11 @@ func analyticsDetectAnomalies(cur *AnalyticsPeriodMetrics, deltas map[string]Ana
 	if cur.LLM.P95ResponseMs > thresholdLatencyP95Ms {
 		out = append(out, AnalyticsAnomaly{
 			Severity: "🟡", Metric: "latency_p95",
-			Message:   fmt.Sprintf("P95 latency %dms превышает порог %dms", cur.LLM.P95ResponseMs, thresholdLatencyP95Ms),
+			Message: fmt.Sprintf(
+				"P95 latency %dms превышает порог %dms",
+				cur.LLM.P95ResponseMs,
+				thresholdLatencyP95Ms,
+			),
 			Value:     float64(cur.LLM.P95ResponseMs),
 			Threshold: float64(thresholdLatencyP95Ms),
 		})

@@ -19,26 +19,8 @@ import (
 // Test helpers
 // ---------------------------------------------------------------------------
 
-type analyticsMockSender struct {
-	messages []string
-	fail     bool
-	calls    int
-}
 
-func (m *analyticsMockSender) SendMessage(_ context.Context, text string) (string, error) {
-	m.calls++
-	if m.fail {
-		return "", fmt.Errorf("mock send error")
-	}
-	m.messages = append(m.messages, text)
-	return "msg-1", nil
-}
 
-func (m *analyticsMockSender) EditMessage(_ context.Context, _ string, _ string) error { return nil }
-func (m *analyticsMockSender) DeleteMessage(_ context.Context, _ string) error         { return nil }
-func (m *analyticsMockSender) SendConfirmation(_ context.Context, _ string) (bool, error) {
-	return true, nil
-}
 
 func setupAnalyticsTestDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -483,15 +465,15 @@ func TestAnalytics_Anomaly_Clean(t *testing.T) {
 
 func TestAnalytics_FormatReport(t *testing.T) {
 	report := &AnalyticsReport{
-		Mode:    "weekly",
-		Deltas:  make(map[string]AnalyticsDelta),
+		Mode:   "weekly",
+		Deltas: make(map[string]AnalyticsDelta),
 	}
 	report.Current.Period.Start = time.Now().AddDate(0, 0, -7)
 	report.Current.Period.End = time.Now()
 	report.Current.LLM = LLMMetrics{
 		TotalRequests: 342, TotalTokens: 1200000, TotalCostUSD: 3.45,
 		CostByComponent: map[string]float64{"main": 2.80, "archivarius": 0.40},
-		AvgResponseMs: 3200, P95ResponseMs: 8100, ErrorRatePct: 2.1, ReasoningRatio: 0.45,
+		AvgResponseMs:   3200, P95ResponseMs: 8100, ErrorRatePct: 2.1, ReasoningRatio: 0.45,
 	}
 	report.Current.Tools = ToolMetrics{TotalRequested: 890, SuccessRatePct: 94.2}
 	tt := AnalyticsNameCount{Name: "sandbox", Count: 340}
@@ -501,11 +483,23 @@ func TestAnalytics_FormatReport(t *testing.T) {
 	report.Current.Subagents = append(report.Current.Subagents, sa)
 	report.Current.Knowledge = KnowledgeMetrics{
 		TotalAtoms: 245, NewInPeriod: 18,
-		ByCategory: map[string]int{"pattern": 89, "constraint": 34, "decision": 45, "tool_pref": 23, "summary": 42, "runbook_draft": 12},
+		ByCategory: map[string]int{
+			"pattern":       89,
+			"constraint":    34,
+			"decision":      45,
+			"tool_pref":     23,
+			"summary":       42,
+			"runbook_draft": 12,
+		},
 		ByPolarity: map[string]int{"positive": 164, "negative": 51, "neutral": 30},
-		ConfHigh: 152, ConfMedium: 69, ConfLow: 19, ConfStale: 5,
+		ConfHigh:   152, ConfMedium: 69, ConfLow: 19, ConfStale: 5,
 	}
-	report.Current.AtomUsage = AtomUsageMetrics{TotalUsages: 1230, EffectivenessPct: 78, UnusedCount: 23, UnusedPct: 9.4}
+	report.Current.AtomUsage = AtomUsageMetrics{
+		TotalUsages:      1230,
+		EffectivenessPct: 78,
+		UnusedCount:      23,
+		UnusedPct:        9.4,
+	}
 
 	anom := AnalyticsAnomaly{Severity: "🔴", Metric: "test", Message: "test anomaly"}
 	report.Anomalies = append(report.Anomalies, anom)
@@ -564,7 +558,8 @@ func TestAnalytics_StoreReport(t *testing.T) {
 	}
 
 	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM registry WHERE kind='snapshot' AND key LIKE 'analytics_weekly_%'`).Scan(&count)
+	err := db.QueryRow(`SELECT COUNT(*) FROM registry WHERE kind='snapshot' AND key LIKE 'analytics_weekly_%'`).
+		Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -625,14 +620,14 @@ func TestAnalytics_Periods_Monthly(t *testing.T) {
 
 func TestAnalytics_HasCritical(t *testing.T) {
 	warn := AnalyticsAnomaly{Severity: "🟡", Metric: "warn", Message: "warning"}
-	var warnList []AnalyticsAnomaly
+	warnList := make([]AnalyticsAnomaly, 0, 1)
 	warnList = append(warnList, warn)
 	if analyticsHasCritical(warnList) {
 		t.Error("should not have critical")
 	}
 
 	crit := AnalyticsAnomaly{Severity: "🔴", Metric: "crit", Message: "critical"}
-	var critList []AnalyticsAnomaly
+	critList := make([]AnalyticsAnomaly, 0, 2)
 	critList = append(critList, warn, crit)
 	if !analyticsHasCritical(critList) {
 		t.Error("should have critical")
