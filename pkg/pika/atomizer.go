@@ -82,6 +82,7 @@ type Atomizer struct {
 	provider  providers.LLMProvider
 	telemetry *Telemetry
 	cfg       AtomizerConfig
+	diag      *DiagnosticsEngine
 }
 
 // NewAtomizer creates a new Atomizer with validated config.
@@ -397,6 +398,13 @@ func (a *Atomizer) insertAtom(
 // loadPromptFile reads atomizer prompt from disk.
 // Hot-reload: read on every call, 0 restart (D-90).
 func (a *Atomizer) loadPromptFile() (string, error) {
+	if a.diag != nil {
+		prompt, err := a.diag.BuildSubagentPrompt(context.Background(), "atomizer")
+		if err == nil {
+			return prompt, nil
+		}
+		// fallback to default prompt
+	}
 	path := a.cfg.PromptFile
 	if path == "" {
 		return defaultAtomizerPrompt, nil

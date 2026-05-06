@@ -181,6 +181,7 @@ type MCPSecurityPipeline struct {
 	baselines          map[string]*toolBaseline
 	taint              TaintState
 	toolHashes         map[string]string
+	diag                *DiagnosticsEngine
 	manipulationREs    []*regexp.Regexp
 	resistanceREs      []*regexp.Regexp
 	cachedPromptSHA    string
@@ -398,6 +399,16 @@ func (p *MCPSecurityPipeline) ShouldBlockTaintedAction(risk string) bool {
 // ── Layer 0.5+2.5: MCP Guard ─────────────────────────────────
 
 func (p *MCPSecurityPipeline) loadGuardPrompt() (string, error) {
+	if p.diag != nil {
+		prompt, err := p.diag.BuildSubagentPrompt(context.Background(), "mcp_guard")
+		if err == nil {
+			p.mu.Lock()
+			p.cachedPromptSHA = sha256Hex([]byte(prompt))
+			p.mu.Unlock()
+			return prompt, nil
+		}
+		// fallback to default prompt
+	}
 	data, err := os.ReadFile(p.guardCfg.PromptFile)
 	if err != nil {
 		return "", fmt.Errorf("pika/mcp_guard: read prompt: %w", err)

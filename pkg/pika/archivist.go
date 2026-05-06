@@ -135,6 +135,7 @@ type Archivist struct {
 	trail    *Trail
 	meta     *Meta
 	cfg      ArchivistConfig
+	diag        *DiagnosticsEngine
 
 	mu          sync.RWMutex
 	cachedBrief string
@@ -286,6 +287,13 @@ func (a *Archivist) BuildPrompt(
 
 // loadPromptFile reads the archivist prompt from disk.
 func (a *Archivist) loadPromptFile() (string, error) {
+	if a.diag != nil {
+		prompt, err := a.diag.BuildSubagentPrompt(context.Background(), "archivist")
+		if err == nil {
+			return prompt, nil
+		}
+		// fallback to default prompt
+	}
 	path := a.cfg.PromptFile
 	if path == "" {
 		return defaultArchivistPrompt, nil
