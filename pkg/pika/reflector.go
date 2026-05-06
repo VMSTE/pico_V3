@@ -119,6 +119,7 @@ type ReflectorPipeline struct {
 	provider  providers.LLMProvider
 	telemetry *Telemetry
 	cfg       ReflectorConfig
+	diag      *DiagnosticsEngine
 }
 
 // NewReflectorPipeline creates a new ReflectorPipeline.
@@ -844,6 +845,13 @@ func (r *ReflectorPipeline) runMonthlyTasks(
 func (r *ReflectorPipeline) loadPromptFile() (
 	string, error,
 ) {
+	if r.diag != nil {
+		prompt, err := r.diag.BuildSubagentPrompt(context.Background(), "reflexor")
+		if err == nil {
+			return prompt, nil
+		}
+		// fallback to default prompt
+	}
 	path := r.cfg.PromptFile
 	if path == "" {
 		return defaultReflectorPrompt, nil

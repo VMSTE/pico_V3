@@ -189,3 +189,21 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/mcp_security_test.go` — NEW: 24 tests covering all 15 acceptance criteria (Output Sanitizer, NFKC, credentials, taint tracking, ACL, capability negotiation, MCP Guard startup/canary, Rug Pull Guard, adaptive baseline, degraded mode, audit trail, prompt versioning)
 - **Breaking:** None (new files, additive only)
 - **Dependencies:** `pkg/pika/telemetry.go` (ReportComponentFailure/Success), `pkg/pika/autoevent.go` (EventClasses)
+
+---
+
+## Wave 7: Diagnostics
+
+### [2026-05-06] feat(pika): diagnostics.go — Diagnostics Engine — wave 7a
+
+- **ТЗ:** ТЗ-v2-7a
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/diagnostics.go` — NEW: `DiagnosticsEngine` struct — single point for subagent error diagnosis, correction rule (CR) management, and subagent prompt assembly with active CR injection. `Diagnose` (error attribution by trace_id, pattern detection ≥2 similar errors → SuggestedCR), `CreateCR` (insert CR into registry, TG notification D-149, threshold alert ≥3 active CRs), `BuildSubagentPrompt` (hot-reload base prompt + append active CRs within 500-token budget, oldest-trim), `IncrementVerified` (count++ on successful subagent call, auto-promote active→verified at threshold 5), `ReviewCRs` (weekly Reflector pipeline: promote verified+7d, deactivate active+30d+unverified). `CorrectionRule` type with lifecycle: active → verified → promoted/deactivated. Constants: `defaultMaxActiveCRs=10`, `defaultMaxCRTokens=500`, `defaultVerifyThreshold=5`, `defaultPromotionMinAgeDays=7`, `defaultDeactivationMaxAgeDays=30`. `validCRComponents` map for component validation. `estimateCRTokens` helper (~4 chars/token).
+  - `pkg/pika/diagnostics_test.go` — NEW: 10 tests (`TestDiagnose_ErrorFound`, `TestDiagnose_NoErrors`, `TestDiagnose_SuggestedCR`, `TestCreateCR_Valid`, `TestCreateCR_InvalidComponent`, `TestBuildSubagentPrompt_NoCRs`, `TestBuildSubagentPrompt_WithCRs`, `TestBuildSubagentPrompt_TokenOverflow`, `TestBuildSubagentPrompt_MissingFile`, `TestIncrementVerified`, `TestReviewCRs`)
+  - `pkg/pika/archivist.go` — MODIFIED: added `diag *DiagnosticsEngine` field to `Archivist` struct, `loadPromptFile` now calls `BuildSubagentPrompt` with fallback to original behavior when diag=nil
+  - `pkg/pika/atomizer.go` — MODIFIED: added `diag *DiagnosticsEngine` field to `Atomizer` struct, same `loadPromptFile` fallback pattern
+  - `pkg/pika/reflector.go` — MODIFIED: added `diag *DiagnosticsEngine` field to `ReflectorPipeline` struct, same `loadPromptFile` fallback pattern (multi-line signature)
+  - `pkg/pika/mcp_security.go` — MODIFIED: added `diag *DiagnosticsEngine` field to `MCPSecurityPipeline` struct, `loadGuardPrompt` now calls `BuildSubagentPrompt` with `cachedPromptSHA` update + fallback
+- **Breaking:** None (new files, additive only; caller-side patches backward-compatible: diag=nil → original behavior)
+- **Dependencies:** `pkg/pika/botmemory.go` (BotMemory, registry table), `pkg/pika/interfaces.go` (TelegramSender), `pkg/pika/botmemory.go` (TraceSpanRow)
