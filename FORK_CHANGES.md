@@ -207,3 +207,34 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/mcp_security.go` — MODIFIED: added `diag *DiagnosticsEngine` field to `MCPSecurityPipeline` struct, `loadGuardPrompt` now calls `BuildSubagentPrompt` with `cachedPromptSHA` update + fallback
 - **Breaking:** None (new files, additive only; caller-side patches backward-compatible: diag=nil → original behavior)
 - **Dependencies:** `pkg/pika/botmemory.go` (BotMemory, registry table), `pkg/pika/interfaces.go` (TelegramSender), `pkg/pika/botmemory.go` (TraceSpanRow)
+
+### [2026-05-06] feat(pika): analytics.go — Go-only Analytics Pipeline — wave 7b
+
+- **ТЗ:** ТЗ-v2-7b
+- **PR:** #TBD
+- **Files:**
+  - `pkg/config/config_pika_analytics.go` — NEW: `AnalyticsConfig` struct (schedule weekly/monthly cron, Telegram channels, anomaly thresholds), `AnalyticsSchedule` struct, `DefaultAnalyticsConfig()` with sensible defaults
+  - `pkg/pika/analytics.go` — NEW: `AnalyticsEngine` struct — full Go-only analytics pipeline. `Run(ctx, mode)` orchestrates: period computation, metric collection (7 SQL query sets), delta calculation vs previous period, anomaly detection (7 rules: error rate, tool fail rate, latency P95, subagent errors, unused atoms, stale atoms, significant deltas), Telegram report formatting (≤4096 chars with auto-split), registry snapshot storage (kind=snapshot, upsert). Helper functions: `analyticsComputePeriods`, `analyticsComputeDeltas`, `analyticsDetectAnomalies`, `analyticsFormatReport`, `analyticsPercentile`, `analyticsSplitMessage`, `analyticsFormatCount`, `analyticsHasCritical`. Constants: `AnalyticsWeekly`/`AnalyticsMonthly`, 7 anomaly thresholds, `reportMaxTelegramChars=4096`
+  - `pkg/pika/analytics_cron.go` — NEW: `RegisterAnalyticsJobs` (registers weekly+monthly cron jobs reusing `schedToCronExpr` from reflector), `HandleAnalyticsJob` (dispatches cron payload to engine.Run)
+  - `pkg/pika/analytics_test.go` — NEW: 21 tests (CollectMetrics happy/partial/empty, Deltas increase/decrease/zero, Anomalies x7 + clean, FormatReport x2, StoreReport upsert, P95, SplitMessage, Periods weekly/monthly, HasCritical, FormatCount)
+  - `workspace/queries/analytics_llm.sql` — NEW: LLM metrics (total requests, tokens, cost, avg/P95 latency, error rate, reasoning ratio, cost by component)
+  - `workspace/queries/analytics_tools.sql` — NEW: Tool calling aggregates (requested/success/failed, success rate, top tools via json_each)
+  - `workspace/queries/analytics_chains.sql` — NEW: Chain analysis (total chains, avg length, avg cost per chain)
+  - `workspace/queries/analytics_subagents.sql` — NEW: Subagent health (error/timeout counts, avg/P95 duration per component)
+  - `workspace/queries/analytics_knowledge.sql` — NEW: Knowledge quality (total atoms, new in period, by category/polarity/confidence bands)
+  - `workspace/queries/analytics_atom_usage.sql` — NEW: Atom usage (total usages, unique atoms, effectiveness %, top atoms, unused count)
+  - `workspace/queries/analytics_tasks.sql` — NEW: Task efficiency (top-5 tasks by cost, avg tokens/tools per task)
+- **Breaking:** None (new files, additive only)
+- **Dependencies:** `pkg/pika/botmemory.go` (BotMemory, registry table), `pkg/pika/interfaces.go` (TelegramSender), `pkg/config/config_pika_analytics.go` (AnalyticsConfig), `pkg/cron` (CronService, CronJob, CronSchedule)
+
+### [2026-05-07] feat(pika): TZ-v2-8i partial — AutoEvent + RAD wiring — wave 8i
+- **TZ:** TZ-v2-8i
+- **PR:** #TBD
+- **Files:**
+  - `pkg/agent/hook_pika.go` — NEW: `autoEventAdapter` struct wrapping `pika.AutoEventHandler` as `agent.EventObserver`. Translates `EventKindToolExecEnd` → `HandleToolResult`. Compile-time interface check added.
+  - `pkg/agent/context_pika.go` — MOD: mount `autoEventAdapter` as builtin hook via `HookRegistration{Name: "autoevent", Hook: &autoEventAdapter{}}` after BotMemory init. Currently nil maps (safe no-op until cfg.AutoEvent added).
+  - `pkg/agent/agent.go` — MOD: added `rad *pika.RAD` field to `AgentLoop` struct.
+  - `pkg/agent/agent_init.go` — MOD: RAD initialization from `cfg.Security.RAD` after `resolveContextManager()`. Uses `pika.NewRAD(pika.RADConfig{...})` with field-by-field copy from config.
+- **Breaking:** None (new files, additive only)
+- **Dependencies:** `pkg/pika/autoevent.go` (wave 3e), `pkg/pika/rad.go` (wave 6a), `pkg/agent/hooks.go` (upstream)
+- **Remaining TZ-v2-8i:** RAD call in pipeline_execute.go (needs reasoning text access), Analytics cron (needs cfg.Analytics), AutoEvent toolTypeMap from config
