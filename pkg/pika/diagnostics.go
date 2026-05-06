@@ -1,4 +1,3 @@
-// PIKA-V3: diagnostics.go — Diagnostics Engine (ТЗ-v2-7a, wave 7)
 //
 // Single point for subagent error diagnosis, correction rule (CR)
 // management, and subagent prompt assembly with active CR injection.
@@ -153,6 +152,9 @@ func (d *DiagnosticsEngine) Diagnose(ctx context.Context, traceID string) Diagno
 			if atomRows.Scan(&atomID) == nil {
 				result.RelatedAtomIDs = append(result.RelatedAtomIDs, atomID)
 			}
+		}
+		if err := atomRows.Err(); err != nil {
+			log.Printf("pika/diagnostics: atom rows: %v", err)
 		}
 	}
 
@@ -429,6 +431,10 @@ func (d *DiagnosticsEngine) ReviewCRs(ctx context.Context) []CRReviewAction {
 			continue
 		}
 		candidates = append(candidates, candidate{id: id, key: key, cr: cr})
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("pika/diagnostics: review rows: %v", err)
+		return actions
 	}
 
 	now := time.Now().UTC()

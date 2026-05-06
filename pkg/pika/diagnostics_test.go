@@ -1,10 +1,9 @@
-// PIKA-V3: diagnostics_test.go — Tests for Diagnostics Engine (ТЗ-v2-7a)
 package pika
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -52,7 +51,10 @@ func (m *mockDiagSender) sentMessages() []string {
 // Helper: create DiagnosticsEngine with test DB
 // ---------------------------------------------------------------------------
 
-func newTestDiagnostics(t *testing.T, sender TelegramSender, promptPaths map[string]string) (*DiagnosticsEngine, func()) {
+func newTestDiagnostics(
+	t *testing.T, sender TelegramSender,
+	promptPaths map[string]string,
+) (*DiagnosticsEngine, func()) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")

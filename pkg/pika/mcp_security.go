@@ -181,7 +181,7 @@ type MCPSecurityPipeline struct {
 	baselines          map[string]*toolBaseline
 	taint              TaintState
 	toolHashes         map[string]string
-	diag                *DiagnosticsEngine
+	diag               *DiagnosticsEngine
 	manipulationREs    []*regexp.Regexp
 	resistanceREs      []*regexp.Regexp
 	cachedPromptSHA    string

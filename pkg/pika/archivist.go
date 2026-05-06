@@ -135,7 +135,7 @@ type Archivist struct {
 	trail    *Trail
 	meta     *Meta
 	cfg      ArchivistConfig
-	diag        *DiagnosticsEngine
+	diag     *DiagnosticsEngine
 
 	mu          sync.RWMutex
 	cachedBrief string
