@@ -1,9 +1,3 @@
-//
-// Single point for subagent error diagnosis, correction rule (CR)
-// management, and subagent prompt assembly with active CR injection.
-//
-// Invariant: diagnostics NEVER blocks main loop.
-// Error in diagnostics → log warning, continue.
 package pika
 
 import (
@@ -153,8 +147,8 @@ func (d *DiagnosticsEngine) Diagnose(ctx context.Context, traceID string) Diagno
 				result.RelatedAtomIDs = append(result.RelatedAtomIDs, atomID)
 			}
 		}
-		if err := atomRows.Err(); err != nil {
-			log.Printf("pika/diagnostics: atom rows: %v", err)
+		if rowErr := atomRows.Err(); rowErr != nil {
+			log.Printf("pika/diagnostics: atom rows: %v", rowErr)
 		}
 	}
 
@@ -318,6 +312,9 @@ func (d *DiagnosticsEngine) BuildSubagentPrompt(ctx context.Context, component s
 	}
 
 	// 5. No CRs → base prompt only (regression-safe: 0 diff with current).
+	if err := rows.Err(); err != nil {
+		log.Printf("pika/diagnostics: CR rows: %v", err)
+	}
 	if len(rules) == 0 {
 		return basePrompt, nil
 	}
@@ -380,6 +377,9 @@ func (d *DiagnosticsEngine) IncrementVerified(ctx context.Context, component str
 		updates = append(updates, pendingUpdate{id: id, data: string(newData)})
 	}
 
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("pika/diagnostics: iterate CRs: %w", err)
+	}
 	for _, u := range updates {
 		if _, err := d.mem.db.ExecContext(ctx,
 			`UPDATE registry SET data = ? WHERE id = ?`,
