@@ -1,104 +1,63 @@
-// PIKA-V3: analytics_cron.go — Cron wiring for Analytics.
-// Registers 2 scheduled jobs (weekly + monthly) in upstream CronService.
-// Pattern mirrors reflector_cron.go.
-
 package pika
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"strings"
+	"sync"
 	"time"
-
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/cron"
 )
 
-const analyticsJobPrefix = "analytics:"
-
-// RegisterAnalyticsJobs reads analytics schedule config and registers
-// cron jobs in upstream CronService.
-func RegisterAnalyticsJobs(
-	cronSvc *cron.CronService,
-	engine *AnalyticsEngine,
-	sched config.AnalyticsSchedule,
-) error {
-	type spec struct {
-		name string
-		raw  string
-		mode string
-	}
-	specs := []spec{
-		{"analytics-weekly", sched.Weekly, AnalyticsWeekly},
-		{"analytics-monthly", sched.Monthly, AnalyticsMonthly},
-	}
-
-	var registered int
-	for _, s := range specs {
-		if s.raw == "" {
-			continue
-		}
-		expr, err := schedToCronExpr(s.raw, mapAnalyticsMode(s.mode))
-		if err != nil {
-			return fmt.Errorf(
-				"pika/analytics_cron: invalid %s schedule %q: %w",
-				s.mode, s.raw, err,
-			)
-		}
-		_, addErr := cronSvc.AddJob(
-			s.name,
-			cron.CronSchedule{
-				Kind: "cron",
-				Expr: expr,
-			},
-			analyticsJobPrefix+s.mode,
-			"", "",
-		)
-		if addErr != nil {
-			return fmt.Errorf(
-				"pika/analytics_cron: add %s: %w",
-				s.name, addErr,
-			)
-		}
-		registered++
-	}
-
-	if registered > 0 {
-		log.Printf("[analytics] registered %d cron jobs", registered)
-	}
-	return nil
+// AnalyticsCron runs analytics engine on a periodic schedule.
+// PIKA-V3: D-136a checkpoint F17, TZ-v2-8i.
+type AnalyticsCron struct {
+	engine  *AnalyticsEngine
+	weekly  time.Duration
+	monthly time.Duration
+	stopCh  chan struct{}
+	once    sync.Once
 }
 
-// HandleAnalyticsJob checks if a cron job is an analytics
-// job and executes engine.Run. Returns (handled, error).
-func HandleAnalyticsJob(
-	engine *AnalyticsEngine,
-	job *cron.CronJob,
-) (bool, error) {
-	if !strings.HasPrefix(job.Payload.Message, analyticsJobPrefix) {
-		return false, nil
+// NewAnalyticsCron creates a cron scheduler for analytics.
+func NewAnalyticsCron(engine *AnalyticsEngine, weekly, monthly time.Duration) *AnalyticsCron {
+	if weekly <= 0 {
+		weekly = 7 * 24 * time.Hour
 	}
-	mode := strings.TrimPrefix(job.Payload.Message, analyticsJobPrefix)
-
-	ctx, cancel := context.WithTimeout(
-		context.Background(),
-		5*time.Minute,
-	)
-	defer cancel()
-
-	log.Printf("[analytics] executing cron job: mode=%s", mode)
-	return true, engine.Run(ctx, mode)
+	if monthly <= 0 {
+		monthly = 30 * 24 * time.Hour
+	}
+	return &AnalyticsCron{
+		engine:  engine,
+		weekly:  weekly,
+		monthly: monthly,
+		stopCh:  make(chan struct{}),
+	}
 }
 
-// mapAnalyticsMode maps analytics mode to reflector mode for schedToCronExpr reuse.
-func mapAnalyticsMode(mode string) string {
-	switch mode {
-	case AnalyticsWeekly:
-		return ReflectorWeekly
-	case AnalyticsMonthly:
-		return ReflectorMonthly
-	default:
-		return mode
+// Start launches weekly and monthly goroutines.
+func (ac *AnalyticsCron) Start() {
+	go ac.loop("weekly", ac.weekly)
+	go ac.loop("monthly", ac.monthly)
+	log.Println("[analytics] cron started")
+}
+
+// Stop halts all analytics goroutines.
+func (ac *AnalyticsCron) Stop() {
+	ac.once.Do(func() { close(ac.stopCh) })
+}
+
+func (ac *AnalyticsCron) loop(mode string, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			if err := ac.engine.Run(ctx, mode); err != nil {
+				log.Printf("[analytics] %s run failed: %v", mode, err)
+			}
+			cancel()
+		case <-ac.stopCh:
+			return
+		}
 	}
 }

@@ -610,3 +610,8 @@ func (al *AgentLoop) runAgentLoop(
 // web_search tool removed. Used when native provider search is preferred.
 
 // Helper to extract provider from registry for cleanup
+
+// GetBotMemory returns the PIKA-V3 BotMemory reference, or nil.
+func (al *AgentLoop) GetBotMemory() *pika.BotMemory {
+	return al.botmem
+}
