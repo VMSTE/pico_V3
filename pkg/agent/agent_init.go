@@ -14,11 +14,11 @@ import (
 	"github.com/sipeed/picoclaw/pkg/commands"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/skills"
 	"github.com/sipeed/picoclaw/pkg/state"
 	"github.com/sipeed/picoclaw/pkg/tools"
-	"github.com/sipeed/picoclaw/pkg/pika"
 )
 
 func NewAgentLoop(
@@ -75,10 +75,10 @@ func NewAgentLoop(
 	// PIKA-V3: RAD pre-action security gate (D-136a, D-SEC-v2, TZ-v2-8i).
 	if cfg.Security.RAD.Enabled {
 		al.rad = pika.NewRAD(pika.RADConfig{
-			Enabled:           cfg.Security.RAD.Enabled,
-			DriftThreshold:    cfg.Security.RAD.DriftThreshold,
-			BlockScore:        cfg.Security.RAD.BlockScore,
-			WarnScore:         cfg.Security.RAD.WarnScore,
+			Enabled:        cfg.Security.RAD.Enabled,
+			DriftThreshold: cfg.Security.RAD.DriftThreshold,
+			BlockScore:     cfg.Security.RAD.BlockScore,
+			WarnScore:      cfg.Security.RAD.WarnScore,
 		})
 	}
 
