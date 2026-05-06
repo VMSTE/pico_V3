@@ -18,8 +18,7 @@ func TestBusSender_ImplementsTelegramSender(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_, err := sender.SendMessage(ctx, "hello analytics report")
-	if err != nil {
+	if _, err := sender.SendMessage(ctx, "hello analytics report"); err != nil {
 		t.Errorf("SendMessage: %v", err)
 	}
 	if err := sender.EditMessage(ctx, "mid", "new text"); err != nil {

@@ -18,6 +18,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/skills"
 	"github.com/sipeed/picoclaw/pkg/state"
 	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/sipeed/picoclaw/pkg/pika"
 )
 
 func NewAgentLoop(
@@ -70,6 +71,16 @@ func NewAgentLoop(
 	al.hooks = NewHookManager(eventBus)
 	configureHookManagerFromConfig(al.hooks, cfg)
 	al.contextManager = al.resolveContextManager()
+
+	// PIKA-V3: RAD pre-action security gate (D-136a, D-SEC-v2, TZ-v2-8i).
+	if cfg.Security.RAD.Enabled {
+		al.rad = pika.NewRAD(pika.RADConfig{
+			Enabled:           cfg.Security.RAD.Enabled,
+			DriftThreshold:    cfg.Security.RAD.DriftThreshold,
+			BlockScore:        cfg.Security.RAD.BlockScore,
+			WarnScore:         cfg.Security.RAD.WarnScore,
+		})
+	}
 
 	// Register shared tools to all agents (now that al is created)
 	registerSharedTools(al, cfg, msgBus, registry, provider)

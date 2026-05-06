@@ -162,7 +162,6 @@ func (a *progressAdapter) OnEvent(
 
 // --- Compile-time interface checks ---
 
-
 // PIKA-V3: autoEventAdapter wraps pika.AutoEventHandler as agent.EventObserver.
 // Translates EventKindToolExecEnd -> HandleToolResult (D-136a, TZ-v2-8i).
 type autoEventAdapter struct {

@@ -23,8 +23,8 @@ func (s *BusSender) SendMessage(ctx context.Context, text string) (string, error
 	return "", err
 }
 
-func (s *BusSender) EditMessage(_ context.Context, _, _ string) error   { return nil }
-func (s *BusSender) DeleteMessage(_ context.Context, _ string) error    { return nil }
+func (s *BusSender) EditMessage(_ context.Context, _, _ string) error { return nil }
+func (s *BusSender) DeleteMessage(_ context.Context, _ string) error  { return nil }
 func (s *BusSender) SendConfirmation(_ context.Context, _ string) (bool, error) {
 	return false, nil
 }
