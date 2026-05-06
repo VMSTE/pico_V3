@@ -52,100 +52,100 @@ const (
 
 type AnalyticsPeriod struct {
 	Start time.Time `json:"start"`
-	End time.Time `json:"end"`
+	End   time.Time `json:"end"`
 }
 
 type AnalyticsNameCount struct {
-	Name string `json:"name"`
-	Count int `json:"count"`
+	Name  string `json:"name"`
+	Count int    `json:"count"`
 }
 
 type LLMMetrics struct {
-	TotalRequests int `json:"total_requests"`
-	TotalTokens int64 `json:"total_tokens"`
-	TotalCostUSD float64 `json:"total_cost_usd"`
+	TotalRequests   int                `json:"total_requests"`
+	TotalTokens     int64              `json:"total_tokens"`
+	TotalCostUSD    float64            `json:"total_cost_usd"`
 	CostByComponent map[string]float64 `json:"cost_by_component"`
-	AvgResponseMs int `json:"avg_response_ms"`
-	P95ResponseMs int `json:"p95_response_ms"`
-	ErrorRatePct float64 `json:"error_rate_pct"`
-	ReasoningRatio float64 `json:"reasoning_ratio"`
+	AvgResponseMs   int                `json:"avg_response_ms"`
+	P95ResponseMs   int                `json:"p95_response_ms"`
+	ErrorRatePct    float64            `json:"error_rate_pct"`
+	ReasoningRatio  float64            `json:"reasoning_ratio"`
 }
 
 type ToolMetrics struct {
-	TotalRequested int `json:"total_requested"`
-	TotalSuccess int `json:"total_success"`
-	TotalFailed int `json:"total_failed"`
-	SuccessRatePct float64 `json:"success_rate_pct"`
-	TopTools []AnalyticsNameCount `json:"top_tools"`
+	TotalRequested int                  `json:"total_requested"`
+	TotalSuccess   int                  `json:"total_success"`
+	TotalFailed    int                  `json:"total_failed"`
+	SuccessRatePct float64              `json:"success_rate_pct"`
+	TopTools       []AnalyticsNameCount `json:"top_tools"`
 }
 
 type ChainMetrics struct {
-	TotalChains int `json:"total_chains"`
+	TotalChains    int     `json:"total_chains"`
 	AvgChainLength float64 `json:"avg_chain_length"`
-	AvgChainCost float64 `json:"avg_chain_cost"`
+	AvgChainCost   float64 `json:"avg_chain_cost"`
 }
 
 type SubagentMetrics struct {
-	Component string `json:"component"`
-	TotalSpans int `json:"total_spans"`
-	ErrorCount int `json:"error_count"`
-	TimeoutCount int `json:"timeout_count"`
-	AvgDurationMs int `json:"avg_duration_ms"`
-	P95DurationMs int `json:"p95_duration_ms"`
+	Component     string `json:"component"`
+	TotalSpans    int    `json:"total_spans"`
+	ErrorCount    int    `json:"error_count"`
+	TimeoutCount  int    `json:"timeout_count"`
+	AvgDurationMs int    `json:"avg_duration_ms"`
+	P95DurationMs int    `json:"p95_duration_ms"`
 }
 
 type KnowledgeMetrics struct {
-	TotalAtoms int `json:"total_atoms"`
-	NewInPeriod int `json:"new_in_period"`
-	ByCategory map[string]int `json:"by_category"`
-	ByPolarity map[string]int `json:"by_polarity"`
-	ConfHigh int `json:"conf_high"`
-	ConfMedium int `json:"conf_medium"`
-	ConfLow int `json:"conf_low"`
-	ConfStale int `json:"conf_stale"`
+	TotalAtoms  int            `json:"total_atoms"`
+	NewInPeriod int            `json:"new_in_period"`
+	ByCategory  map[string]int `json:"by_category"`
+	ByPolarity  map[string]int `json:"by_polarity"`
+	ConfHigh    int            `json:"conf_high"`
+	ConfMedium  int            `json:"conf_medium"`
+	ConfLow     int            `json:"conf_low"`
+	ConfStale   int            `json:"conf_stale"`
 }
 
 type AtomUsageMetrics struct {
-	TotalUsages int `json:"total_usages"`
-	UniqueAtomsUsed int `json:"unique_atoms_used"`
-	EffectivenessPct float64 `json:"effectiveness_pct"`
-	TopAtoms []AnalyticsNameCount `json:"top_atoms"`
-	UnusedCount int `json:"unused_count"`
-	UnusedPct float64 `json:"unused_pct"`
+	TotalUsages      int                  `json:"total_usages"`
+	UniqueAtomsUsed  int                  `json:"unique_atoms_used"`
+	EffectivenessPct float64              `json:"effectiveness_pct"`
+	TopAtoms         []AnalyticsNameCount `json:"top_atoms"`
+	UnusedCount      int                  `json:"unused_count"`
+	UnusedPct        float64              `json:"unused_pct"`
 }
 
 type AnalyticsTaskMetrics struct {
-	TaskTag string `json:"task_tag"`
-	RequestCount int `json:"request_count"`
-	AvgTokens float64 `json:"avg_tokens"`
-	AvgTools float64 `json:"avg_tools"`
-	TotalCost float64 `json:"total_cost"`
-	AvgCost float64 `json:"avg_cost"`
+	TaskTag      string  `json:"task_tag"`
+	RequestCount int     `json:"request_count"`
+	AvgTokens    float64 `json:"avg_tokens"`
+	AvgTools     float64 `json:"avg_tools"`
+	TotalCost    float64 `json:"total_cost"`
+	AvgCost      float64 `json:"avg_cost"`
 }
 
 type AnalyticsPeriodMetrics struct {
-	Period AnalyticsPeriod `json:"period"`
-	LLM LLMMetrics `json:"llm"`
-	Tools ToolMetrics `json:"tools"`
-	Chains ChainMetrics `json:"chains"`
-	Subagents []SubagentMetrics `json:"subagents"`
-	Knowledge KnowledgeMetrics `json:"knowledge"`
-	AtomUsage AtomUsageMetrics `json:"atom_usage"`
-	Tasks []AnalyticsTaskMetrics `json:"tasks"`
+	Period    AnalyticsPeriod        `json:"period"`
+	LLM       LLMMetrics             `json:"llm"`
+	Tools     ToolMetrics            `json:"tools"`
+	Chains    ChainMetrics           `json:"chains"`
+	Subagents []SubagentMetrics      `json:"subagents"`
+	Knowledge KnowledgeMetrics       `json:"knowledge"`
+	AtomUsage AtomUsageMetrics       `json:"atom_usage"`
+	Tasks     []AnalyticsTaskMetrics `json:"tasks"`
 }
 
 type AnalyticsDelta struct {
-	Current float64 `json:"current"`
-	Previous float64 `json:"previous"`
-	DeltaPct float64 `json:"delta_pct"`
-	Direction string `json:"direction"`
+	Current   float64 `json:"current"`
+	Previous  float64 `json:"previous"`
+	DeltaPct  float64 `json:"delta_pct"`
+	Direction string  `json:"direction"`
 }
 
 type AnalyticsAnomaly struct {
-	Severity string `json:"severity"`
-	Metric string `json:"metric"`
-	Message string `json:"message"`
-	Value float64 `json:"value"`
+	Severity  string  `json:"severity"`
+	Metric    string  `json:"metric"`
+	Message   string  `json:"message"`
+	Value     float64 `json:"value"`
 	Threshold float64 `json:"threshold"`
 }
 
@@ -163,10 +163,10 @@ type AnalyticsReport struct {
 // ---------------------------------------------------------------------------
 
 type AnalyticsEngine struct {
-	mem *BotMemory `json:"mem"`
-	sender TelegramSender `json:"sender"`
-	mgrSender TelegramSender `json:"mgr_sender"`
-	queriesDir string `json:"queries_dir"`
+	mem        *BotMemory
+	sender     TelegramSender
+	mgrSender  TelegramSender
+	queriesDir string
 }
 
 func NewAnalyticsEngine(
@@ -258,7 +258,7 @@ func analyticsComputePeriods(mode string, now time.Time) (cur, prev AnalyticsPer
 		cur = AnalyticsPeriod{Start: now.AddDate(0, 0, -7), End: now}
 		prev = AnalyticsPeriod{Start: now.AddDate(0, 0, -14), End: now.AddDate(0, 0, -7)}
 	}
-	return
+	return cur, prev
 }
 
 // ---------------------------------------------------------------------------
@@ -362,7 +362,7 @@ func (ae *AnalyticsEngine) queryLLMMetrics(ctx context.Context, start, end strin
 		if qErr == nil {
 			for rows.Next() {
 				var comp string
-		defer rows.Close()
+				defer rows.Close()
 				var cost float64
 				var cnt int
 				if rows.Scan(&comp, &cost, &cnt) == nil {
@@ -381,7 +381,7 @@ func (ae *AnalyticsEngine) queryLLMMetrics(ctx context.Context, start, end strin
 		if qErr == nil {
 			var latencies []int
 			for rows.Next() {
-		defer rows.Close()
+				defer rows.Close()
 				var ms int
 				if rows.Scan(&ms) == nil {
 					latencies = append(latencies, ms)
@@ -423,7 +423,7 @@ func (ae *AnalyticsEngine) queryToolMetrics(ctx context.Context, start, end stri
 		if qErr == nil {
 			for rows.Next() {
 				var nc AnalyticsNameCount
-		defer rows.Close()
+				defer rows.Close()
 				if rows.Scan(&nc.Name, &nc.Count) == nil {
 					out.TopTools = append(out.TopTools, nc)
 				}
@@ -473,7 +473,7 @@ func (ae *AnalyticsEngine) querySubagentMetrics(ctx context.Context, start, end 
 		if qErr == nil {
 			for rows.Next() {
 				var s SubagentMetrics
-		defer rows.Close()
+				defer rows.Close()
 				if rows.Scan(&s.Component, &s.TotalSpans, &s.ErrorCount, &s.TimeoutCount, &s.AvgDurationMs) == nil {
 					compMap[s.Component] = &s
 				}
@@ -490,7 +490,7 @@ func (ae *AnalyticsEngine) querySubagentMetrics(ctx context.Context, start, end 
 		if qErr == nil {
 			durMap := make(map[string][]int)
 			for rows.Next() {
-		defer rows.Close()
+				defer rows.Close()
 				var comp string
 				var ms int
 				if rows.Scan(&comp, &ms) == nil {
@@ -576,7 +576,7 @@ func (ae *AnalyticsEngine) queryAtomUsageMetrics(ctx context.Context, start, end
 		if qErr == nil {
 			for rows.Next() {
 				var nc AnalyticsNameCount
-		defer rows.Close()
+				defer rows.Close()
 				if rows.Scan(&nc.Name, &nc.Count) == nil {
 					out.TopAtoms = append(out.TopAtoms, nc)
 				}
