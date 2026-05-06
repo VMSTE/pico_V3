@@ -65,6 +65,19 @@ func pikaContextManagerFactory(
 				nil,
 			)
 		}
+
+		// PIKA-V3: Store BotMemory ref for RAD reasoning access (TZ-v2-8i).
+	al.botmem = botmem
+
+// PIKA-V3: Mount AutoEvent EventObserver hook (D-136a, TZ-v2-8i, F14).
+	// Behavioural, observe-only. Maps tool calls -> events via toolTypeMap.
+	if botmem != nil {
+		autoHandler := pika.NewAutoEventHandler(botmem, nil, nil, pika.EventClasses{})
+		_ = al.MountHook(HookRegistration{
+			Name:     "autoevent",
+			Hook:     &autoEventAdapter{handler: autoHandler},
+		})
+	}
 	}
 	if arch == nil {
 		arch = pika.NewNoopArchivistCaller()

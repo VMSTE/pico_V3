@@ -28,9 +28,12 @@ import (
 	"github.com/sipeed/picoclaw/pkg/session"
 	"github.com/sipeed/picoclaw/pkg/state"
 	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/sipeed/picoclaw/pkg/pika"
 )
 
 type AgentLoop struct {
+	rad *pika.RAD // PIKA-V3: RAD (D-SEC-v2, TZ-v2-8i)
+	botmem *pika.BotMemory // PIKA-V3: BotMemory ref for RAD (TZ-v2-8i)
 	// Core dependencies
 	bus      interfaces.MessageBus
 	cfg      *config.Config

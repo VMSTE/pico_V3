@@ -45,6 +45,12 @@ toolLoop:
 		toolName := tc.Name
 		toolArgs := cloneStringAnyMap(tc.Arguments)
 
+			// PIKA-V3: RAD pre-action gate (D-136a F16, TZ-v2-8i).
+			if blocked, radReason := radPreActionGate(ctx, al, ts.sessionKey, toolName); blocked {
+				logger.WarnCF("pipeline", "RAD blocked tool", map[string]any{"tool": toolName, "reason": radReason})
+				return ToolControlBreak
+			}
+
 		if al.hooks != nil {
 			toolReq, decision := al.hooks.BeforeTool(turnCtx, &ToolCallHookRequest{
 				Meta:      ts.eventMeta("runTurn", "turn.tool.before"),
