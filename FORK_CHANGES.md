@@ -240,6 +240,10 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/bus_sender.go` — NEW: 'BusSender' adapter (msgBus → TelegramSender interface). Universal sender for any connected messenger — not Telegram-specific.
   - `pkg/pika/analytics_cron.go` — NEW: 'AnalyticsCron' scheduler. Runs AnalyticsEngine.Run on weekly+monthly intervals via goroutines (D-136a checkpoint F17).
   - `pkg/gateway/gateway.go` — MOD: analytics wiring in restartServices() after CronService.Start(). Creates BusSender → AnalyticsEngine → AnalyticsCron pipeline.
+  - `pkg/agent/rad_gate_test.go` — NEW: 3 tests (TestRadPreActionGate_NilRAD, TestRadPreActionGate_SafeTool, TestRadPreActionGate_WithBotmem)
+  - `pkg/agent/hook_pika_test.go` — NEW: 2 tests (TestAutoEventAdapter_ImplementsEventObserver, TestAutoEventAdapter_NilHandler)
+  - `pkg/pika/bus_sender_test.go` — NEW: 1 test (TestBusSender_ImplementsTelegramSender)
+  - `pkg/pika/analytics_cron_test.go` — NEW: 3 tests (TestNewAnalyticsCron_Defaults, TestNewAnalyticsCron_CustomIntervals, TestAnalyticsCron_StartStop)
 - **Breaking:** None (new files, additive only)
 - **Dependencies:** pkg/pika/autoevent.go (wave 3e), pkg/pika/rad.go (wave 6a), pkg/pika/analytics.go (wave 7b), pkg/agent/hooks.go (upstream), pkg/bus/bus.go (upstream)
 - **Design decisions:**
