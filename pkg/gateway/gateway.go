@@ -45,6 +45,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/media"
 	"github.com/sipeed/picoclaw/pkg/netbind"
 	"github.com/sipeed/picoclaw/pkg/pid"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/state"
 	"github.com/sipeed/picoclaw/pkg/tools"
@@ -597,6 +598,15 @@ func restartServices(
 		return fmt.Errorf("error restarting cron service: %w", err)
 	}
 	fmt.Println("  ✓ Cron service restarted")
+
+	// PIKA-V3: Analytics cron (D-136a F17, TZ-v2-8i).
+	if botmem := al.GetBotMemory(); botmem != nil {
+		sender := &pika.BusSender{MB: msgBus}
+		engine := pika.NewAnalyticsEngine(botmem, sender, sender, "")
+		analyticsCron := pika.NewAnalyticsCron(engine, 0, 0)
+		analyticsCron.Start()
+		fmt.Println("  ✓ Analytics cron started")
+	}
 
 	runningServices.HeartbeatService = heartbeat.NewHeartbeatService(
 		cfg.WorkspacePath(),

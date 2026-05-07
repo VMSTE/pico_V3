@@ -226,3 +226,28 @@ Each entry maps to a single wave/phase and its merged PR.
   - `workspace/queries/analytics_tasks.sql` — NEW: Task efficiency (top-5 tasks by cost, avg tokens/tools per task)
 - **Breaking:** None (new files, additive only)
 - **Dependencies:** `pkg/pika/botmemory.go` (BotMemory, registry table), `pkg/pika/interfaces.go` (TelegramSender), `pkg/config/config_pika_analytics.go` (AnalyticsConfig), `pkg/cron` (CronService, CronJob, CronSchedule)
+
+
+### [2026-05-07] feat(pika): TZ-v2-8i — AutoEvent + RAD + Analytics wiring — wave 8i
+- **T3:** TZ-v2-8i
+- **Fixes:** #TBD
+- **Files:**
+  - `pkg/agent/hook_pika.go` — NEW: 'autoEventAdapter' struct wrapping 'pika.AutoEventHandler' as 'agent.EventObserver'. Translates 'EventKindToolExecEnd' → 'HandleToolResult'. Compile-time interface check added.
+  - `pkg/agent/context_pika.go` — MOD: mount 'autoEventAdapter' as builtin hook via HookRegistration after BotMemory init. Set 'al.botmem = botmem' for RAD reasoning access.
+  - `pkg/agent/agent.go` — MOD: added 'rad *pika.RAD' and 'botmem *pika.BotMemory' fields to AgentLoop. Added 'GetBotMemory()' public getter for gateway access.
+  - `pkg/agent/agent_init.go` — MOD: RAD initialization from 'cfg.Security.RAD' after resolveContextManager(). Uses pika.NewRAD(pika.RADConfig{...}).
+  - `pkg/agent/rad_gate.go` — NEW: 'radPreActionGate()' — direct RAD call in pipeline (NOT hook). Gets reasoning via BotMemory.GetLastReasoningText, calls RAD.Analyze, blocks on RADAnomaly, warns on RADWarning.
+  - `pkg/agent/pipeline_execute.go` — MOD: inserted RAD pre-action gate before each tool call in ExecuteTools (D-136a checkpoint F16).
+  - `pkg/pika/bus_sender.go` — NEW: 'BusSender' adapter (msgBus → TelegramSender interface). Universal sender for any connected messenger — not Telegram-specific.
+  - `pkg/pika/analytics_cron.go` — NEW: 'AnalyticsCron' scheduler. Runs AnalyticsEngine.Run on weekly+monthly intervals via goroutines (D-136a checkpoint F17).
+  - `pkg/gateway/gateway.go` — MOD: analytics wiring in restartServices() after CronService.Start(). Creates BusSender → AnalyticsEngine → AnalyticsCron pipeline.
+  - `pkg/agent/rad_gate_test.go` — NEW: 3 tests (TestRadPreActionGate_NilRAD, TestRadPreActionGate_SafeTool, TestRadPreActionGate_WithBotmem)
+  - `pkg/agent/hook_pika_test.go` — NEW: 2 tests (TestAutoEventAdapter_ImplementsEventObserver, TestAutoEventAdapter_NilHandler)
+  - `pkg/pika/bus_sender_test.go` — NEW: 1 test (TestBusSender_ImplementsTelegramSender)
+  - `pkg/pika/analytics_cron_test.go` — NEW: 3 tests (TestNewAnalyticsCron_Defaults, TestNewAnalyticsCron_CustomIntervals, TestAnalyticsCron_StartStop)
+- **Breaking:** None (new files, additive only)
+- **Dependencies:** pkg/pika/autoevent.go (wave 3e), pkg/pika/rad.go (wave 6a), pkg/pika/analytics.go (wave 7b), pkg/agent/hooks.go (upstream), pkg/bus/bus.go (upstream)
+- **Design decisions:**
+  - RAD: direct call in pipeline, NOT hook/EventObserver — per TZ-v2-8i spec. Reasoning extracted from BotMemory, not LLM response fields.
+  - Analytics: BusSender wraps universal MessageBus instead of Telegram-specific channel. Bus routes to all connected messengers.
+  - Analytics cron: goroutine-based (like HeartbeatService), not CronService jobs — simpler lifecycle, no cron expression parsing needed.

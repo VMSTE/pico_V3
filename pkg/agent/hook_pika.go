@@ -162,9 +162,27 @@ func (a *progressAdapter) OnEvent(
 
 // --- Compile-time interface checks ---
 
+// PIKA-V3: autoEventAdapter wraps pika.AutoEventHandler as agent.EventObserver.
+// Translates EventKindToolExecEnd -> HandleToolResult (D-136a, TZ-v2-8i).
+type autoEventAdapter struct {
+	handler *pika.AutoEventHandler
+}
+
+func (a *autoEventAdapter) OnEvent(ctx context.Context, evt Event) error {
+	if evt.Kind != EventKindToolExecEnd {
+		return nil
+	}
+	p, ok := evt.Payload.(ToolExecEndPayload)
+	if !ok {
+		return nil
+	}
+	return a.handler.HandleToolResult(ctx, p.Tool, "", p.IsError, "", 0)
+}
+
 var (
 	_ LLMInterceptor = (*outputGateAdapter)(nil)
 	_ LLMInterceptor = (*toolGuardAdapter)(nil)
 	_ ToolApprover   = (*confirmGateAdapter)(nil)
 	_ EventObserver  = (*progressAdapter)(nil)
+	_ EventObserver  = (*autoEventAdapter)(nil)
 )

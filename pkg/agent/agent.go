@@ -23,6 +23,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/constants"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/media"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/routing"
 	"github.com/sipeed/picoclaw/pkg/session"
@@ -31,6 +32,8 @@ import (
 )
 
 type AgentLoop struct {
+	rad    *pika.RAD       // PIKA-V3: RAD (D-SEC-v2, TZ-v2-8i)
+	botmem *pika.BotMemory // PIKA-V3: BotMemory ref for RAD (TZ-v2-8i)
 	// Core dependencies
 	bus      interfaces.MessageBus
 	cfg      *config.Config
@@ -607,3 +610,8 @@ func (al *AgentLoop) runAgentLoop(
 // web_search tool removed. Used when native provider search is preferred.
 
 // Helper to extract provider from registry for cleanup
+
+// GetBotMemory returns the PIKA-V3 BotMemory reference, or nil.
+func (al *AgentLoop) GetBotMemory() *pika.BotMemory {
+	return al.botmem
+}
