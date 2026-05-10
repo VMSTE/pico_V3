@@ -33,7 +33,8 @@ import (
 
 type AgentLoop struct {
 	rad    *pika.RAD       // PIKA-V3: RAD (D-SEC-v2, TZ-v2-8i)
-	botmem *pika.BotMemory // PIKA-V3: BotMemory ref for RAD (TZ-v2-8i)
+	botmem    *pika.BotMemory  // PIKA-V3: BotMemory ref for RAD (TZ-v2-8i)
+	telemetry *pika.Telemetry // PIKA-V3: Telemetry (budget+health+cost) (TZ-v2-9a)
 	// Core dependencies
 	bus      interfaces.MessageBus
 	cfg      *config.Config
