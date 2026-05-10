@@ -266,3 +266,16 @@ Each entry maps to a single wave/phase and its merged PR.
   - MCP Guard previously had no `defaultGuardPrompt` / `os.ErrNotExist` fallback — agent would crash if prompt file missing. Now aligned with other 3 subagents.
   - Backticks in mcp_guard.md replaced with single quotes in Go `defaultGuardPrompt` const (Go raw strings cannot contain backticks). File version preserves original formatting.
   - Prompt content sources: atomizer from Go code, archivist/reflexor/mcp_guard from Notion SSOT pages.
+
+### [2026-05-10] feat(pika): memory pipeline — use MemoryDBPath from config — wave 8a
+- **ТЗ:** ТЗ-v2-8j Phase Б
+- **PR:** TBD
+- **Files:**
+  - `pkg/agent/instance.go` — MODIFIED:
+    - `initSessionStore(dir string)` → `initSessionStore(dbPath string)`: принимает полный путь к DB вместо директории. Убран `filepath.Join(dir, "bot_memory.db")`, используется `filepath.Dir(dbPath)` для MkdirAll
+    - Строки 120-123: хардкод `filepath.Join(workspace, "sessions")` заменён на `cfg.Agents.Defaults.MemoryDBPath`
+    - NEW функция `migrateMemoryDB(workspace, newPath)`: при первом запуске переносит `sessions/bot_memory.db` → `memory/bot_memory.db` через `os.Rename`. No-op если target существует или legacy отсутствует
+  - `workspace/memory/MEMORY.md` — DELETED: upstream шаблон для текстовой памяти, не используется Pika v3 (у нас SQL через bot_memory.db)
+- **Breaking:** bot_memory.db перемещается из `sessions/` в `memory/` при первом запуске. Миграция автоматическая, данные не теряются
+- **Rollback:** `git revert` коммита. После revert вручную `mv workspace/memory/bot_memory.db workspace/sessions/bot_memory.db`. Данные сохраняются — это тот же SQLite файл
+- **Config:** `cfg.Agents.Defaults.MemoryDBPath` (default: `workspace/memory/bot_memory.db`, задаётся в `defaults.go:44`). Поле существовало ранее, но игнорировалось instance.go — теперь используется
