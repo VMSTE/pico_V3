@@ -221,6 +221,15 @@ func (a *Archivist) BuildPrompt(
 		}, nil
 	}
 
+	// PIKA-V3: Trace span (TZ-v2-9a block 3)
+	spanIDarchivist := fmt.Sprintf("span_archivist_%d", time.Now().UnixNano())
+	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
+		SpanID: spanIDarchivist, Component: "archivist", Operation: "build_prompt",
+		StartedAt: time.Now(), Status: "running",
+	})
+	defer func() {
+		_ = a.mem.CompleteSpan(ctx, spanIDarchivist, "done", nil, "", "")
+	}()
 	// Apply timeout
 	tMs := a.cfg.BuildPromptTimeoutMs
 	ctx, cancel := context.WithTimeout(

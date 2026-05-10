@@ -100,6 +100,15 @@ func NewDiagnosticsEngine(
 // Read-only with respect to trace_spans and atom_usage.
 // Returns empty result on any internal error (invariant: never blocks).
 func (d *DiagnosticsEngine) Diagnose(ctx context.Context, traceID string) DiagnosisResult {
+	// PIKA-V3: Trace span (TZ-v2-9a block 3)
+	spanIDdiagnostics := fmt.Sprintf("span_diagnostics_%d", time.Now().UnixNano())
+	_ = d.mem.InsertSpan(ctx, TraceSpanRow{
+		SpanID: spanIDdiagnostics, Component: "diagnostics", Operation: "diagnose",
+		StartedAt: time.Now(), Status: "running",
+	})
+	defer func() {
+		_ = d.mem.CompleteSpan(ctx, spanIDdiagnostics, "done", nil, "", "")
+	}()
 	result := DiagnosisResult{TraceID: traceID}
 
 	// 1. Find first error/timeout span for this trace.

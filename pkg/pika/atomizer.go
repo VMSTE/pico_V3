@@ -136,6 +136,15 @@ func (a *Atomizer) ShouldAtomize(
 func (a *Atomizer) Run(
 	ctx context.Context, sessionID string,
 ) error {
+	// PIKA-V3: Trace span (TZ-v2-9a block 3)
+	spanIDatomizer := fmt.Sprintf("span_atomizer_%d", time.Now().UnixNano())
+	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
+		SpanID: spanIDatomizer, Component: "atomizer", Operation: "run",
+		StartedAt: time.Now(), Status: "running",
+	})
+	defer func() {
+		_ = a.mem.CompleteSpan(ctx, spanIDatomizer, "done", nil, "", "")
+	}()
 	// Step 1: Select chunk (oldest turns <= budget)
 	turnIDs, err := a.mem.GetOldestTurnIDs(
 		ctx, sessionID, a.cfg.ChunkMaxTokens,
