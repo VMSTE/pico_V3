@@ -528,6 +528,7 @@ func DefaultConfig() *Config {
 				ShowStepText: true, StopCommandEnabled: true,
 			},
 		},
+		Onboard: OnboardConfig{PreserveUserPrompts: true},
 	}
 }
 
