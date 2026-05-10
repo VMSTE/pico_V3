@@ -251,3 +251,18 @@ Each entry maps to a single wave/phase and its merged PR.
   - RAD: direct call in pipeline, NOT hook/EventObserver — per TZ-v2-8i spec. Reasoning extracted from BotMemory, not LLM response fields.
   - Analytics: BusSender wraps universal MessageBus instead of Telegram-specific channel. Bus routes to all connected messengers.
   - Analytics cron: goroutine-based (like HeartbeatService), not CronService jobs — simpler lifecycle, no cron expression parsing needed.
+
+### [2026-05-10] feat(pika): ТЗ-v2-8j (Phase A) — Prompt files for subagents + MCP Guard fallback — wave 8
+- **Files:**
+  - `workspace/prompts/atomizer.md` — NEW: Atomizer system prompt extracted from defaultAtomizerPrompt Go constant. SSOT: Go code (pkg/pika/atomizer.go:642).
+  - `workspace/prompts/archivist_build.md` — NEW: Archivist system prompt from Notion SSOT (Приложение: Промт Архивариуса v2). Version 2.2, unified search_context tool.
+  - `workspace/prompts/reflexor.md` — NEW: Reflexor system prompt from Notion SSOT (Промт Рефлексора v1). XML-structured, 5 analysis sections, JSON output schema.
+  - `workspace/prompts/mcp_guard.md` — NEW: MCP Guard system prompt from Notion SSOT (Приложение: Промт MCP Guard). English, 4-step CoT pipeline, STARTUP_AUDIT + RUNTIME_AUDIT modes.
+  - `pkg/pika/mcp_security.go` — MOD: added `"errors"` import, `os.ErrNotExist` fallback in `LoadGuardPrompt()`, `defaultGuardPrompt` constant. Now matches D-90 fallback pattern used by archivist/atomizer/reflector.
+- **Breaking:** None (new files, additive only; mcp_security.go fallback is backward-compatible)
+- **Dependencies:** None (prompt files read at runtime via os.ReadFile, no go:embed)
+- **Design decisions:**
+  - All 4 subagent prompts stored as `workspace/prompts/*.md` — hot-reloadable at runtime via D-90 pattern (DiagnosticsEngine → file fallback → const fallback).
+  - MCP Guard previously had no `defaultGuardPrompt` / `os.ErrNotExist` fallback — agent would crash if prompt file missing. Now aligned with other 3 subagents.
+  - Backticks in mcp_guard.md replaced with single quotes in Go `defaultGuardPrompt` const (Go raw strings cannot contain backticks). File version preserves original formatting.
+  - Prompt content sources: atomizer from Go code, archivist/reflexor/mcp_guard from Notion SSOT pages.
