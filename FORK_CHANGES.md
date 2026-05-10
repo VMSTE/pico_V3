@@ -309,3 +309,9 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Design decisions:**
   - BuildSystemPrompt kept as stub (not deleted) for API compatibility — method signature preserved, body returns "", nil.
   - CORE.md/CONTEXT.md loading, file cache, InvalidateCache all removed — no longer needed since prompt content comes from upstream LoadBootstrapFiles (AGENT.md/SOUL.md/USER.md) + 4 PromptContributors.
+
+### [2026-05-10] fix(deps): Go 1.25.10 — govulncheck green (ТЗ-v2-8q) — wave 8
+- **ТЗ:** ТЗ-v2-8q
+- **Files:**
+- `go.mod` — MOD: `go 1.25.9` → `go 1.25.10`. Fixes 3 stdlib vulnerabilities: GO-2026-4976 (net/http/httputil), GO-2026-4971 (net), GO-2026-4918 (net/http).
+- **Breaking:** None (patch-level stdlib upgrade only)
