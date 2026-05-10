@@ -5455,10 +5455,6 @@ func TestParallelMessageProcessing_DifferentSessionsProcessedConcurrently(t *tes
 }
 
 func TestParallelMessageProcessing_SameSessionProcessedSequentially(t *testing.T) {
-	t.Skip(
-		"KNOWN-FLAKY: sync: negative WaitGroup counter in agent.go:226 — " +
-			"upstream race condition. See ТЗ-v2-8p.",
-	)
 	tmpDir, err := os.MkdirTemp("", "agent-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -5468,6 +5464,7 @@ func TestParallelMessageProcessing_SameSessionProcessedSequentially(t *testing.T
 	var mu sync.Mutex
 	turnIDs := make(map[string]bool)
 	var wg sync.WaitGroup
+	var doneOnce sync.Once
 	wg.Add(1) // Only 1 turn should be created for same session
 
 	cfg := &config.Config{
@@ -5490,7 +5487,7 @@ func TestParallelMessageProcessing_SameSessionProcessedSequentially(t *testing.T
 
 	al := NewAgentLoop(cfg, msgBus, &concurrentMockProvider{
 		responseFunc: func(callID int) string {
-			wg.Done()
+			doneOnce.Do(wg.Done)
 			return "ok"
 		},
 	})
@@ -5553,6 +5550,9 @@ func TestParallelMessageProcessing_SameSessionProcessedSequentially(t *testing.T
 	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for turn to complete")
 	}
+
+	// Allow steering queue to fully drain after initial turn completes
+	time.Sleep(500 * time.Millisecond)
 
 	mu.Lock()
 	defer mu.Unlock()
