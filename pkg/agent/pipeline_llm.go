@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
@@ -360,6 +361,33 @@ func (p *Pipeline) CallLLM(
 			HasReasoning: exec.response.Reasoning != "" || exec.response.ReasoningContent != "",
 		},
 	)
+
+	// PIKA-V3: Record LLM call -> request_log + reasoning -> reasoning_log
+	if al.botmem != nil && exec.response != nil {
+		var tokIn, tokOut int
+		if exec.response.Usage != nil {
+			tokIn = exec.response.Usage.PromptTokens
+			tokOut = exec.response.Usage.CompletionTokens
+		}
+		_, _ = al.botmem.InsertRequestLog(turnCtx, pika.RequestLogRow{
+			SessionID:          ts.sessionKey,
+			Direction:          "chat",
+			Component:          "main",
+			Model:              exec.llmModel,
+			PromptTokens:       tokIn,
+			CompletionTokens:   tokOut,
+			ToolCallsRequested: len(exec.response.ToolCalls),
+		})
+		if reasoningContent != "" {
+			tid, _ := al.botmem.GetMaxTurnID(turnCtx, ts.sessionKey)
+			_, _ = al.botmem.InsertReasoningLog(turnCtx, pika.ReasoningLogRow{
+				SessionID:       ts.sessionKey,
+				ReasoningText:   reasoningContent,
+				ReasoningTokens: len(reasoningContent) / 4,
+				TurnID:          tid,
+			})
+		}
+	}
 
 	llmResponseFields := map[string]any{
 		"agent_id":       ts.agent.ID,
