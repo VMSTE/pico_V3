@@ -279,3 +279,23 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Breaking:** bot_memory.db перемещается из `sessions/` в `memory/` при первом запуске. Миграция автоматическая, данные не теряются
 - **Rollback:** `git revert` коммита. После revert вручную `mv workspace/memory/bot_memory.db workspace/sessions/bot_memory.db`. Данные сохраняются — это тот же SQLite файл
 - **Config:** `cfg.Agents.Defaults.MemoryDBPath` (default: `workspace/memory/bot_memory.db`, задаётся в `defaults.go:44`). Поле существовало ранее, но игнорировалось instance.go — теперь используется
+
+### [2026-05-10] feat(pika): ТЗ-v2-8j (Phase В) — PromptContributor refactor + upstream bootstrap — wave 8
+- **ТЗ:** ТЗ-v2-8j Phase В
+- **PR:** TBD
+- **Files:**
+- `workspace/AGENT.md` — REWRITTEN: default PicoClaw template replaced with Pika v3 SSOT content from Notion (CORE.md v4 §2.2b). Role DevOps, 3-question thinking, 8 NEVER rules with WHY, antipatterns, examples, plan markup. 96 lines.
+- `workspace/SOUL.md` — REWRITTEN: default PicoClaw template replaced with Pika v3 personality. Russian, trust boundaries, security invariants. 30 lines.
+- `workspace/USER.md` — REWRITTEN: default PicoClaw template replaced with Pika v3 user context from Notion (CONTEXT.md §2.3). Manager garry, server paths, 5 work modes, risk matrix. 44 lines.
+- `pkg/pika/context_manager.go` — MOD: added 5 exported getters (GetArchivist, GetStateProvider, GetPlanStore, ExtractActivePlan, BuildDegradationBlock) for PromptContributor access. BuildSystemPrompt() preserved but no longer called from Assemble.
+- `pkg/agent/context_pika.go` — REWRITTEN: Assemble() returns empty SystemPrompt (pipeline falls to upstream else-branch). 4 new PromptContributor structs registered: pikaMemoryBriefContributor (pika:memory_brief), pikaTrailContributor (pika:trail), pikaActivePlanContributor (pika:active_plan), pikaDegradationContributor (pika:degradation). 379 lines.
+- `pkg/agent/context.go` — MOD: getIdentity() patched — removed MEMORY.md and Daily Notes references from workspace description, removed rule 3 (Memory update instruction), reduced Sprintf args from 6 to 3. Prevents conflict with Archivist memory management.
+- **Breaking:** System prompt assembly path changed from Pika if-branch to upstream else-branch. Prompt content now comes from AGENT.md/SOUL.md/USER.md (upstream LoadBootstrapFiles) + 4 PromptContributors instead of CORE.md/CONTEXT.md (which never existed as files).
+- **Rollback:** `git revert` of commit. Restores old context_pika.go (BuildSystemPrompt path), old getIdentity() with MEMORY.md refs, old bootstrap file contents. Pika returns to if-branch (same behavior as before Phase В).
+- **Dependencies:** pkg/agent/prompt.go (PromptContributor interface, PromptRegistry), pkg/pika/context_manager.go (Trail, Meta, Archivist, SystemStateProvider), pkg/agent/context.go (ContextBuilder.RegisterPromptContributor)
+- **Design decisions:**
+  - Upstream else-branch chosen over custom if-branch: one prompt assembly path instead of two. Upstream provides identity, bootstrap files, skills catalog, dynamic context, conversation summary. Pika adds 4 contributors via PromptRegistry.
+  - MEMORY.md references removed from getIdentity(): prevents model from writing to MEMORY.md (conflicts with Archivist-managed bot_memory.db). GetMemoryContext() already returns empty (file deleted in Phase Б).
+  - META removed from system prompt: was always non-empty (made BuildSystemPrompt never return ""). Channel payload delivery deferred to follow-up PR.
+  - CORE.md/CONTEXT.md were never created as files — content was always in Notion SSOT. Now properly mapped: CORE.md content → AGENT.md, personality → SOUL.md, context → USER.md.
+  - PlanStore updated inside pikaActivePlanContributor for wave 4 compatibility.

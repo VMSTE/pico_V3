@@ -335,3 +335,36 @@ func (cm *PikaContextManager) GetTrail() *Trail {
 func (cm *PikaContextManager) GetMeta() *Meta {
 	return cm.meta
 }
+
+// --- Phase В (ТЗ-v2-8j): exported getters for PromptContributor access ---
+
+// GetArchivist returns the ArchivistCaller for MEMORY BRIEF contributor.
+func (cm *PikaContextManager) GetArchivist() ArchivistCaller {
+	return cm.archivist
+}
+
+// GetStateProvider returns the SystemStateProvider for DEGRADATION contributor.
+func (cm *PikaContextManager) GetStateProvider() SystemStateProvider {
+	return cm.stateProvider
+}
+
+// GetPlanStore returns the ActivePlanStore for ACTIVE_PLAN contributor.
+func (cm *PikaContextManager) GetPlanStore() *ActivePlanStore {
+	return cm.planStore
+}
+
+// ExtractActivePlan extracts <plan> block from last reasoning.
+// Exported wrapper for PromptContributor access.
+func (cm *PikaContextManager) ExtractActivePlan(
+	ctx context.Context, sessionKey string,
+) string {
+	return cm.extractActivePlan(ctx, sessionKey)
+}
+
+// BuildDegradationBlock returns the DEGRADATION text (empty if healthy).
+// Exported wrapper for PromptContributor access.
+func (cm *PikaContextManager) BuildDegradationBlock() string {
+	var sb strings.Builder
+	cm.injectDegradation(&sb)
+	return sb.String()
+}
