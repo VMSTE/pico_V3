@@ -331,3 +331,12 @@ Each entry maps to a single wave/phase and its merged PR.
   - CLI `--reset-prompts` flag is one-shot override: resets prompts in this run without changing config.
   - Only `prompts/*.md` are protected; other workspace files (SOUL.md, USER.md, skills/) update on re-onboard. Rationale: prompts are user-tunable via hot-reload, other files are upstream templates.
   - WebUI dashboard toggle deferred to separate follow-up (frontend change).
+
+### [2026-05-10] feat(pika): ТЗ-v2-8l part 2c — WebUI toggle for prompt protection — wave 8
+- **ТЗ:** ТЗ-v2-8l (часть 2c — WebUI)
+- **PR:** #TBD
+- **Files:**
+  - `web/frontend/src/components/config/form-model.ts` — MODIFIED: added `preserveUserPrompts` field, default, and config parser
+  - `web/frontend/src/components/config/config-sections.tsx` — MODIFIED: added `OnboardSection` with toggle
+  - `web/frontend/src/components/config/config-page.tsx` — MODIFIED: import, render, and patchAppConfig mapping
+- **Breaking:** None

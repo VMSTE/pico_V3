@@ -22,6 +22,7 @@ import {
   DevicesSection,
   ExecSection,
   LauncherSection,
+  OnboardSection,
   RuntimeSection,
 } from "@/components/config/config-sections"
 import {
@@ -273,6 +274,9 @@ export function ConfigPage() {
             enabled: form.devicesEnabled,
             monitor_usb: form.monitorUSB,
           },
+          onboard: {
+            preserve_user_prompts: form.preserveUserPrompts,
+          },
         })
 
         setBaseline(form)
@@ -431,6 +435,8 @@ export function ConfigPage() {
                 }
                 onAutoStartChange={setAutoStartEnabled}
               />
+
+              <OnboardSection form={form} onFieldChange={updateField} />
 
               {!isDirty && actionButtons}
             </div>

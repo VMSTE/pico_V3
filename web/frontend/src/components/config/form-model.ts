@@ -25,6 +25,7 @@ export interface CoreConfigForm {
   heartbeatInterval: string
   devicesEnabled: boolean
   monitorUSB: boolean
+  preserveUserPrompts: boolean
 }
 
 export interface LauncherForm {
@@ -91,6 +92,7 @@ export const EMPTY_FORM: CoreConfigForm = {
   heartbeatInterval: "30",
   devicesEnabled: false,
   monitorUSB: true,
+  preserveUserPrompts: true,
 }
 
 export const EMPTY_LAUNCHER_FORM: LauncherForm = {
@@ -133,6 +135,7 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
   const session = asRecord(root.session)
   const heartbeat = asRecord(root.heartbeat)
   const devices = asRecord(root.devices)
+    const onboard = asRecord(root.onboard)
   const tools = asRecord(root.tools)
   const cron = asRecord(tools.cron)
   const exec = asRecord(tools.exec)
@@ -228,6 +231,10 @@ export function buildFormFromConfig(config: unknown): CoreConfigForm {
       devices.monitor_usb === undefined
         ? EMPTY_FORM.monitorUSB
         : asBool(devices.monitor_usb),
+      preserveUserPrompts:
+        onboard.preserve_user_prompts === undefined
+          ? EMPTY_FORM.preserveUserPrompts
+          : asBool(onboard.preserve_user_prompts),
   }
 }
 

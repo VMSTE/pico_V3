@@ -663,3 +663,27 @@ export function DevicesSection({
     </ConfigSectionCard>
   )
 }
+
+interface OnboardSectionProps {
+  form: CoreConfigForm
+  onFieldChange: UpdateCoreField
+}
+
+export function OnboardSection({
+  form,
+  onFieldChange,
+}: OnboardSectionProps) {
+  return (
+    <ConfigSectionCard title="Onboard">
+      <SwitchCardField
+        label="Preserve user prompts"
+        hint="Keep user-edited prompts in workspace/prompts/ during reinstall. Disable to reset prompts to defaults on next onboard."
+        layout="setting-row"
+        checked={form.preserveUserPrompts}
+        onCheckedChange={(checked) =>
+          onFieldChange("preserveUserPrompts", checked)
+        }
+      />
+    </ConfigSectionCard>
+  )
+}
