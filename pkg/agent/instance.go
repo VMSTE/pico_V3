@@ -117,8 +117,10 @@ func NewAgentInstance(
 		toolsRegistry.Register(tools.NewAppendFileTool(workspace, restrict, allowWritePaths))
 	}
 
-	sessionsDir := filepath.Join(workspace, "sessions")
-	sessions := initSessionStore(sessionsDir)
+	// PIKA-V3 Phase B: use MemoryDBPath from config instead of hardcoded sessions/
+	memoryDBPath := cfg.Agents.Defaults.MemoryDBPath
+	migrateMemoryDB(workspace, memoryDBPath)
+	sessions := initSessionStore(memoryDBPath)
 
 	mcpDiscoveryActive := cfg.Tools.MCP.Enabled && cfg.Tools.MCP.Discovery.Enabled
 	contextBuilder := NewContextBuilder(workspace).
@@ -357,13 +359,54 @@ func (a *AgentInstance) Close() error {
 	return nil
 }
 
+// PIKA-V3 Phase B: migrateMemoryDB moves bot_memory.db from legacy
+// sessions/ path to the configured MemoryDBPath (typically memory/).
+// No-op if target already exists or legacy file is absent.
+func migrateMemoryDB(workspace, newPath string) {
+	oldPath := filepath.Join(workspace, "sessions", "bot_memory.db")
+
+	// If target already exists — nothing to do.
+	if _, err := os.Stat(newPath); err == nil {
+		return
+	}
+
+	// If legacy file does not exist — nothing to migrate.
+	info, err := os.Stat(oldPath)
+	if err != nil || info.IsDir() {
+		return
+	}
+
+	// Ensure target directory exists.
+	if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
+		logger.WarnCF("agent",
+			"pika/memory: cannot create target dir; skipping migration",
+			map[string]any{"error": err.Error(), "path": newPath})
+		return
+	}
+
+	// Rename (atomic on same filesystem).
+	if err := os.Rename(oldPath, newPath); err != nil {
+		logger.WarnCF("agent",
+			"pika/memory: migration rename failed; will create fresh DB",
+			map[string]any{
+				"error":   err.Error(),
+				"oldPath": oldPath,
+				"newPath": newPath,
+			})
+		return
+	}
+
+	logger.InfoCF("agent",
+		"pika/memory: migrated bot_memory.db from sessions/ to configured path",
+		map[string]any{"oldPath": oldPath, "newPath": newPath})
+}
+
 // PIKA-V3: initSessionStore creates the session persistence backend
 // using PikaSessionStore backed by SQLite (bot_memory.db).
 // Falls back to in-memory SQLite if file-based init fails.
 // Panics only when in-memory fallback also fails (unrecoverable).
-func initSessionStore(dir string) session.SessionStore {
-	os.MkdirAll(dir, 0o755)
-	dbPath := filepath.Join(dir, "bot_memory.db")
+func initSessionStore(dbPath string) session.SessionStore {
+	os.MkdirAll(filepath.Dir(dbPath), 0o755)
 
 	db, err := pika.Migrate(dbPath)
 	if err != nil {
