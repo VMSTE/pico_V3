@@ -51,6 +51,7 @@ type Config struct {
 	Clarify  ClarifyConfig  `json:"clarify,omitempty"  yaml:"-"`
 	Security SecurityConfig `json:"security,omitempty" yaml:"-"`
 	Health   HealthConfig   `json:"health,omitempty"   yaml:"-"`
+	Onboard  OnboardConfig  `json:"onboard,omitempty"  yaml:"-"`
 
 	// cache for sensitive values and compiled regex (computed once)
 	sensitiveCache *SensitiveDataCache

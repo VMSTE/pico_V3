@@ -495,3 +495,8 @@ func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 
 	return resolved
 }
+
+// OnboardConfig defines onboarding behavior settings. PIKA-V3.
+type OnboardConfig struct {
+	PreserveUserPrompts bool `json:"preserve_user_prompts"`
+}

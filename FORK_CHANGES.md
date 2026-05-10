@@ -315,3 +315,19 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Files:**
 - `go.mod` — MOD: `go 1.25.9` → `go 1.25.10`. Fixes 3 stdlib vulnerabilities: GO-2026-4976 (net/http/httputil), GO-2026-4971 (net), GO-2026-4918 (net/http).
 - **Breaking:** None (patch-level stdlib upgrade only)
+
+### [2026-05-10] fix(pika): ТЗ-v2-8l — Upstream embed fix + prompt protection — wave 8
+- **ТЗ:** ТЗ-v2-8l
+- **PR:** #TBD
+- **Files:**
+  - `cmd/picoclaw/internal/onboard/helpers.go` — MOD: `onboard()` signature: added `resetPrompts bool`. `createWorkspaceTemplates()` signature: added `preservePrompts bool`. `copyEmbeddedToTarget()` signature: added `preservePrompts bool`. Added skip logic: when `preservePrompts=true`, existing `prompts/*.md` files are not overwritten on re-onboard. Added `"strings"` import.
+  - `cmd/picoclaw/internal/onboard/command.go` — MOD: added `--reset-prompts` CLI flag (default `false`). Passes `resetPrompts` to `onboard()`.
+  - `pkg/config/config_pika.go` — MOD: added `OnboardConfig` struct with `PreserveUserPrompts bool`.
+  - `pkg/config/config.go` — MOD: added `Onboard OnboardConfig` field to `Config` struct.
+  - `pkg/config/defaults.go` — MOD: added `Onboard: OnboardConfig{PreserveUserPrompts: true}` default.
+- **Breaking:** None (additive only, default behavior preserved for first onboard)
+- **Design decisions:**
+  - Prompt protection is config-driven (`onboard.preserve_user_prompts`, default `true`) — user controls via WebUI toggle or config.json.
+  - CLI `--reset-prompts` flag is one-shot override: resets prompts in this run without changing config.
+  - Only `prompts/*.md` are protected; other workspace files (SOUL.md, USER.md, skills/) update on re-onboard. Rationale: prompts are user-tunable via hot-reload, other files are upstream templates.
+  - WebUI dashboard toggle deferred to separate follow-up (frontend change).

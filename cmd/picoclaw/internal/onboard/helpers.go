@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/term"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/credential"
 )
 
-func onboard(encrypt bool) {
+func onboard(encrypt bool, resetPrompts bool) {
 	configPath := internal.GetConfigPath()
 
 	configExists := false
@@ -78,7 +79,8 @@ func onboard(encrypt bool) {
 	}
 
 	workspace := cfg.WorkspacePath()
-	createWorkspaceTemplates(workspace)
+	preservePrompts := cfg.Onboard.PreserveUserPrompts && !resetPrompts
+	createWorkspaceTemplates(workspace, preservePrompts)
 
 	cliui.PrintOnboardComplete(internal.Logo, encrypt, configPath)
 }
@@ -138,14 +140,14 @@ func setupSSHKey() error {
 	return nil
 }
 
-func createWorkspaceTemplates(workspace string) {
-	err := copyEmbeddedToTarget(workspace)
+func createWorkspaceTemplates(workspace string, preservePrompts bool) {
+	err := copyEmbeddedToTarget(workspace, preservePrompts)
 	if err != nil {
 		fmt.Printf("Error copying workspace templates: %v\n", err)
 	}
 }
 
-func copyEmbeddedToTarget(targetDir string) error {
+func copyEmbeddedToTarget(targetDir string, preservePrompts bool) error {
 	// Ensure target directory exists
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return fmt.Errorf("Failed to create target directory: %w", err)
@@ -182,6 +184,13 @@ func copyEmbeddedToTarget(targetDir string) error {
 		// Ensure target file's directory exists
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 			return fmt.Errorf("Failed to create directory %s: %w", filepath.Dir(targetPath), err)
+		}
+
+		// PIKA-V3: protect user-edited prompts on re-onboard
+		if preservePrompts && strings.HasPrefix(new_path, "prompts/") {
+			if _, err := os.Stat(targetPath); err == nil {
+				return nil // file exists, skip
+			}
 		}
 
 		// Write file
