@@ -299,3 +299,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - META removed from system prompt: was always non-empty (made BuildSystemPrompt never return ""). Channel payload delivery deferred to follow-up PR.
   - CORE.md/CONTEXT.md were never created as files — content was always in Notion SSOT. Now properly mapped: CORE.md content → AGENT.md, personality → SOUL.md, context → USER.md.
   - PlanStore updated inside pikaActivePlanContributor for wave 4 compatibility.
+
+### [2026-05-10] refactor(pika): ТЗ-v2-8j cleanup — remove dead BuildSystemPrompt code — wave 8
+- **ТЗ:** ТЗ-v2-8j (post Phase В cleanup)
+- **Files:**
+- `pkg/pika/context_manager.go` — MOD: BuildSystemPrompt() gutted to stub (return "", nil). Deleted: loadBootstrapFile(), getCached(), setCached(), InvalidateCache(). Removed struct fields: mu, cachedCore, cachedContext, coreModTime, contextModTime. Removed imports: os, filepath, time, sync. 215 lines (was 370).
+- `pkg/pika/context_manager_test.go` — MOD: deleted 7 dead tests (TestBuildSystemPrompt_*, TestInvalidateCache). 66 lines (was 282). Surviving: TestCompact_NoOp, TestIngest_NoOp, TestClear_NoOp, TestAlwaysHealthyProvider, TestNoopArchivistCaller.
+- **Breaking:** None (BuildSystemPrompt was already dead code — Assemble returns empty SystemPrompt since Phase В)
+- **Design decisions:**
+  - BuildSystemPrompt kept as stub (not deleted) for API compatibility — method signature preserved, body returns "", nil.
+  - CORE.md/CONTEXT.md loading, file cache, InvalidateCache all removed — no longer needed since prompt content comes from upstream LoadBootstrapFiles (AGENT.md/SOUL.md/USER.md) + 4 PromptContributors.
