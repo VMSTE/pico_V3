@@ -140,6 +140,10 @@ type Archivist struct {
 	mu          sync.RWMutex
 	cachedBrief string
 	cachedFocus *Focus
+
+	// PIKA-V3: transient tracking for atom_usage (TZ-v2-9a F-2)
+	currentSessionKey string
+	currentSpanID     string
 }
 
 // NewArchivist creates a new Archivist. All dependencies injected.
@@ -221,6 +225,17 @@ func (a *Archivist) BuildPrompt(
 		}, nil
 	}
 
+	// PIKA-V3: Trace span (TZ-v2-9a block 3)
+	spanIDarchivist := fmt.Sprintf("span_archivist_%d", time.Now().UnixNano())
+	a.currentSessionKey = input.SessionKey
+	a.currentSpanID = spanIDarchivist
+	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
+		SpanID: spanIDarchivist, Component: "archivist", Operation: "build_prompt",
+		StartedAt: time.Now(), Status: "running",
+	})
+	defer func() {
+		_ = a.mem.CompleteSpan(ctx, spanIDarchivist, "done", nil, "", "")
+	}()
 	// Apply timeout
 	tMs := a.cfg.BuildPromptTimeoutMs
 	ctx, cancel := context.WithTimeout(
@@ -561,6 +576,9 @@ func (a *Archivist) searchKnowledge(
 			atom.Polarity != polarity {
 			continue
 		}
+		// PIKA-V3: record atom_usage (TZ-v2-9a F-2)
+		tid, _ := a.mem.GetMaxTurnID(ctx, a.currentSessionKey)
+		_ = a.mem.InsertAtomUsage(ctx, atom.AtomID, a.currentSpanID, tid, "BRIEF", nil, nil, "", "", a.currentSpanID)
 		hits = append(hits, KnowledgeHit{
 			Category:   atom.Category,
 			Summary:    atom.Summary,

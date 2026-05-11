@@ -74,6 +74,9 @@ func pikaContextManagerFactory(
 		// PIKA-V3: Store BotMemory ref for RAD reasoning access (TZ-v2-8i).
 		al.botmem = botmem
 
+		// PIKA-V3: Create and wire Telemetry (budget, health, cost) (TZ-v2-9a).
+		al.telemetry = pika.NewTelemetry(pika.TelemetryConfig{}, botmem, nil)
+
 		// PIKA-V3: Mount AutoEvent EventObserver hook (D-136a, TZ-v2-8i, F14).
 		autoHandler := pika.NewAutoEventHandler(botmem, nil, nil, pika.EventClasses{})
 		_ = al.MountHook(HookRegistration{

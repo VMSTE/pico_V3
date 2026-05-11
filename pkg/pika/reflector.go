@@ -154,6 +154,15 @@ func (r *ReflectorPipeline) Run(
 		return nil
 	}
 
+	// PIKA-V3: Trace span (TZ-v2-9a block 3)
+	spanIDreflector := fmt.Sprintf("span_reflector_%d", time.Now().UnixNano())
+	_ = r.mem.InsertSpan(ctx, TraceSpanRow{
+		SpanID: spanIDreflector, Component: "reflector", Operation: "run",
+		StartedAt: time.Now(), Status: "running",
+	})
+	defer func() {
+		_ = r.mem.CompleteSpan(ctx, spanIDreflector, "done", nil, "", "")
+	}()
 	// Step 1: Data prep — fetch knowledge_atoms by scope
 	atoms, err := r.fetchAtoms(ctx, mode)
 	if err != nil {

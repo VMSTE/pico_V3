@@ -11,6 +11,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/constants"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/tools"
 	"github.com/sipeed/picoclaw/pkg/utils"
@@ -571,6 +572,19 @@ toolLoop:
 		}
 		if len(toolResult.Media) > 0 && !toolResult.ResponseHandled {
 			toolResultMsg.Media = append(toolResultMsg.Media, toolResult.Media...)
+		}
+		// PIKA-V3: Record tool call for health sliding window (TZ-v2-9a block 2)
+		if al.telemetry != nil {
+			st := "ok"
+			if toolResult.IsError {
+				st = "error"
+			}
+			al.telemetry.RecordToolCall(pika.CallResult{
+				ToolName:  toolName,
+				LatencyMs: toolDuration.Milliseconds(),
+				Status:    st,
+				Timestamp: time.Now(),
+			})
 		}
 		al.emitEvent(
 			EventKindToolExecEnd,

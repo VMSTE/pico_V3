@@ -4,8 +4,11 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
@@ -21,6 +24,7 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 	var resp *AssembleResponse
 	var history []providers.Message
 	var summary string
+	assembleStart := time.Now() // TZ-v2-9a F-3: measure prompt build time
 	if !ts.opts.NoHistory {
 		var err error
 		resp, err = p.ContextManager.Assemble(ctx, &AssembleRequest{
@@ -87,6 +91,23 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 		}
 
 		systemPrompt := strings.Join(parts, "\n\n---\n\n")
+
+		// --- TZ-v2-9a F-3: record prompt composition snapshot ---
+		if bm := p.al.botmem; bm != nil {
+			snapTS := time.Now()
+			snapID := fmt.Sprintf("psnap_%d", snapTS.UnixNano())
+			trID := fmt.Sprintf("ptrace_%d", snapTS.UnixNano())
+			tid, _ := bm.GetMaxTurnID(ctx, ts.sessionKey)
+			h := sha256.Sum256([]byte(systemPrompt))
+			preview := systemPrompt
+			if len(preview) > 200 {
+				preview = preview[:200]
+			}
+			_ = bm.InsertPromptSnapshot(ctx, snapID, trID, ts.sessionKey,
+				tid, "", "", "",
+				map[string]int{"core": len(resp.SystemPrompt) / 4, "context": 0, "brief": 0, "trail": 0, "plan": 0},
+				hex.EncodeToString(h[:]), preview, int(time.Since(assembleStart).Milliseconds()))
+		}
 
 		messages = []providers.Message{
 			{Role: "system", Content: systemPrompt},
