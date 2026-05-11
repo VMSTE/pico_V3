@@ -576,9 +576,9 @@ func (a *Archivist) searchKnowledge(
 			atom.Polarity != polarity {
 			continue
 		}
-			// PIKA-V3: record atom_usage (TZ-v2-9a F-2)
-			tid, _ := a.mem.GetMaxTurnID(ctx, a.currentSessionKey)
-			_ = a.mem.InsertAtomUsage(ctx, atom.AtomID, a.currentSpanID, tid, "BRIEF", nil, nil, "", "", a.currentSpanID)
+		// PIKA-V3: record atom_usage (TZ-v2-9a F-2)
+		tid, _ := a.mem.GetMaxTurnID(ctx, a.currentSessionKey)
+		_ = a.mem.InsertAtomUsage(ctx, atom.AtomID, a.currentSpanID, tid, "BRIEF", nil, nil, "", "", a.currentSpanID)
 		hits = append(hits, KnowledgeHit{
 			Category:   atom.Category,
 			Summary:    atom.Summary,

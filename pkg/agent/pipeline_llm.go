@@ -182,7 +182,6 @@ func (p *Pipeline) CallLLM(
 		return exec.activeProvider.Chat(providerCtx, messagesForCall, toolDefsForCall, exec.llmModel, exec.llmOpts)
 	}
 
-
 	// PIKA-V3: Budget check before LLM call (TZ-v2-9a F-1)
 	if al.telemetry != nil {
 		allowed, remaining := al.telemetry.CheckBudget()

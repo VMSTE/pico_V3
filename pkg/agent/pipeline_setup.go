@@ -105,7 +105,7 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 			}
 			_ = bm.InsertPromptSnapshot(ctx, snapID, trID, ts.sessionKey,
 				tid, "", "", "",
-				map[string]int{"core": len(resp.SystemPrompt)/4, "context": 0, "brief": 0, "trail": 0, "plan": 0},
+				map[string]int{"core": len(resp.SystemPrompt) / 4, "context": 0, "brief": 0, "trail": 0, "plan": 0},
 				hex.EncodeToString(h[:]), preview, int(time.Since(assembleStart).Milliseconds()))
 		}
 
