@@ -216,6 +216,11 @@ func NewMCPSecurityPipeline(
 	return p
 }
 
+// SetDiagnostics injects the diagnostics engine (post-construction wiring).
+func (p *MCPSecurityPipeline) SetDiagnostics(d *DiagnosticsEngine) {
+	p.diag = d
+}
+
 func compileAll(pats []string) []*regexp.Regexp {
 	rs := make([]*regexp.Regexp, len(pats))
 	for i, p := range pats {

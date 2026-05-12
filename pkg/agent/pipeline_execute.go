@@ -14,6 +14,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/tools"
+	integration "github.com/sipeed/picoclaw/pkg/tools/integration"
 	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
@@ -457,6 +458,27 @@ toolLoop:
 			return ToolControlBreak
 		}
 
+
+				// PIKA-V3: MCP Security — sanitize MCP tool output (TZ-v2-9b).
+				if al.mcpSecurity != nil && toolResult != nil && !toolResult.IsError {
+					if t, ok := ts.agent.Tools.Get(toolName); ok {
+						if mcpT, ok := t.(*integration.MCPTool); ok {
+							san := al.mcpSecurity.SanitizeOutput(mcpT.ServerName(), mcpT.ToolName(), toolResult.ForLLM)
+							switch san.Verdict {
+							case pika.VerdictBlock:
+								toolResult.ForLLM = fmt.Sprintf("[MCP output blocked: %s]", san.Reasons)
+								toolResult.IsError = true
+							case pika.VerdictSuspicious:
+								toolResult.ForLLM = san.Sanitized
+								al.mcpSecurity.SetTaint(mcpT.ServerName(), 0)
+							default:
+								if san.Sanitized != "" {
+									toolResult.ForLLM = san.Sanitized
+								}
+							}
+						}
+					}
+				}
 		if al.hooks != nil {
 			toolResp, decision := al.hooks.AfterTool(turnCtx, &ToolResultHookResponse{
 				Meta:      ts.eventMeta("runTurn", "turn.tool.after"),

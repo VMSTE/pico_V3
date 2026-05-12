@@ -145,6 +145,11 @@ func NewReflectorPipeline(
 	}
 }
 
+// SetDiagnostics injects the diagnostics engine (post-construction wiring).
+func (p *ReflectorPipeline) SetDiagnostics(d *DiagnosticsEngine) {
+	p.diag = d
+}
+
 // Run executes the reflector pipeline for the given mode.
 // Pipeline: data prep → LLM → parse → apply.
 func (r *ReflectorPipeline) Run(

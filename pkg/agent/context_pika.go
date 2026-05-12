@@ -61,14 +61,41 @@ func pikaContextManagerFactory(
 	if botmem != nil && al.cfg != nil {
 		archProvider := resolveArchivistProvider(al.cfg)
 		if archProvider != nil {
-			arch = pika.NewArchivist(
+			// PIKA-V3: Create DiagnosticsEngine (TZ-v2-9b).
+			al.diag = pika.NewDiagnosticsEngine(botmem, nil, map[string]string{})
+
+			// PIKA-V3: Create Archivist with diagnostics (TZ-v2-9b).
+			realArch := pika.NewArchivist(
 				botmem, archProvider, trail, meta,
 				pika.DefaultArchivistConfig(),
 			)
-			logger.InfoCF("pika",
-				"Real Archivist wired successfully",
-				nil,
+			realArch.SetDiagnostics(al.diag)
+			arch = realArch
+			logger.InfoCF("pika", "Archivist + Diagnostics wired (TZ-v2-9b)", nil)
+
+			// PIKA-V3: Create Atomizer pipeline (TZ-v2-9b).
+			atomGen := pika.NewAtomIDGenerator(botmem)
+			al.atomizer = pika.NewAtomizer(
+				botmem, atomGen, archProvider, al.telemetry,
+				pika.DefaultAtomizerConfig(),
 			)
+			al.atomizer.SetDiagnostics(al.diag)
+			logger.InfoCF("pika", "Atomizer wired (TZ-v2-9b)", nil)
+
+			// PIKA-V3: Create Reflector pipeline for cron-driven reflection (TZ-v2-9b).
+			al.reflector = pika.NewReflectorPipeline(
+				botmem, atomGen, archProvider, al.telemetry,
+				pika.DefaultReflectorConfig(),
+			)
+			al.reflector.SetDiagnostics(al.diag)
+			logger.InfoCF("pika", "Reflector wired (TZ-v2-9b)", nil)
+
+			// PIKA-V3: Create MCPSecurity pipeline (TZ-v2-9b).
+			al.mcpSecurity = pika.NewMCPSecurityPipeline(
+				pika.DefaultMCPGuardConfig(), nil, al.telemetry,
+			)
+			al.mcpSecurity.SetDiagnostics(al.diag)
+			logger.InfoCF("pika", "MCPSecurity wired (TZ-v2-9b)", nil)
 		}
 
 		// PIKA-V3: Store BotMemory ref for RAD reasoning access (TZ-v2-8i).
