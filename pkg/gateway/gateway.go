@@ -649,7 +649,10 @@ func restartServices(
 		if mSched == "" {
 			mSched = "1st 05:30"
 		}
-		if regErr := pika.RegisterAnalyticsJobs(runningServices.CronService, analyticsEngine, wSched, mSched); regErr != nil {
+		regErr := pika.RegisterAnalyticsJobs(
+			runningServices.CronService, analyticsEngine, wSched, mSched,
+		)
+		if regErr != nil {
 			fmt.Printf("  ✗ Analytics cron registration failed: %v\n", regErr)
 		} else {
 			fmt.Println("  ✓ Analytics cron registered")
