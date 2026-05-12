@@ -392,7 +392,6 @@ func (p *MCPSecurityPipeline) GetTaint() TaintState {
 	return p.taint
 }
 
-
 // ProcessToolOutput is a wiring facade: runs SanitizeOutput + applies verdict.
 // toolID is the tool registry name; if it contains "__", splits as server__tool.
 func (p *MCPSecurityPipeline) ProcessToolOutput(toolID string, raw string) (string, bool) {
