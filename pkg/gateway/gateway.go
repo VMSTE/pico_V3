@@ -377,8 +377,12 @@ func setupAndStartServices(
 		aCfg := cfg.Analytics
 		wSched := aCfg.Schedule.Weekly
 		mSched := aCfg.Schedule.Monthly
-		if wSched == "" { wSched = "Sun 04:30" }
-		if mSched == "" { mSched = "1st 05:30" }
+		if wSched == "" {
+			wSched = "Sun 04:30"
+		}
+		if mSched == "" {
+			mSched = "1st 05:30"
+		}
 		if regErr := pika.RegisterAnalyticsJobs(runningServices.CronService, analyticsEngine, wSched, mSched); regErr != nil {
 			fmt.Printf("  ✗ Analytics cron registration failed: %v\n", regErr)
 		} else {
@@ -636,15 +640,18 @@ func restartServices(
 		aCfg := cfg.Analytics
 		wSched := aCfg.Schedule.Weekly
 		mSched := aCfg.Schedule.Monthly
-		if wSched == "" { wSched = "Sun 04:30" }
-		if mSched == "" { mSched = "1st 05:30" }
+		if wSched == "" {
+			wSched = "Sun 04:30"
+		}
+		if mSched == "" {
+			mSched = "1st 05:30"
+		}
 		if regErr := pika.RegisterAnalyticsJobs(runningServices.CronService, analyticsEngine, wSched, mSched); regErr != nil {
 			fmt.Printf("  ✗ Analytics cron registration failed: %v\n", regErr)
 		} else {
 			fmt.Println("  ✓ Analytics cron registered")
 		}
 	}
-		
 
 	// PIKA-V3: Register Reflector cron jobs (TZ-v2-9b).
 	if refl := al.GetReflector(); refl != nil {
@@ -654,9 +661,15 @@ func restartServices(
 				Weekly:  cfg.ResolveAgentConfig("reflexor").Schedule.Weekly,
 				Monthly: cfg.ResolveAgentConfig("reflexor").Schedule.Monthly,
 			}
-			if sched.Daily == "" { sched.Daily = "03:00" }
-			if sched.Weekly == "" { sched.Weekly = "Sun 04:00" }
-			if sched.Monthly == "" { sched.Monthly = "1st 05:00" }
+			if sched.Daily == "" {
+				sched.Daily = "03:00"
+			}
+			if sched.Weekly == "" {
+				sched.Weekly = "Sun 04:00"
+			}
+			if sched.Monthly == "" {
+				sched.Monthly = "1st 05:00"
+			}
 			if regErr := pika.RegisterReflectorJobs(runningServices.CronService, refl, sched); regErr != nil {
 				fmt.Printf("  ✗ Reflector cron registration failed: %v\n", regErr)
 			} else {

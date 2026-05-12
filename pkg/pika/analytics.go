@@ -178,19 +178,42 @@ func NewAnalyticsEngine(
 
 // applyAnalyticsDefaults fills zero-value config fields with hardcoded defaults. PIKA-V3.
 func applyAnalyticsDefaults(cfg config.AnalyticsConfig) config.AnalyticsConfig {
-	if cfg.ToolFailRatePct == 0 { cfg.ToolFailRatePct = 10.0 }
-	if cfg.ErrorRatePct == 0 { cfg.ErrorRatePct = 5.0 }
-	if cfg.LatencyP95Ms == 0 { cfg.LatencyP95Ms = 15000 }
-	if cfg.UnusedAtomsPct == 0 { cfg.UnusedAtomsPct = 20.0 }
-	if cfg.StaleAtomsPct == 0 { cfg.StaleAtomsPct = 10.0 }
-	if cfg.SubagentErrors == 0 { cfg.SubagentErrors = 5 }
-	if cfg.DeltaSignificantPct == 0 { cfg.DeltaSignificantPct = 50.0 }
-	if cfg.ReportMaxTelegramChars == 0 { cfg.ReportMaxTelegramChars = 4000 }
-	if cfg.TopToolsLimit == 0 { cfg.TopToolsLimit = 10 }
-	if cfg.TopAtomsLimit == 0 { cfg.TopAtomsLimit = 10 }
-	if cfg.TopTasksLimit == 0 { cfg.TopTasksLimit = 5 }
+	if cfg.ToolFailRatePct == 0 {
+		cfg.ToolFailRatePct = 10.0
+	}
+	if cfg.ErrorRatePct == 0 {
+		cfg.ErrorRatePct = 5.0
+	}
+	if cfg.LatencyP95Ms == 0 {
+		cfg.LatencyP95Ms = 15000
+	}
+	if cfg.UnusedAtomsPct == 0 {
+		cfg.UnusedAtomsPct = 20.0
+	}
+	if cfg.StaleAtomsPct == 0 {
+		cfg.StaleAtomsPct = 10.0
+	}
+	if cfg.SubagentErrors == 0 {
+		cfg.SubagentErrors = 5
+	}
+	if cfg.DeltaSignificantPct == 0 {
+		cfg.DeltaSignificantPct = 50.0
+	}
+	if cfg.ReportMaxTelegramChars == 0 {
+		cfg.ReportMaxTelegramChars = 4000
+	}
+	if cfg.TopToolsLimit == 0 {
+		cfg.TopToolsLimit = 10
+	}
+	if cfg.TopAtomsLimit == 0 {
+		cfg.TopAtomsLimit = 10
+	}
+	if cfg.TopTasksLimit == 0 {
+		cfg.TopTasksLimit = 5
+	}
 	return cfg
 }
+
 // Run executes the analytics pipeline. mode = "weekly" or "monthly".
 func (ae *AnalyticsEngine) Run(ctx context.Context, mode string) error {
 	log.Printf("[analytics] starting mode=%s", mode)
@@ -685,7 +708,11 @@ func analyticsMakeDelta(cur, prev float64) AnalyticsDelta {
 // Anomaly detection
 // ---------------------------------------------------------------------------
 
-func analyticsDetectAnomalies(cur *AnalyticsPeriodMetrics, deltas map[string]AnalyticsDelta, cfg config.AnalyticsConfig) []AnalyticsAnomaly {
+func analyticsDetectAnomalies(
+	cur *AnalyticsPeriodMetrics,
+	deltas map[string]AnalyticsDelta,
+	cfg config.AnalyticsConfig,
+) []AnalyticsAnomaly {
 	var out []AnalyticsAnomaly
 
 	failRate := 0.0
