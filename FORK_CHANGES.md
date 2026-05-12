@@ -382,3 +382,18 @@ Each entry maps to a single wave/phase and its merged PR.
   - DisableTelegramReports controls only periodic reports. Alerts (anomalies, degraded) always go to manager chat — per founder requirement.
   - analytics_cron_service.go created but not wired — CronService migration blocked by SetOnJob dispatcher ordering (documented in ТЗ as Block 4).
   - Reflector schedule uses fallback defaults when config values are empty — backward-compatible with existing deployments without explicit schedule config.
+
+### [2026-05-12] feat(pika): analytics CronService migration — ТЗ-v2-8h block 4 — wave 8
+- **ТЗ:** ТЗ-v2-8h (Block 4)
+- **PR:** #TBD
+- **Files:**
+  - `pkg/gateway/gateway.go` — MODIFIED: analytics engine created before setupCronTool (available in SetOnJob closure). Added `analyticsEngine *pika.AnalyticsEngine` parameter to setupCronTool. HandleAnalyticsJob added to SetOnJob dispatcher (analytics → reflector → fallback chain). RegisterAnalyticsJobs called after CronService.Start() in both setupAndStartServices and restartServices. Removed old ticker block (NewAnalyticsCron).
+  - `pkg/pika/analytics_cron.go` — DELETED: custom ticker-based AnalyticsCron struct (Start/Stop/loop goroutines). Replaced by analytics_cron_service.go (CronService pattern).
+  - `pkg/pika/analytics_cron_test.go` — DELETED: tests for removed ticker (TestNewAnalyticsCron_Defaults, TestNewAnalyticsCron_CustomIntervals, TestAnalyticsCron_StartStop).
+- **Breaking:** None (analytics schedule unchanged, cron expressions generated from same config fields Schedule.Weekly/Monthly)
+- **Dependencies:** pkg/pika/analytics_cron_service.go (wave 8i — already existed, now wired), pkg/cron (upstream CronService)
+- **Design decisions:**
+  - Analytics migrated from custom ticker goroutines to upstream CronService — same pattern as Reflector (RegisterJobs + HandleJob in SetOnJob dispatcher).
+  - Engine created before setupCronTool so it's captured in SetOnJob closure — avoids needing engine in services struct.
+  - analytics_cron_service.go reuses schedToCronExpr from reflector_cron.go — no duplicate parsing logic.
+  - Fallback defaults "Sun 04:30" / "1st 05:30" when config schedule is empty — backward-compatible.
