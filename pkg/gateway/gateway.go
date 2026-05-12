@@ -602,20 +602,25 @@ func restartServices(
 	// PIKA-V3: Analytics cron (D-136a F17, TZ-v2-8i).
 	if botmem := al.GetBotMemory(); botmem != nil {
 		sender := &pika.BusSender{MB: msgBus}
-		engine := pika.NewAnalyticsEngine(botmem, sender, sender, "")
+		aCfg := cfg.Analytics
+		engine := pika.NewAnalyticsEngine(aCfg, botmem, sender, sender, aCfg.QueriesDir)
 		analyticsCron := pika.NewAnalyticsCron(engine, 0, 0)
 		analyticsCron.Start()
 		fmt.Println("  ✓ Analytics cron started")
-	}
+		}
+		
 
 	// PIKA-V3: Register Reflector cron jobs (TZ-v2-9b).
 	if refl := al.GetReflector(); refl != nil {
 		if runningServices.CronService != nil {
 			sched := pika.ReflectorSchedule{
-				Daily:   "03:00",
-				Weekly:  "Sun 04:00",
-				Monthly: "1st 05:00",
+				Daily:   cfg.ResolveAgentConfig("reflexor").Schedule.Daily,
+				Weekly:  cfg.ResolveAgentConfig("reflexor").Schedule.Weekly,
+				Monthly: cfg.ResolveAgentConfig("reflexor").Schedule.Monthly,
 			}
+			if sched.Daily == "" { sched.Daily = "03:00" }
+			if sched.Weekly == "" { sched.Weekly = "Sun 04:00" }
+			if sched.Monthly == "" { sched.Monthly = "1st 05:00" }
 			if regErr := pika.RegisterReflectorJobs(runningServices.CronService, refl, sched); regErr != nil {
 				fmt.Printf("  ✗ Reflector cron registration failed: %v\n", regErr)
 			} else {

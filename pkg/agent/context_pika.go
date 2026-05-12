@@ -67,7 +67,7 @@ func pikaContextManagerFactory(
 			// PIKA-V3: Create Archivist with diagnostics (TZ-v2-9b).
 			realArch := pika.NewArchivist(
 				botmem, archProvider, trail, meta,
-				pika.DefaultArchivistConfig(),
+				mapArchivistConfig(al.cfg.ResolveAgentConfig("archivist")),
 			)
 			realArch.SetDiagnostics(al.diag)
 			arch = realArch
@@ -77,7 +77,7 @@ func pikaContextManagerFactory(
 			atomGen := pika.NewAtomIDGenerator(botmem)
 			al.atomizer = pika.NewAtomizer(
 				botmem, atomGen, archProvider, al.telemetry,
-				pika.DefaultAtomizerConfig(),
+				mapAtomizerConfig(al.cfg.ResolveAgentConfig("atomizer")),
 			)
 			al.atomizer.SetDiagnostics(al.diag)
 			logger.InfoCF("pika", "Atomizer wired (TZ-v2-9b)", nil)
@@ -85,14 +85,14 @@ func pikaContextManagerFactory(
 			// PIKA-V3: Create Reflector pipeline for cron-driven reflection (TZ-v2-9b).
 			al.reflector = pika.NewReflectorPipeline(
 				botmem, atomGen, archProvider, al.telemetry,
-				pika.DefaultReflectorConfig(),
+				mapReflectorConfig(al.cfg.ResolveAgentConfig("reflexor")),
 			)
 			al.reflector.SetDiagnostics(al.diag)
 			logger.InfoCF("pika", "Reflector wired (TZ-v2-9b)", nil)
 
 			// PIKA-V3: Create MCPSecurity pipeline (TZ-v2-9b).
 			al.mcpSecurity = pika.NewMCPSecurityPipeline(
-				pika.DefaultMCPGuardConfig(), nil, al.telemetry,
+				mapMCPGuardConfig(al.cfg.ResolveAgentConfig("mcp_guard")), nil, al.telemetry,
 			)
 			al.mcpSecurity.SetDiagnostics(al.diag)
 			logger.InfoCF("pika", "MCPSecurity wired (TZ-v2-9b)", nil)
@@ -102,7 +102,7 @@ func pikaContextManagerFactory(
 		al.botmem = botmem
 
 		// PIKA-V3: Create and wire Telemetry (budget, health, cost) (TZ-v2-9a).
-		al.telemetry = pika.NewTelemetry(pika.TelemetryConfig{}, botmem, nil)
+		al.telemetry = pika.NewTelemetry(mapTelemetryConfig(al.cfg.Health, al.cfg.ResolveAgentConfig("main").Budget), botmem, nil)
 
 		// PIKA-V3: Mount AutoEvent EventObserver hook (D-136a, TZ-v2-8i, F14).
 		autoHandler := pika.NewAutoEventHandler(botmem, nil, nil, pika.EventClasses{})

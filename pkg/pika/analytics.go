@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sipeed/picoclaw/pkg/config"
 )
 
 // ---------------------------------------------------------------------------
@@ -25,19 +27,6 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	thresholdToolFailRatePct     = 10.0
-	thresholdErrorRatePct        = 5.0
-	thresholdLatencyP95Ms        = 15000
-	thresholdUnusedAtomsPct      = 20.0
-	thresholdStaleAtomsPct       = 10.0
-	thresholdSubagentErrors      = 5
-	thresholdDeltaSignificantPct = 50.0
-
-	reportMaxTelegramChars = 4000
-	topToolsLimit          = 10
-	topAtomsLimit          = 10
-	topTasksLimit          = 5
-
 	registryKindSnapshot  = "snapshot"
 	registryKeyWeeklyPfx  = "analytics_weekly_"
 	registryKeyMonthlyPfx = "analytics_monthly_"
@@ -163,6 +152,7 @@ type AnalyticsReport struct {
 // ---------------------------------------------------------------------------
 
 type AnalyticsEngine struct {
+	cfg        config.AnalyticsConfig
 	mem        *BotMemory
 	sender     TelegramSender
 	mgrSender  TelegramSender
@@ -170,12 +160,15 @@ type AnalyticsEngine struct {
 }
 
 func NewAnalyticsEngine(
+	cfg config.AnalyticsConfig,
 	mem *BotMemory,
 	sender TelegramSender,
 	mgrSender TelegramSender,
 	queriesDir string,
 ) *AnalyticsEngine {
+	cfg = applyAnalyticsDefaults(cfg)
 	return &AnalyticsEngine{
+		cfg:        cfg,
 		mem:        mem,
 		sender:     sender,
 		mgrSender:  mgrSender,
@@ -183,6 +176,21 @@ func NewAnalyticsEngine(
 	}
 }
 
+// applyAnalyticsDefaults fills zero-value config fields with hardcoded defaults. PIKA-V3.
+func applyAnalyticsDefaults(cfg config.AnalyticsConfig) config.AnalyticsConfig {
+	if cfg.ToolFailRatePct == 0 { cfg.ToolFailRatePct = 10.0 }
+	if cfg.ErrorRatePct == 0 { cfg.ErrorRatePct = 5.0 }
+	if cfg.LatencyP95Ms == 0 { cfg.LatencyP95Ms = 15000 }
+	if cfg.UnusedAtomsPct == 0 { cfg.UnusedAtomsPct = 20.0 }
+	if cfg.StaleAtomsPct == 0 { cfg.StaleAtomsPct = 10.0 }
+	if cfg.SubagentErrors == 0 { cfg.SubagentErrors = 5 }
+	if cfg.DeltaSignificantPct == 0 { cfg.DeltaSignificantPct = 50.0 }
+	if cfg.ReportMaxTelegramChars == 0 { cfg.ReportMaxTelegramChars = 4000 }
+	if cfg.TopToolsLimit == 0 { cfg.TopToolsLimit = 10 }
+	if cfg.TopAtomsLimit == 0 { cfg.TopAtomsLimit = 10 }
+	if cfg.TopTasksLimit == 0 { cfg.TopTasksLimit = 5 }
+	return cfg
+}
 // Run executes the analytics pipeline. mode = "weekly" or "monthly".
 func (ae *AnalyticsEngine) Run(ctx context.Context, mode string) error {
 	log.Printf("[analytics] starting mode=%s", mode)
@@ -200,7 +208,7 @@ func (ae *AnalyticsEngine) Run(ctx context.Context, mode string) error {
 	}
 
 	deltas := analyticsComputeDeltas(current, previous)
-	anomalies := analyticsDetectAnomalies(current, deltas)
+	anomalies := analyticsDetectAnomalies(current, deltas, ae.cfg)
 
 	report := &AnalyticsReport{
 		Mode:        mode,
@@ -213,8 +221,10 @@ func (ae *AnalyticsEngine) Run(ctx context.Context, mode string) error {
 
 	text := analyticsFormatReport(report)
 
-	if sendErr := ae.sendReport(ctx, text); sendErr != nil {
-		log.Printf("[analytics] WARN sendReport: %v", sendErr)
+	if !ae.cfg.DisableTelegramReports {
+		if sendErr := ae.sendReport(ctx, text); sendErr != nil {
+			log.Printf("[analytics] WARN sendReport: %v", sendErr)
+		}
 	}
 
 	if analyticsHasCritical(anomalies) && ae.mgrSender != nil {
@@ -675,87 +685,87 @@ func analyticsMakeDelta(cur, prev float64) AnalyticsDelta {
 // Anomaly detection
 // ---------------------------------------------------------------------------
 
-func analyticsDetectAnomalies(cur *AnalyticsPeriodMetrics, deltas map[string]AnalyticsDelta) []AnalyticsAnomaly {
+func analyticsDetectAnomalies(cur *AnalyticsPeriodMetrics, deltas map[string]AnalyticsDelta, cfg config.AnalyticsConfig) []AnalyticsAnomaly {
 	var out []AnalyticsAnomaly
 
 	failRate := 0.0
 	if cur.Tools.TotalRequested > 0 {
 		failRate = 100 - cur.Tools.SuccessRatePct
 	}
-	if failRate > thresholdToolFailRatePct {
+	if failRate > cfg.ToolFailRatePct {
 		out = append(out, AnalyticsAnomaly{
 			Severity: "🔴", Metric: "tool_fail_rate",
-			Message:   fmt.Sprintf("Tool fail rate %.1f%% превышает порог %.0f%%", failRate, thresholdToolFailRatePct),
+			Message:   fmt.Sprintf("Tool fail rate %.1f%% превышает порог %.0f%%", failRate, cfg.ToolFailRatePct),
 			Value:     failRate,
-			Threshold: thresholdToolFailRatePct,
+			Threshold: cfg.ToolFailRatePct,
 		})
 	}
 
-	if cur.LLM.ErrorRatePct > thresholdErrorRatePct {
+	if cur.LLM.ErrorRatePct > cfg.ErrorRatePct {
 		out = append(out, AnalyticsAnomaly{
 			Severity: "🔴", Metric: "llm_error_rate",
 			Message: fmt.Sprintf(
 				"LLM error rate %.1f%% превышает порог %.0f%%",
 				cur.LLM.ErrorRatePct,
-				thresholdErrorRatePct,
+				cfg.ErrorRatePct,
 			),
 			Value:     cur.LLM.ErrorRatePct,
-			Threshold: thresholdErrorRatePct,
+			Threshold: cfg.ErrorRatePct,
 		})
 	}
 
 	for _, s := range cur.Subagents {
-		if s.ErrorCount > thresholdSubagentErrors {
+		if s.ErrorCount > cfg.SubagentErrors {
 			out = append(out, AnalyticsAnomaly{
 				Severity: "🔴", Metric: "subagent_errors",
 				Message:   fmt.Sprintf("%s: %d ошибок за период", s.Component, s.ErrorCount),
 				Value:     float64(s.ErrorCount),
-				Threshold: float64(thresholdSubagentErrors),
+				Threshold: float64(cfg.SubagentErrors),
 			})
 		}
 	}
 
-	if cur.LLM.P95ResponseMs > thresholdLatencyP95Ms {
+	if cur.LLM.P95ResponseMs > cfg.LatencyP95Ms {
 		out = append(out, AnalyticsAnomaly{
 			Severity: "🟡", Metric: "latency_p95",
 			Message: fmt.Sprintf(
 				"P95 latency %dms превышает порог %dms",
 				cur.LLM.P95ResponseMs,
-				thresholdLatencyP95Ms,
+				cfg.LatencyP95Ms,
 			),
 			Value:     float64(cur.LLM.P95ResponseMs),
-			Threshold: float64(thresholdLatencyP95Ms),
+			Threshold: float64(cfg.LatencyP95Ms),
 		})
 	}
 
-	if cur.AtomUsage.UnusedPct > thresholdUnusedAtomsPct {
+	if cur.AtomUsage.UnusedPct > cfg.UnusedAtomsPct {
 		out = append(out, AnalyticsAnomaly{
 			Severity: "🟡", Metric: "unused_atoms",
 			Message:   fmt.Sprintf("%.1f%% атомов не использованы", cur.AtomUsage.UnusedPct),
 			Value:     cur.AtomUsage.UnusedPct,
-			Threshold: thresholdUnusedAtomsPct,
+			Threshold: cfg.UnusedAtomsPct,
 		})
 	}
 
 	if cur.Knowledge.TotalAtoms > 0 {
 		stalePct := float64(cur.Knowledge.ConfStale) / float64(cur.Knowledge.TotalAtoms) * 100
-		if stalePct > thresholdStaleAtomsPct {
+		if stalePct > cfg.StaleAtomsPct {
 			out = append(out, AnalyticsAnomaly{
 				Severity: "🟡", Metric: "stale_atoms",
 				Message:   fmt.Sprintf("%.1f%% атомов stale (confidence < 0.2)", stalePct),
 				Value:     stalePct,
-				Threshold: thresholdStaleAtomsPct,
+				Threshold: cfg.StaleAtomsPct,
 			})
 		}
 	}
 
 	for name, d := range deltas {
-		if math.Abs(d.DeltaPct) > thresholdDeltaSignificantPct {
+		if math.Abs(d.DeltaPct) > cfg.DeltaSignificantPct {
 			out = append(out, AnalyticsAnomaly{
 				Severity: "🟡", Metric: name,
 				Message:   fmt.Sprintf("%s изменилась на %s%.0f%%", name, d.Direction, math.Abs(d.DeltaPct)),
 				Value:     math.Abs(d.DeltaPct),
-				Threshold: thresholdDeltaSignificantPct,
+				Threshold: cfg.DeltaSignificantPct,
 			})
 		}
 	}
@@ -950,7 +960,7 @@ func (ae *AnalyticsEngine) sendReport(ctx context.Context, text string) error {
 	if ae.sender == nil {
 		return ae.fallbackWriteReport(text)
 	}
-	parts := analyticsSplitMessage(text, reportMaxTelegramChars)
+	parts := analyticsSplitMessage(text, ae.cfg.ReportMaxTelegramChars)
 	for _, part := range parts {
 		_, err := ae.sender.SendMessage(ctx, part)
 		if err != nil {
