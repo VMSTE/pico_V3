@@ -363,3 +363,37 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Breaking:** None (all guards: if component != nil)
 - **Known limitation:** RegisterReflectorJobs only in restart path (not cold start). Safe: nil-check skips. Works after first reload.
 - **Dependencies:** pkg/pika/atomizer.go (wave 5a), pkg/pika/reflector.go (wave 5b), pkg/pika/mcp_security.go (wave 6b), pkg/pika/diagnostics.go (wave 7a)
+
+### [2026-05-12] feat(config): extract hardcoded analytics/subagent settings into config — wave 8h
+- **ТЗ:** ТЗ-v2-8h
+- **PR:** #TBD
+- **Files:**
+  - `pkg/config/config_pika_analytics.go` — MODIFIED: extended `AnalyticsConfig` from 3 to 15 fields (Enabled, QueriesDir, Schedule, 7 thresholds: ToolFailThresholdPct/LLMErrorThresholdPct/LatencyP95ThresholdMs/UnusedAtomsPct/StaleAtomsPct/DeltaSpikePct/AnomalyWindowHours, 4 limits: TopQueriesLimit/TopAtomsLimit/ReportMaxLines/HistoryRetentionDays, DisableTelegramReports). `DefaultAnalyticsConfig()` with production defaults replacing 11 hardcoded consts from analytics.go.
+  - `pkg/config/config.go` — MODIFIED: added `Analytics AnalyticsConfig` field to global `Config` struct (line 54).
+  - `pkg/agent/config_mappers.go` — NEW: 5 config mappers (`mapAtomizerConfig`, `mapReflectorConfig`, `mapArchivistConfig`, `mapMCPGuardConfig`, `mapTelemetryConfig`) — replace hardcoded `Default*Config()` with values resolved from unified config via `cfg.ResolveAgentConfig()`.
+  - `pkg/agent/context_pika.go` — MODIFIED: replaced 5× `Default*Config()` calls with `map*Config(cfg)` calls (Archivist :70, Atomizer :80, Reflector :88, MCPGuard :95, Telemetry :105).
+  - `pkg/pika/analytics.go` — MODIFIED: removed 11 hardcoded const (thresholds/limits). Added `cfg` field to `AnalyticsEngine`. `NewAnalyticsEngine()` signature changed — accepts `config.AnalyticsConfig` as first arg. Added `applyAnalyticsDefaults()` for zero-value fallback. `analyticsDetectAnomalies()` accepts `config.AnalyticsConfig` as third arg. `DisableTelegramReports` flag wraps periodic report delivery (alerts always sent).
+  - `pkg/pika/analytics_cron_service.go` — NEW: CronService-based analytics scheduler (prepared for Block 4 migration from ticker). Blocked by `SetOnJob` dispatcher ordering — deferred.
+  - `pkg/gateway/gateway.go` — MODIFIED: analytics engine creation uses `cfg.Analytics` instead of zero-value. Reflector schedule read from `cfg.ResolveAgentConfig("reflexor").Schedule` with fallback defaults ("03:00"/"Sun 04:00"/"1st 05:00"). Removed broken `HandleAnalyticsJob` block from `SetOnJob` dispatcher (lines 815-823). Fixed `fmt.Println` placement inside `if botmem != nil` block.
+  - `pkg/pika/analytics_test.go` — MODIFIED: updated 8× `analyticsDetectAnomalies()` calls + 4× `NewAnalyticsEngine()` calls for new signatures. Added `config` import. Zero-value `AnalyticsConfig{}` wrapped in `applyAnalyticsDefaults()` for correct threshold defaults in tests.
+- **Breaking:** `NewAnalyticsEngine()` signature changed (config.AnalyticsConfig added as first arg). `analyticsDetectAnomalies()` signature changed (config.AnalyticsConfig added as third arg).
+- **Dependencies:** `pkg/config/config_pika_analytics.go` (AnalyticsConfig), `pkg/config/config_pika.go` (ResolveAgentConfig, ResolvedAgentConfig, ScheduleConfig)
+- **Design decisions:**
+  - DisableTelegramReports controls only periodic reports. Alerts (anomalies, degraded) always go to manager chat — per founder requirement.
+  - analytics_cron_service.go created but not wired — CronService migration blocked by SetOnJob dispatcher ordering (documented in ТЗ as Block 4).
+  - Reflector schedule uses fallback defaults when config values are empty — backward-compatible with existing deployments without explicit schedule config.
+
+### [2026-05-12] feat(pika): analytics CronService migration — ТЗ-v2-8h block 4 — wave 8
+- **ТЗ:** ТЗ-v2-8h (Block 4)
+- **PR:** #TBD
+- **Files:**
+  - `pkg/gateway/gateway.go` — MODIFIED: analytics engine created before setupCronTool (available in SetOnJob closure). Added `analyticsEngine *pika.AnalyticsEngine` parameter to setupCronTool. HandleAnalyticsJob added to SetOnJob dispatcher (analytics → reflector → fallback chain). RegisterAnalyticsJobs called after CronService.Start() in both setupAndStartServices and restartServices. Removed old ticker block (NewAnalyticsCron).
+  - `pkg/pika/analytics_cron.go` — DELETED: custom ticker-based AnalyticsCron struct (Start/Stop/loop goroutines). Replaced by analytics_cron_service.go (CronService pattern).
+  - `pkg/pika/analytics_cron_test.go` — DELETED: tests for removed ticker (TestNewAnalyticsCron_Defaults, TestNewAnalyticsCron_CustomIntervals, TestAnalyticsCron_StartStop).
+- **Breaking:** None (analytics schedule unchanged, cron expressions generated from same config fields Schedule.Weekly/Monthly)
+- **Dependencies:** pkg/pika/analytics_cron_service.go (wave 8i — already existed, now wired), pkg/cron (upstream CronService)
+- **Design decisions:**
+  - Analytics migrated from custom ticker goroutines to upstream CronService — same pattern as Reflector (RegisterJobs + HandleJob in SetOnJob dispatcher).
+  - Engine created before setupCronTool so it's captured in SetOnJob closure — avoids needing engine in services struct.
+  - analytics_cron_service.go reuses schedToCronExpr from reflector_cron.go — no duplicate parsing logic.
+  - Fallback defaults "Sun 04:30" / "1st 05:30" when config schedule is empty — backward-compatible.

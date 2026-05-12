@@ -13,6 +13,8 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/sipeed/picoclaw/pkg/config"
 )
 
 // ---------------------------------------------------------------------------
@@ -213,7 +215,7 @@ func TestAnalytics_CollectMetrics_Happy(t *testing.T) {
 	now := time.Now().UTC()
 	insertAnalyticsTestData(t, db, now)
 
-	engine := NewAnalyticsEngine(bm, nil, nil, qDir)
+	engine := NewAnalyticsEngine(applyAnalyticsDefaults(config.AnalyticsConfig{}), bm, nil, nil, qDir)
 	period := AnalyticsPeriod{Start: now.Add(-24 * time.Hour), End: now.Add(time.Hour)}
 
 	m, err := engine.collectMetrics(context.Background(), period)
@@ -255,7 +257,7 @@ func TestAnalytics_CollectMetrics_PartialFail(t *testing.T) {
 	bm := setupAnalyticsTestBM(t, db)
 	defer bm.Close()
 	emptyDir := t.TempDir()
-	engine := NewAnalyticsEngine(bm, nil, nil, emptyDir)
+	engine := NewAnalyticsEngine(applyAnalyticsDefaults(config.AnalyticsConfig{}), bm, nil, nil, emptyDir)
 	now := time.Now().UTC()
 	period := AnalyticsPeriod{Start: now.Add(-24 * time.Hour), End: now}
 
@@ -277,7 +279,7 @@ func TestAnalytics_CollectMetrics_EmptyDB(t *testing.T) {
 	bm := setupAnalyticsTestBM(t, db)
 	defer bm.Close()
 	qDir := setupAnalyticsTestQDir(t)
-	engine := NewAnalyticsEngine(bm, nil, nil, qDir)
+	engine := NewAnalyticsEngine(applyAnalyticsDefaults(config.AnalyticsConfig{}), bm, nil, nil, qDir)
 	now := time.Now().UTC()
 	period := AnalyticsPeriod{Start: now.Add(-24 * time.Hour), End: now}
 
@@ -338,7 +340,11 @@ func TestAnalytics_Anomaly_ToolFailRate(t *testing.T) {
 	cur := &AnalyticsPeriodMetrics{}
 	cur.Tools.TotalRequested = 100
 	cur.Tools.SuccessRatePct = 88.0
-	anomalies := analyticsDetectAnomalies(cur, make(map[string]AnalyticsDelta))
+	anomalies := analyticsDetectAnomalies(
+		cur,
+		make(map[string]AnalyticsDelta),
+		applyAnalyticsDefaults(config.AnalyticsConfig{}),
+	)
 	found := false
 	for _, a := range anomalies {
 		if a.Metric == "tool_fail_rate" && a.Severity == "🔴" {
@@ -353,7 +359,11 @@ func TestAnalytics_Anomaly_ToolFailRate(t *testing.T) {
 func TestAnalytics_Anomaly_ErrorRate(t *testing.T) {
 	cur := &AnalyticsPeriodMetrics{}
 	cur.LLM.ErrorRatePct = 6.0
-	anomalies := analyticsDetectAnomalies(cur, make(map[string]AnalyticsDelta))
+	anomalies := analyticsDetectAnomalies(
+		cur,
+		make(map[string]AnalyticsDelta),
+		applyAnalyticsDefaults(config.AnalyticsConfig{}),
+	)
 	found := false
 	for _, a := range anomalies {
 		if a.Metric == "llm_error_rate" && a.Severity == "🔴" {
@@ -369,7 +379,11 @@ func TestAnalytics_Anomaly_SubagentErrors(t *testing.T) {
 	cur := &AnalyticsPeriodMetrics{}
 	sub := SubagentMetrics{Component: "archivarius", ErrorCount: 7}
 	cur.Subagents = append(cur.Subagents, sub)
-	anomalies := analyticsDetectAnomalies(cur, make(map[string]AnalyticsDelta))
+	anomalies := analyticsDetectAnomalies(
+		cur,
+		make(map[string]AnalyticsDelta),
+		applyAnalyticsDefaults(config.AnalyticsConfig{}),
+	)
 	found := false
 	for _, a := range anomalies {
 		if a.Metric == "subagent_errors" && a.Severity == "🔴" {
@@ -384,7 +398,11 @@ func TestAnalytics_Anomaly_SubagentErrors(t *testing.T) {
 func TestAnalytics_Anomaly_Latency(t *testing.T) {
 	cur := &AnalyticsPeriodMetrics{}
 	cur.LLM.P95ResponseMs = 16000
-	anomalies := analyticsDetectAnomalies(cur, make(map[string]AnalyticsDelta))
+	anomalies := analyticsDetectAnomalies(
+		cur,
+		make(map[string]AnalyticsDelta),
+		applyAnalyticsDefaults(config.AnalyticsConfig{}),
+	)
 	found := false
 	for _, a := range anomalies {
 		if a.Metric == "latency_p95" && a.Severity == "🟡" {
@@ -399,7 +417,11 @@ func TestAnalytics_Anomaly_Latency(t *testing.T) {
 func TestAnalytics_Anomaly_UnusedAtoms(t *testing.T) {
 	cur := &AnalyticsPeriodMetrics{}
 	cur.AtomUsage.UnusedPct = 25.0
-	anomalies := analyticsDetectAnomalies(cur, make(map[string]AnalyticsDelta))
+	anomalies := analyticsDetectAnomalies(
+		cur,
+		make(map[string]AnalyticsDelta),
+		applyAnalyticsDefaults(config.AnalyticsConfig{}),
+	)
 	found := false
 	for _, a := range anomalies {
 		if a.Metric == "unused_atoms" && a.Severity == "🟡" {
@@ -415,7 +437,11 @@ func TestAnalytics_Anomaly_StaleAtoms(t *testing.T) {
 	cur := &AnalyticsPeriodMetrics{}
 	cur.Knowledge.TotalAtoms = 100
 	cur.Knowledge.ConfStale = 12
-	anomalies := analyticsDetectAnomalies(cur, make(map[string]AnalyticsDelta))
+	anomalies := analyticsDetectAnomalies(
+		cur,
+		make(map[string]AnalyticsDelta),
+		applyAnalyticsDefaults(config.AnalyticsConfig{}),
+	)
 	found := false
 	for _, a := range anomalies {
 		if a.Metric == "stale_atoms" && a.Severity == "🟡" {
@@ -431,7 +457,7 @@ func TestAnalytics_Anomaly_SignificantDelta(t *testing.T) {
 	cur := &AnalyticsPeriodMetrics{}
 	deltas := make(map[string]AnalyticsDelta)
 	deltas["llm.total_requests"] = AnalyticsDelta{Current: 160, Previous: 100, DeltaPct: 60, Direction: "↑"}
-	anomalies := analyticsDetectAnomalies(cur, deltas)
+	anomalies := analyticsDetectAnomalies(cur, deltas, applyAnalyticsDefaults(config.AnalyticsConfig{}))
 	found := false
 	for _, a := range anomalies {
 		if a.Metric == "llm.total_requests" && a.Severity == "🟡" {
@@ -454,7 +480,7 @@ func TestAnalytics_Anomaly_Clean(t *testing.T) {
 	cur.Knowledge.ConfStale = 2
 	deltas := make(map[string]AnalyticsDelta)
 	deltas["llm.total_requests"] = AnalyticsDelta{DeltaPct: 10, Direction: "↑"}
-	anomalies := analyticsDetectAnomalies(cur, deltas)
+	anomalies := analyticsDetectAnomalies(cur, deltas, applyAnalyticsDefaults(config.AnalyticsConfig{}))
 	if len(anomalies) != 0 {
 		t.Errorf("expected 0 anomalies, got %d: %+v", len(anomalies), anomalies)
 	}
@@ -540,7 +566,7 @@ func TestAnalytics_StoreReport(t *testing.T) {
 	bm := setupAnalyticsTestBM(t, db)
 	defer bm.Close()
 	qDir := setupAnalyticsTestQDir(t)
-	engine := NewAnalyticsEngine(bm, nil, nil, qDir)
+	engine := NewAnalyticsEngine(applyAnalyticsDefaults(config.AnalyticsConfig{}), bm, nil, nil, qDir)
 
 	report := &AnalyticsReport{Mode: "weekly", GeneratedAt: time.Now()}
 	report.Current.Period.Start = time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)

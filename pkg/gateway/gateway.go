@@ -346,6 +346,14 @@ func setupAndStartServices(
 	runningServices := &services{}
 
 	execTimeout := time.Duration(cfg.Tools.Cron.ExecTimeoutMinutes) * time.Minute
+
+	// PIKA-V3: Create analytics engine before setupCronTool so it can be used in SetOnJob dispatcher.
+	var analyticsEngine *pika.AnalyticsEngine
+	if botmem := agentLoop.GetBotMemory(); botmem != nil {
+		sender := &pika.BusSender{MB: msgBus}
+		aCfg := cfg.Analytics
+		analyticsEngine = pika.NewAnalyticsEngine(aCfg, botmem, sender, sender, aCfg.QueriesDir)
+	}
 	var err error
 	runningServices.CronService, err = setupCronTool(
 		agentLoop,
@@ -354,6 +362,7 @@ func setupAndStartServices(
 		cfg.Agents.Defaults.RestrictToWorkspace,
 		execTimeout,
 		cfg,
+		analyticsEngine,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up cron service: %w", err)
@@ -362,6 +371,27 @@ func setupAndStartServices(
 		return nil, fmt.Errorf("error starting cron service: %w", err)
 	}
 	fmt.Println("✓ Cron service started")
+
+	// PIKA-V3: Register Analytics cron jobs (TZ-v2-8h).
+	if analyticsEngine != nil && runningServices.CronService != nil {
+		aCfg := cfg.Analytics
+		wSched := aCfg.Schedule.Weekly
+		mSched := aCfg.Schedule.Monthly
+		if wSched == "" {
+			wSched = "Sun 04:30"
+		}
+		if mSched == "" {
+			mSched = "1st 05:30"
+		}
+		regErr := pika.RegisterAnalyticsJobs(
+			runningServices.CronService, analyticsEngine, wSched, mSched,
+		)
+		if regErr != nil {
+			fmt.Printf("  ✗ Analytics cron registration failed: %v\n", regErr)
+		} else {
+			fmt.Println("  ✓ Analytics cron registered")
+		}
+	}
 
 	runningServices.HeartbeatService = heartbeat.NewHeartbeatService(
 		cfg.WorkspacePath(),
@@ -582,6 +612,14 @@ func restartServices(
 	cfg := al.GetConfig()
 
 	execTimeout := time.Duration(cfg.Tools.Cron.ExecTimeoutMinutes) * time.Minute
+
+	// PIKA-V3: Create analytics engine before setupCronTool so it can be used in SetOnJob dispatcher.
+	var analyticsEngine *pika.AnalyticsEngine
+	if botmem := al.GetBotMemory(); botmem != nil {
+		sender := &pika.BusSender{MB: msgBus}
+		aCfg := cfg.Analytics
+		analyticsEngine = pika.NewAnalyticsEngine(aCfg, botmem, sender, sender, aCfg.QueriesDir)
+	}
 	var err error
 	runningServices.CronService, err = setupCronTool(
 		al,
@@ -590,6 +628,7 @@ func restartServices(
 		cfg.Agents.Defaults.RestrictToWorkspace,
 		execTimeout,
 		cfg,
+		analyticsEngine,
 	)
 	if err != nil {
 		return fmt.Errorf("error restarting cron service: %w", err)
@@ -599,22 +638,43 @@ func restartServices(
 	}
 	fmt.Println("  ✓ Cron service restarted")
 
-	// PIKA-V3: Analytics cron (D-136a F17, TZ-v2-8i).
-	if botmem := al.GetBotMemory(); botmem != nil {
-		sender := &pika.BusSender{MB: msgBus}
-		engine := pika.NewAnalyticsEngine(botmem, sender, sender, "")
-		analyticsCron := pika.NewAnalyticsCron(engine, 0, 0)
-		analyticsCron.Start()
-		fmt.Println("  ✓ Analytics cron started")
+	// PIKA-V3: Register Analytics cron jobs (TZ-v2-8h).
+	if analyticsEngine != nil && runningServices.CronService != nil {
+		aCfg := cfg.Analytics
+		wSched := aCfg.Schedule.Weekly
+		mSched := aCfg.Schedule.Monthly
+		if wSched == "" {
+			wSched = "Sun 04:30"
+		}
+		if mSched == "" {
+			mSched = "1st 05:30"
+		}
+		regErr := pika.RegisterAnalyticsJobs(
+			runningServices.CronService, analyticsEngine, wSched, mSched,
+		)
+		if regErr != nil {
+			fmt.Printf("  ✗ Analytics cron registration failed: %v\n", regErr)
+		} else {
+			fmt.Println("  ✓ Analytics cron registered")
+		}
 	}
 
 	// PIKA-V3: Register Reflector cron jobs (TZ-v2-9b).
 	if refl := al.GetReflector(); refl != nil {
 		if runningServices.CronService != nil {
 			sched := pika.ReflectorSchedule{
-				Daily:   "03:00",
-				Weekly:  "Sun 04:00",
-				Monthly: "1st 05:00",
+				Daily:   cfg.ResolveAgentConfig("reflexor").Schedule.Daily,
+				Weekly:  cfg.ResolveAgentConfig("reflexor").Schedule.Weekly,
+				Monthly: cfg.ResolveAgentConfig("reflexor").Schedule.Monthly,
+			}
+			if sched.Daily == "" {
+				sched.Daily = "03:00"
+			}
+			if sched.Weekly == "" {
+				sched.Weekly = "Sun 04:00"
+			}
+			if sched.Monthly == "" {
+				sched.Monthly = "1st 05:00"
 			}
 			if regErr := pika.RegisterReflectorJobs(runningServices.CronService, refl, sched); regErr != nil {
 				fmt.Printf("  ✗ Reflector cron registration failed: %v\n", regErr)
@@ -783,6 +843,7 @@ func setupCronTool(
 	restrict bool,
 	execTimeout time.Duration,
 	cfg *config.Config,
+	analyticsEngine *pika.AnalyticsEngine,
 ) (*cron.CronService, error) {
 	cronStorePath := filepath.Join(workspace, "cron", "jobs.json")
 
@@ -801,6 +862,15 @@ func setupCronTool(
 
 	if cronTool != nil {
 		cronService.SetOnJob(func(job *cron.CronJob) (string, error) {
+			// PIKA-V3: Analytics cron interception (TZ-v2-8h).
+			if analyticsEngine != nil {
+				if handled, err := pika.HandleAnalyticsJob(analyticsEngine, job); handled {
+					if err != nil {
+						return fmt.Sprintf("analytics error: %v", err), nil
+					}
+					return "analytics job completed", nil
+				}
+			}
 			// PIKA-V3: Reflector cron interception (TZ-v2-9b).
 			if refl := agentLoop.GetReflector(); refl != nil {
 				if handled, err := pika.HandleReflectorJob(refl, job); handled {
