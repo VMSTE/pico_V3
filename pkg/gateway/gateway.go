@@ -616,7 +616,7 @@ func restartServices(
 				Weekly:  "Sun 04:00",
 				Monthly: "1st 05:00",
 			}
-			if regErr := pika.RegisterReflectorJobs(runningServices.CronService, refl, sched); err != nil {
+			if regErr := pika.RegisterReflectorJobs(runningServices.CronService, refl, sched); regErr != nil {
 				fmt.Printf("  ✗ Reflector cron registration failed: %v\n", err)
 			} else {
 				fmt.Println("  ✓ Reflector cron registered")
