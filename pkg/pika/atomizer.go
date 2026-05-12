@@ -114,6 +114,11 @@ func NewAtomizer(
 	}
 }
 
+// SetDiagnostics injects the diagnostics engine (post-construction wiring).
+func (a *Atomizer) SetDiagnostics(d *DiagnosticsEngine) {
+	a.diag = d
+}
+
 // ShouldAtomize checks if session tokens exceed threshold.
 func (a *Atomizer) ShouldAtomize(
 	ctx context.Context, sessionID string,

@@ -608,6 +608,22 @@ func restartServices(
 		fmt.Println("  ✓ Analytics cron started")
 	}
 
+	// PIKA-V3: Register Reflector cron jobs (TZ-v2-9b).
+	if refl := al.GetReflector(); refl != nil {
+		if runningServices.CronService != nil {
+			sched := pika.ReflectorSchedule{
+				Daily:   "03:00",
+				Weekly:  "Sun 04:00",
+				Monthly: "1st 05:00",
+			}
+			if regErr := pika.RegisterReflectorJobs(runningServices.CronService, refl, sched); regErr != nil {
+				fmt.Printf("  ✗ Reflector cron registration failed: %v\n", regErr)
+			} else {
+				fmt.Println("  ✓ Reflector cron registered")
+			}
+		}
+	}
+
 	runningServices.HeartbeatService = heartbeat.NewHeartbeatService(
 		cfg.WorkspacePath(),
 		cfg.Heartbeat.Interval,
@@ -785,6 +801,15 @@ func setupCronTool(
 
 	if cronTool != nil {
 		cronService.SetOnJob(func(job *cron.CronJob) (string, error) {
+			// PIKA-V3: Reflector cron interception (TZ-v2-9b).
+			if refl := agentLoop.GetReflector(); refl != nil {
+				if handled, err := pika.HandleReflectorJob(refl, job); handled {
+					if err != nil {
+						return fmt.Sprintf("reflector error: %v", err), nil
+					}
+					return "reflector job completed", nil
+				}
+			}
 			result := cronTool.ExecuteJob(context.Background(), job)
 			return result, nil
 		})

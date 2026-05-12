@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
+	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
@@ -63,6 +64,23 @@ func (p *Pipeline) Finalize(
 
 	// PIKA-V3: legacy post-turn CompressReasonSummarize removed (Phase C, wave 2b).
 	// Post-turn compaction will be handled by Atomizer threshold (wave 5, no-op stub).
+
+	// PIKA-V3: Atomizer post-turn threshold check (TZ-v2-9b).
+	if al := p.al; al.atomizer != nil {
+		bgCtx := context.Background()
+		go func() {
+			ok, err := al.atomizer.ShouldAtomize(bgCtx, ts.sessionKey)
+			if err != nil {
+				logger.WarnCF("pika", "Atomizer threshold check failed", map[string]any{"error": err.Error()})
+				return
+			}
+			if ok {
+				if err := al.atomizer.Run(bgCtx, ts.sessionKey); err != nil {
+					logger.WarnCF("pika", "Atomizer run failed", map[string]any{"error": err.Error()})
+				}
+			}
+		}()
+	}
 
 	ts.setPhase(TurnPhaseCompleted)
 	return turnResult{

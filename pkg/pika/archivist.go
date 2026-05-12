@@ -199,6 +199,11 @@ func (a *Archivist) GetCachedBrief() string {
 	return a.cachedBrief
 }
 
+// SetDiagnostics injects the diagnostics engine (post-construction wiring).
+func (a *Archivist) SetDiagnostics(d *DiagnosticsEngine) {
+	a.diag = d
+}
+
 // GetCachedFocus returns the cached Focus (nil if none).
 func (a *Archivist) GetCachedFocus() *Focus {
 	a.mu.RLock()

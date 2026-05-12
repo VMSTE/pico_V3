@@ -32,9 +32,13 @@ import (
 )
 
 type AgentLoop struct {
-	rad       *pika.RAD       // PIKA-V3: RAD (D-SEC-v2, TZ-v2-8i)
-	botmem    *pika.BotMemory // PIKA-V3: BotMemory ref for RAD (TZ-v2-8i)
-	telemetry *pika.Telemetry // PIKA-V3: Telemetry (budget+health+cost) (TZ-v2-9a)
+	rad         *pika.RAD                 // PIKA-V3: RAD (D-SEC-v2, TZ-v2-8i)
+	botmem      *pika.BotMemory           // PIKA-V3: BotMemory ref for RAD (TZ-v2-8i)
+	telemetry   *pika.Telemetry           // PIKA-V3: Telemetry (budget+health+cost) (TZ-v2-9a)
+	diag        *pika.DiagnosticsEngine   // PIKA-V3: Diagnostics engine (TZ-v2-9b)
+	atomizer    *pika.Atomizer            // PIKA-V3: Atomizer pipeline (TZ-v2-9b)
+	reflector   *pika.ReflectorPipeline   // PIKA-V3: Reflector cron pipeline (TZ-v2-9b)
+	mcpSecurity *pika.MCPSecurityPipeline // PIKA-V3: MCP Security pipeline (TZ-v2-9b)
 	// Core dependencies
 	bus      interfaces.MessageBus
 	cfg      *config.Config
@@ -615,4 +619,14 @@ func (al *AgentLoop) runAgentLoop(
 // GetBotMemory returns the PIKA-V3 BotMemory reference, or nil.
 func (al *AgentLoop) GetBotMemory() *pika.BotMemory {
 	return al.botmem
+}
+
+// GetReflector returns the ReflectorPipeline (TZ-v2-9b).
+func (al *AgentLoop) GetReflector() *pika.ReflectorPipeline {
+	return al.reflector
+}
+
+// GetMCPSecurity returns the MCPSecurityPipeline (TZ-v2-9b).
+func (al *AgentLoop) GetMCPSecurity() *pika.MCPSecurityPipeline {
+	return al.mcpSecurity
 }

@@ -340,3 +340,26 @@ Each entry maps to a single wave/phase and its merged PR.
   - `web/frontend/src/components/config/config-sections.tsx` — MODIFIED: added `OnboardSection` with toggle
   - `web/frontend/src/components/config/config-page.tsx` — MODIFIED: import, render, and patchAppConfig mapping
 - **Breaking:** None
+
+---
+
+## Wave 9: Wiring Audit
+
+### [2026-05-12] feat(pika): ТЗ-v2-9b — Pipeline Wiring: Atomizer, Reflector, MCPSecurity, Diagnostics — wave 9b
+
+- **ТЗ:** ТЗ-v2-9b: Pipeline Wiring
+- **PR:** #TBD
+- **Files:**
+  - `pkg/agent/context_pika.go` — MOD: NewDiagnosticsEngine + NewAtomizer + NewReflectorPipeline + NewMCPSecurityPipeline creation. SetDiagnostics() calls to all subagents.
+  - `pkg/agent/agent.go` — MOD: added reflector *pika.ReflectorPipeline + mcpSecurity *pika.MCPSecurityPipeline fields and GetReflector()/GetMCPSecurity() getters.
+  - `pkg/agent/pipeline_finalize.go` — MOD: replaced no-op stub with Atomizer trigger (ShouldAtomize → Run in goroutine after each turn).
+  - `pkg/agent/pipeline_execute.go` — MOD: MCPSecurity ProcessToolOutput call after MCP tool Execute. Simplified from switch/verdict to single facade call.
+  - `pkg/gateway/gateway.go` — MOD: RegisterReflectorJobs + HandleReflectorJob in restart/reload path after analyticsCron.
+  - `pkg/pika/archivist.go` — MOD: added SetDiagnostics() setter.
+  - `pkg/pika/atomizer.go` — MOD: added SetDiagnostics() setter.
+  - `pkg/pika/reflector.go` — MOD: added SetDiagnostics() setter.
+  - `pkg/pika/mcp_security.go` — MOD: added SetDiagnostics() setter + ProcessToolOutput() facade (verdict logic inside pika, not agent).
+  - `pkg/tools/integration/mcp_tool.go` — ROLLED BACK to main (audit fix: upstream file, ТЗ-v2-6b forbids modification).
+- **Breaking:** None (all guards: if component != nil)
+- **Known limitation:** RegisterReflectorJobs only in restart path (not cold start). Safe: nil-check skips. Works after first reload.
+- **Dependencies:** pkg/pika/atomizer.go (wave 5a), pkg/pika/reflector.go (wave 5b), pkg/pika/mcp_security.go (wave 6b), pkg/pika/diagnostics.go (wave 7a)

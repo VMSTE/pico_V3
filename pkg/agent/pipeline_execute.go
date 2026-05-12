@@ -457,6 +457,14 @@ toolLoop:
 			return ToolControlBreak
 		}
 
+		// PIKA-V3: MCP Security — sanitize MCP tool output (TZ-v2-9b).
+		if al.mcpSecurity != nil && toolResult != nil && !toolResult.IsError {
+			output, blocked := al.mcpSecurity.ProcessToolOutput(toolName, toolResult.ForLLM)
+			toolResult.ForLLM = output
+			if blocked {
+				toolResult.IsError = true
+			}
+		}
 		if al.hooks != nil {
 			toolResp, decision := al.hooks.AfterTool(turnCtx, &ToolResultHookResponse{
 				Meta:      ts.eventMeta("runTurn", "turn.tool.after"),
