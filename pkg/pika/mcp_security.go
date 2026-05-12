@@ -392,6 +392,35 @@ func (p *MCPSecurityPipeline) GetTaint() TaintState {
 	return p.taint
 }
 
+
+// ProcessToolOutput is a wiring facade: runs SanitizeOutput + applies verdict.
+// toolID is the tool registry name; if it contains "__", splits as server__tool.
+func (p *MCPSecurityPipeline) ProcessToolOutput(toolID string, raw string) (string, bool) {
+	parts := strings.SplitN(toolID, "__", 2)
+	var serverName, toolName string
+	if len(parts) == 2 {
+		serverName, toolName = parts[0], parts[1]
+	} else {
+		serverName, toolName = "unknown", toolID
+	}
+	san := p.SanitizeOutput(serverName, toolName, raw)
+	switch san.Verdict {
+	case VerdictBlock:
+		return fmt.Sprintf("[MCP output blocked: %s]", san.Reasons), true
+	case VerdictSuspicious:
+		p.SetTaint(serverName, 0)
+		if san.Sanitized != "" {
+			return san.Sanitized, false
+		}
+		return raw, false
+	default:
+		if san.Sanitized != "" {
+			return san.Sanitized, false
+		}
+		return raw, false
+	}
+}
+
 // ShouldBlockTaintedAction checks if action should be blocked.
 func (p *MCPSecurityPipeline) ShouldBlockTaintedAction(risk string) bool {
 	p.mu.Lock()

@@ -62,12 +62,6 @@ func (t *MCPTool) SetMaxInlineTextRunes(limit int) {
 	}
 }
 
-// ServerName returns the MCP server name for security pipeline integration.
-func (t *MCPTool) ServerName() string { return t.serverName }
-
-// ToolName returns the original MCP tool name.
-func (t *MCPTool) ToolName() string { return t.tool.Name }
-
 const maxMCPInlineTextRunes = 16 * 1024
 
 // sanitizeIdentifierComponent normalizes a string so it can be safely used
