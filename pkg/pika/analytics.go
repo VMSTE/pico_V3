@@ -39,16 +39,19 @@ const (
 // Structs
 // ---------------------------------------------------------------------------
 
+// AnalyticsPeriod defines a time window for analytics aggregation.
 type AnalyticsPeriod struct {
 	Start time.Time `json:"start"`
 	End   time.Time `json:"end"`
 }
 
+// AnalyticsNameCount holds a name-count pair for top-N rankings.
 type AnalyticsNameCount struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
 }
 
+// LLMMetrics holds aggregated LLM usage metrics for a period.
 type LLMMetrics struct {
 	TotalRequests   int                `json:"total_requests"`
 	TotalTokens     int64              `json:"total_tokens"`
@@ -60,6 +63,7 @@ type LLMMetrics struct {
 	ReasoningRatio  float64            `json:"reasoning_ratio"`
 }
 
+// ToolMetrics holds aggregated tool usage metrics for a period.
 type ToolMetrics struct {
 	TotalRequested int                  `json:"total_requested"`
 	TotalSuccess   int                  `json:"total_success"`
@@ -68,12 +72,14 @@ type ToolMetrics struct {
 	TopTools       []AnalyticsNameCount `json:"top_tools"`
 }
 
+// ChainMetrics holds chain/session depth metrics for a period.
 type ChainMetrics struct {
 	TotalChains    int     `json:"total_chains"`
 	AvgChainLength float64 `json:"avg_chain_length"`
 	AvgChainCost   float64 `json:"avg_chain_cost"`
 }
 
+// SubagentMetrics holds per-subagent execution metrics.
 type SubagentMetrics struct {
 	Component     string `json:"component"`
 	TotalSpans    int    `json:"total_spans"`
@@ -83,6 +89,7 @@ type SubagentMetrics struct {
 	P95DurationMs int    `json:"p95_duration_ms"`
 }
 
+// KnowledgeMetrics holds knowledge base statistics for a period.
 type KnowledgeMetrics struct {
 	TotalAtoms  int            `json:"total_atoms"`
 	NewInPeriod int            `json:"new_in_period"`
@@ -94,6 +101,7 @@ type KnowledgeMetrics struct {
 	ConfStale   int            `json:"conf_stale"`
 }
 
+// AtomUsageMetrics holds atom retrieval and staleness metrics.
 type AtomUsageMetrics struct {
 	TotalUsages      int                  `json:"total_usages"`
 	UniqueAtomsUsed  int                  `json:"unique_atoms_used"`
@@ -103,6 +111,7 @@ type AtomUsageMetrics struct {
 	UnusedPct        float64              `json:"unused_pct"`
 }
 
+// AnalyticsTaskMetrics holds task completion metrics for a period.
 type AnalyticsTaskMetrics struct {
 	TaskTag      string  `json:"task_tag"`
 	RequestCount int     `json:"request_count"`
@@ -112,6 +121,7 @@ type AnalyticsTaskMetrics struct {
 	AvgCost      float64 `json:"avg_cost"`
 }
 
+// AnalyticsPeriodMetrics aggregates all metric categories for a single period.
 type AnalyticsPeriodMetrics struct {
 	Period    AnalyticsPeriod        `json:"period"`
 	LLM       LLMMetrics             `json:"llm"`
@@ -123,6 +133,7 @@ type AnalyticsPeriodMetrics struct {
 	Tasks     []AnalyticsTaskMetrics `json:"tasks"`
 }
 
+// AnalyticsDelta represents a significant change between two analytics periods.
 type AnalyticsDelta struct {
 	Current   float64 `json:"current"`
 	Previous  float64 `json:"previous"`
@@ -130,6 +141,7 @@ type AnalyticsDelta struct {
 	Direction string  `json:"direction"`
 }
 
+// AnalyticsAnomaly represents a detected metric anomaly exceeding a threshold.
 type AnalyticsAnomaly struct {
 	Severity  string  `json:"severity"`
 	Metric    string  `json:"metric"`
@@ -138,6 +150,7 @@ type AnalyticsAnomaly struct {
 	Threshold float64 `json:"threshold"`
 }
 
+// AnalyticsReport is the complete analytics output for a reporting cycle.
 type AnalyticsReport struct {
 	Mode        string                    `json:"mode"`
 	Current     AnalyticsPeriodMetrics    `json:"current"`
@@ -151,6 +164,7 @@ type AnalyticsReport struct {
 // AnalyticsEngine
 // ---------------------------------------------------------------------------
 
+// AnalyticsEngine runs periodic analytics pipelines and generates reports.
 type AnalyticsEngine struct {
 	cfg        config.AnalyticsConfig
 	mem        *BotMemory
@@ -159,6 +173,7 @@ type AnalyticsEngine struct {
 	queriesDir string
 }
 
+// NewAnalyticsEngine creates a new AnalyticsEngine with the given dependencies.
 func NewAnalyticsEngine(
 	cfg config.AnalyticsConfig,
 	mem *BotMemory,

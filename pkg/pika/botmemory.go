@@ -23,6 +23,7 @@ var categoryPrefix = map[string]string{
 	"runbook_draft": "R-",
 }
 
+// MessageRow represents a row in the messages table.
 type MessageRow struct {
 	ID        int64           `json:"id"`
 	SessionID string          `json:"session_id"`
@@ -35,6 +36,7 @@ type MessageRow struct {
 	Metadata  json.RawMessage `json:"metadata,omitempty"`
 }
 
+// EventRow represents a row in the events table.
 type EventRow struct {
 	ID        int64           `json:"id"`
 	Ts        time.Time       `json:"ts"`
@@ -47,6 +49,7 @@ type EventRow struct {
 	TurnID    int             `json:"turn_id"`
 }
 
+// KnowledgeAtomRow represents a row in the knowledge_atoms table.
 type KnowledgeAtomRow struct {
 	ID              int64           `json:"id"`
 	AtomID          string          `json:"atom_id"`
@@ -67,6 +70,7 @@ type KnowledgeAtomRow struct {
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
+// RegistryRow represents a row in the registry table.
 type RegistryRow struct {
 	ID       int64           `json:"id"`
 	Ts       time.Time       `json:"ts"`
@@ -79,6 +83,7 @@ type RegistryRow struct {
 	Tags     json.RawMessage `json:"tags,omitempty"`
 }
 
+// RequestLogRow represents a row in the request_log table.
 type RequestLogRow struct {
 	SessionID          string          `json:"session_id,omitempty"`
 	MsgIndex           *int            `json:"msg_index,omitempty"`
@@ -104,6 +109,7 @@ type RequestLogRow struct {
 	PlanDetected       int             `json:"plan_detected"`
 }
 
+// ReasoningLogRow represents a row in the reasoning_log table.
 type ReasoningLogRow struct {
 	SessionID         string          `json:"session_id,omitempty"`
 	MsgIndex          *int            `json:"msg_index,omitempty"`
@@ -118,6 +124,7 @@ type ReasoningLogRow struct {
 	TurnID            int             `json:"turn_id"`
 }
 
+// TraceSpanRow represents a row in the trace_spans table.
 type TraceSpanRow struct {
 	SpanID       string          `json:"span_id"`
 	ParentSpanID string          `json:"parent_span_id,omitempty"`
@@ -131,6 +138,7 @@ type TraceSpanRow struct {
 	InputData    json.RawMessage `json:"input_data,omitempty"`
 }
 
+// EventArchiveRow represents a row in the event_archive table.
 type EventArchiveRow struct {
 	ID        int64           `json:"id"`
 	SessionID string          `json:"session_id"`
