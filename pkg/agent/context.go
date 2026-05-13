@@ -18,6 +18,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/skills"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
@@ -586,6 +587,11 @@ func (cb *ContextBuilder) LoadBootstrapFiles() string {
 	}
 	if agentDefinition.User != nil {
 		fmt.Fprintf(&sb, "## %s\n\n%s\n\n", "USER.md", agentDefinition.User.Content)
+		// PIKA-V3: Onboarding detection (ТЗ-v2-10c Block C).
+		if pika.NeedsOnboarding(agentDefinition.User.Content) {
+			sb.WriteString(pika.OnboardingPromptAddon())
+			sb.WriteString("\n\n")
+		}
 	}
 
 	if agentDefinition.Source != AgentDefinitionSourceAgent {
