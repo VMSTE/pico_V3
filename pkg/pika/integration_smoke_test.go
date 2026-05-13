@@ -19,9 +19,9 @@ func (s *smokeTG) SendMessage(_ context.Context, text string) (string, error) {
 	s.sent = append(s.sent, text)
 	return "1", nil
 }
-func (s *smokeTG) EditMessage(_ context.Context, _, _ string) error            { return nil }
-func (s *smokeTG) DeleteMessage(_ context.Context, _ string) error             { return nil }
-func (s *smokeTG) SendConfirmation(_ context.Context, _ string) (bool, error)  { return true, nil }
+func (s *smokeTG) EditMessage(_ context.Context, _, _ string) error           { return nil }
+func (s *smokeTG) DeleteMessage(_ context.Context, _ string) error            { return nil }
+func (s *smokeTG) SendConfirmation(_ context.Context, _ string) (bool, error) { return true, nil }
 
 type smokeClarSender struct{ sent []string }
 
@@ -29,6 +29,7 @@ func (s *smokeClarSender) SendMessage(_, text string) (string, error) {
 	s.sent = append(s.sent, text)
 	return "1", nil
 }
+
 func (s *smokeClarSender) WaitForReply(_ context.Context, _ string, _ time.Duration) (string, error) {
 	return "ok", nil
 }
