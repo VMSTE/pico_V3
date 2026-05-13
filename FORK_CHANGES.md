@@ -108,7 +108,7 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ### [2026-05-04] feat(pika): autoevent.go — wave 3e
 
-- **PR:** #TBD
+- **PR:** #25
 
 ---
 
@@ -116,16 +116,16 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ### [2026-05-05] feat(pika): telemetry.go — wave 4f
 
-- **PR:** #TBD
+- **PR:** #26
 
 ### [2026-05-05] feat(pika): session.go — wave 4b
 
-- **PR:** #TBD
+- **PR:** #28
 
 ### [2026-05-05] feat(pika): toolguard.go — ToolGuard AfterLLM hook — wave 4c
 
 - **ТЗ:** ТЗ-v2-4c: toolguard.go — ToolGuard (AfterLLM builtin hook)
-- **PR:** #TBD
+- **PR:** #30
 - **Files:**
   - `pkg/pika/toolguard.go` — NEW: `ToolGuard` struct with local hook types (HookAction, HookDecision, ToolGuardLLMResponse). `ActivePlanGetter` interface (implemented by PikaContextManager). `ToolGuardFactory(cfg, planGetter)` constructor. `AfterLLM(resp)` — detects missing tool call when ACTIVE_PLAN active: plan=="" → continue, HasToolCalls → continue, Content=="" → continue, retryCount≥max → continue (exhausted), otherwise → HookActionModify with reminder. `ResetTurn()` — per-turn retry counter reset. Max 1 retry. **No import of pkg/agent** (avoids import cycle via context_pika.go). Wiring adapter in instance.go (ТЗ-4a) converts local types ↔ agent.LLMInterceptor.
   - `pkg/pika/toolguard_test.go` — NEW: 8 tests (ActivePlanTextNoTools_Modify, ActivePlanWithToolCalls_Continue, NoPlan_Continue, RetryExhausted_Continue, EmptyResponse_Continue, NilPlanGetter_Continue, NilResponse_Continue, ResetTurn)
@@ -135,7 +135,7 @@ Each entry maps to a single wave/phase and its merged PR.
 ### [2026-05-05] feat(pika): confirm_gate.go — ConfirmGate ToolApprover hook — wave 4d
 
 - **ТЗ:** ТЗ-v2-4d: confirm_gate.go — ConfirmGate (ToolApprover builtin hook)
-- **PR:** #TBD
+- **PR:** #31
 - **Files:**
   - `pkg/pika/confirm_gate.go` — NEW: `ConfirmGate` struct implementing ToolApprover (D-136a). Local types: `ConfirmApprovalRequest`, `ConfirmApprovalDecision` (mirror agent.ToolApprovalRequest/ApprovalDecision). `TelegramSender` interface (shared pattern with clarify.go ClarifySender). `ConfirmGateFactory(cfg, sender, health)` constructor. `ApproveTool(ctx, req)` — matches tool.operation against `security.dangerous_ops` config, evaluates confirm rules (always/if_healthy/if_critical_path/never), reflex for compose.restart+exited, sends Telegram confirmation, fail-closed on timeout/error. Helper functions: `getOperation`, `isExited`, `isInCriticalPath` (glob match), `extractPath`, `summarizeArgs`, `evaluateConfirmRule`. Uses existing `SystemStateProvider` from interfaces.go and `config.DangerousOpEntry`/`ConfirmMode` from config_pika.go. **No import of pkg/agent** (avoids import cycle).
   - `pkg/pika/confirm_gate_test.go` — NEW: 9 tests (DeployRequest_Approved, DeployRequest_Denied, ComposeRestart_Exited, ComposeRestart_Healthy, ComposeRestart_Degraded, FilesWrite_CriticalPath, FilesWrite_NonCritical, NotInTable, Timeout_Deny)
@@ -173,7 +173,7 @@ Each entry maps to a single wave/phase and its merged PR.
 ### [2026-05-05] feat(pika): rad.go — Reasoning Anomaly Detector — wave 6a
 
 - **ТЗ:** ТЗ-v2-6a: rad.go — Reasoning Anomaly Detector
-- **PR:** #TBD
+- **PR:** #35
 - **Files:**
   - `pkg/pika/rad.go` — NEW: `RAD` struct — fast pre-action security gate on reasoning tokens (D-SEC-v2, Layer 6). 0 LLM, sync. Types: `RADVerdict` (safe/warning/anomaly), `RADResult` (verdict+score+detectors+reason), `RADConfig` (enabled, pattern keywords RU/EN, drift_threshold, block/warn scores), `RADSession` (minimal session view: last_tool_source, prev_keywords), `RADToolCall` (minimal pending call: name, risk_level). `DefaultRADConfig()` with production keywords. `NewRAD(cfg)` — compiles regex at creation (fail-fast on invalid patterns). `Analyze(ctx, reasoning, session, pendingCall)` — main entry point, runs 3 detectors: (1) Pattern Detector (+3): case-insensitive regex on configurable RU/EN keywords; (2) Drift Detector (+2): Jaccard keyword overlap < threshold after MCP call, skips non-MCP; (3) Escalation Detector (+2): red-risk action after MCP output. Scoring: ≥block_score(3)→ANOMALY, ≥warn_score(2)→WARNING, else SAFE. Helpers: `jaccardIndex`, `extractKeywords` (Unicode-aware tokenizer). autoEvent mapping: `rad.blocked`→`rad_anomaly`, `rad.warning`→`rad_warning` (critical class, defined in config toolTypeMap).
   - `pkg/pika/rad_test.go` — NEW: 15 tests (PatternDetect_RU, PatternDetect_EN, PatternDetect_CleanReasoning, DriftDetect_LowOverlap, DriftDetect_HighOverlap, DriftDetect_NonMCPSkip, EscalationDetect_RedAfterMCP, EscalationDetect_GreenAfterMCP, CompoundScoring_Safe, CompoundScoring_Warning, CompoundScoring_Anomaly, Disabled, JaccardIndex, ExtractKeywords, DriftPlusEscalation_Anomaly)
@@ -183,7 +183,7 @@ Each entry maps to a single wave/phase and its merged PR.
 ### [2026-05-06] feat(pika): mcp_security.go — MCP Security Pipeline — wave 6b
 
 - **ТЗ:** ТЗ-v2-6b: mcp_security.go — MCP Security
-- **PR:** #TBD
+- **PR:** #36
 - **Files:**
   - `pkg/pika/mcp_security.go` — MODIFIED: rename extractJSON→extractGuardJSON (conflict with archivist.go)
   - `pkg/pika/mcp_security_test.go` — NEW: 24 tests covering all 15 acceptance criteria (Output Sanitizer, NFKC, credentials, taint tracking, ACL, capability negotiation, MCP Guard startup/canary, Rug Pull Guard, adaptive baseline, degraded mode, audit trail, prompt versioning)
@@ -197,7 +197,7 @@ Each entry maps to a single wave/phase and its merged PR.
 ### [2026-05-06] feat(pika): diagnostics.go — Diagnostics Engine — wave 7a
 
 - **ТЗ:** ТЗ-v2-7a
-- **PR:** #TBD
+- **PR:** #37
 - **Files:**
   - `pkg/pika/diagnostics.go` — NEW: `DiagnosticsEngine` struct — single point for subagent error diagnosis, correction rule (CR) management, and subagent prompt assembly with active CR injection. `Diagnose` (error attribution by trace_id, pattern detection ≥2 similar errors → SuggestedCR), `CreateCR` (insert CR into registry, TG notification D-149, threshold alert ≥3 active CRs), `BuildSubagentPrompt` (hot-reload base prompt + append active CRs within 500-token budget, oldest-trim), `IncrementVerified` (count++ on successful subagent call, auto-promote active→verified at threshold 5), `ReviewCRs` (weekly Reflector pipeline: promote verified+7d, deactivate active+30d+unverified). `CorrectionRule` type with lifecycle: active → verified → promoted/deactivated. Constants: `defaultMaxActiveCRs=10`, `defaultMaxCRTokens=500`, `defaultVerifyThreshold=5`, `defaultPromotionMinAgeDays=7`, `defaultDeactivationMaxAgeDays=30`. `validCRComponents` map for component validation. `estimateCRTokens` helper (~4 chars/token).
   - `pkg/pika/diagnostics_test.go` — NEW: 10 tests (`TestDiagnose_ErrorFound`, `TestDiagnose_NoErrors`, `TestDiagnose_SuggestedCR`, `TestCreateCR_Valid`, `TestCreateCR_InvalidComponent`, `TestBuildSubagentPrompt_NoCRs`, `TestBuildSubagentPrompt_WithCRs`, `TestBuildSubagentPrompt_TokenOverflow`, `TestBuildSubagentPrompt_MissingFile`, `TestIncrementVerified`, `TestReviewCRs`)
@@ -211,7 +211,7 @@ Each entry maps to a single wave/phase and its merged PR.
 ### [2026-05-06] feat(pika): analytics.go — Go-only Analytics Pipeline — wave 7b
 
 - **ТЗ:** ТЗ-v2-7b
-- **PR:** #TBD
+- **PR:** #38
 - **Files:**
   - `pkg/config/config_pika_analytics.go` — NEW: `AnalyticsConfig` struct (schedule weekly/monthly cron, Telegram channels, anomaly thresholds), `AnalyticsSchedule` struct, `DefaultAnalyticsConfig()` with sensible defaults
   - `pkg/pika/analytics.go` — NEW: `AnalyticsEngine` struct — full Go-only analytics pipeline. `Run(ctx, mode)` orchestrates: period computation, metric collection (7 SQL query sets), delta calculation vs previous period, anomaly detection (7 rules: error rate, tool fail rate, latency P95, subagent errors, unused atoms, stale atoms, significant deltas), Telegram report formatting (≤4096 chars with auto-split), registry snapshot storage (kind=snapshot, upsert). Helper functions: `analyticsComputePeriods`, `analyticsComputeDeltas`, `analyticsDetectAnomalies`, `analyticsFormatReport`, `analyticsPercentile`, `analyticsSplitMessage`, `analyticsFormatCount`, `analyticsHasCritical`. Constants: `AnalyticsWeekly`/`AnalyticsMonthly`, 7 anomaly thresholds, `reportMaxTelegramChars=4096`
@@ -230,7 +230,7 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ### [2026-05-07] feat(pika): TZ-v2-8i — AutoEvent + RAD + Analytics wiring — wave 8i
 - **T3:** TZ-v2-8i
-- **Fixes:** #TBD
+- **Fixes:** #39
 - **Files:**
   - `pkg/agent/hook_pika.go` — NEW: 'autoEventAdapter' struct wrapping 'pika.AutoEventHandler' as 'agent.EventObserver'. Translates 'EventKindToolExecEnd' → 'HandleToolResult'. Compile-time interface check added.
   - `pkg/agent/context_pika.go` — MOD: mount 'autoEventAdapter' as builtin hook via HookRegistration after BotMemory init. Set 'al.botmem = botmem' for RAD reasoning access.
@@ -318,7 +318,7 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ### [2026-05-10] fix(pika): ТЗ-v2-8l — Upstream embed fix + prompt protection — wave 8
 - **ТЗ:** ТЗ-v2-8l
-- **PR:** #TBD
+- **PR:** #41
 - **Files:**
   - `cmd/picoclaw/internal/onboard/helpers.go` — MOD: `onboard()` signature: added `resetPrompts bool`. `createWorkspaceTemplates()` signature: added `preservePrompts bool`. `copyEmbeddedToTarget()` signature: added `preservePrompts bool`. Added skip logic: when `preservePrompts=true`, existing `prompts/*.md` files are not overwritten on re-onboard. Added `"strings"` import.
   - `cmd/picoclaw/internal/onboard/command.go` — MOD: added `--reset-prompts` CLI flag (default `false`). Passes `resetPrompts` to `onboard()`.
@@ -334,7 +334,7 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ### [2026-05-10] feat(pika): ТЗ-v2-8l part 2c — WebUI toggle for prompt protection — wave 8
 - **ТЗ:** ТЗ-v2-8l (часть 2c — WebUI)
-- **PR:** #TBD
+- **PR:** #43
 - **Files:**
   - `web/frontend/src/components/config/form-model.ts` — MODIFIED: added `preserveUserPrompts` field, default, and config parser
   - `web/frontend/src/components/config/config-sections.tsx` — MODIFIED: added `OnboardSection` with toggle
@@ -348,7 +348,7 @@ Each entry maps to a single wave/phase and its merged PR.
 ### [2026-05-12] feat(pika): ТЗ-v2-9b — Pipeline Wiring: Atomizer, Reflector, MCPSecurity, Diagnostics — wave 9b
 
 - **ТЗ:** ТЗ-v2-9b: Pipeline Wiring
-- **PR:** #TBD
+- **PR:** #46
 - **Files:**
   - `pkg/agent/context_pika.go` — MOD: NewDiagnosticsEngine + NewAtomizer + NewReflectorPipeline + NewMCPSecurityPipeline creation. SetDiagnostics() calls to all subagents.
   - `pkg/agent/agent.go` — MOD: added reflector *pika.ReflectorPipeline + mcpSecurity *pika.MCPSecurityPipeline fields and GetReflector()/GetMCPSecurity() getters.
@@ -366,7 +366,7 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ### [2026-05-12] feat(config): extract hardcoded analytics/subagent settings into config — wave 8h
 - **ТЗ:** ТЗ-v2-8h
-- **PR:** #TBD
+- **PR:** #47
 - **Files:**
   - `pkg/config/config_pika_analytics.go` — MODIFIED: extended `AnalyticsConfig` from 3 to 15 fields (Enabled, QueriesDir, Schedule, 7 thresholds: ToolFailThresholdPct/LLMErrorThresholdPct/LatencyP95ThresholdMs/UnusedAtomsPct/StaleAtomsPct/DeltaSpikePct/AnomalyWindowHours, 4 limits: TopQueriesLimit/TopAtomsLimit/ReportMaxLines/HistoryRetentionDays, DisableTelegramReports). `DefaultAnalyticsConfig()` with production defaults replacing 11 hardcoded consts from analytics.go.
   - `pkg/config/config.go` — MODIFIED: added `Analytics AnalyticsConfig` field to global `Config` struct (line 54).
@@ -385,7 +385,7 @@ Each entry maps to a single wave/phase and its merged PR.
 
 ### [2026-05-12] feat(pika): analytics CronService migration — ТЗ-v2-8h block 4 — wave 8
 - **ТЗ:** ТЗ-v2-8h (Block 4)
-- **PR:** #TBD
+- **PR:** #47
 - **Files:**
   - `pkg/gateway/gateway.go` — MODIFIED: analytics engine created before setupCronTool (available in SetOnJob closure). Added `analyticsEngine *pika.AnalyticsEngine` parameter to setupCronTool. HandleAnalyticsJob added to SetOnJob dispatcher (analytics → reflector → fallback chain). RegisterAnalyticsJobs called after CronService.Start() in both setupAndStartServices and restartServices. Removed old ticker block (NewAnalyticsCron).
   - `pkg/pika/analytics_cron.go` — DELETED: custom ticker-based AnalyticsCron struct (Start/Stop/loop goroutines). Replaced by analytics_cron_service.go (CronService pattern).
