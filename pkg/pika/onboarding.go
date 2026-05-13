@@ -33,16 +33,16 @@ Detect language from the user's first message and respond in that language.
    - Name
    - What do you do? (dev, design, management, other)
    - Communication style preference (brief / detailed / contextual)
-3. After getting answers, use files.write to update workspace/USER.md:
-   - Replace every "(заполняется при onboard)" with the real value
-   - Replace "(определяется при onboard)" with detected OS from environment context
+3. After getting answers, use edit_file tool to update workspace/USER.md:
+   - For each placeholder, call edit_file with old_text="(заполняется при onboard)" and new_text=real value
+   - Also replace "(определяется при onboard)" with detected OS from environment context
    - Keep the file structure intact — only fill in the blanks
 4. Confirm briefly that setup is complete.
 
 RULES:
 - If the user's first message is a direct task or question, greet briefly
   and combine the greeting with the answer. Do not block work for onboarding.
-- After files.write succeeds, the placeholder markers disappear from USER.md.
+- After edit_file succeeds, the placeholder markers disappear from USER.md.
   The prompt cache invalidates on next turn and this instruction will not
   appear again — onboarding is complete.`
 }
