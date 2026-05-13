@@ -332,7 +332,7 @@ func (ae *AnalyticsEngine) loadSQL(name string) ([]string, error) {
 	path := filepath.Join(ae.queriesDir, name)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("loadSQL %s: %w", name, err)
+		return nil, fmt.Errorf("pika/analytics: loadSQL %s: %w", name, err)
 	}
 	return analyticsSplitSQL(string(data)), nil
 }
@@ -1007,7 +1007,7 @@ func (ae *AnalyticsEngine) fallbackWriteReport(text string) error {
 	_ = os.MkdirAll(dir, 0o755)
 	fname := filepath.Join(dir, fmt.Sprintf("analytics_%s.md", time.Now().Format("2006-01-02_15-04")))
 	if err := os.WriteFile(fname, []byte(text), 0o644); err != nil {
-		return fmt.Errorf("fallback write: %w", err)
+		return fmt.Errorf("pika/analytics: fallback write: %w", err)
 	}
 	log.Printf("[analytics] fallback: report saved to %s", fname)
 	return nil
@@ -1043,7 +1043,7 @@ func analyticsSplitMessage(text string, maxLen int) []string {
 func (ae *AnalyticsEngine) storeReport(ctx context.Context, report *AnalyticsReport) error {
 	data, err := json.Marshal(report)
 	if err != nil {
-		return fmt.Errorf("marshal report: %w", err)
+		return fmt.Errorf("pika/analytics: marshal report: %w", err)
 	}
 
 	var key string
@@ -1067,7 +1067,7 @@ func (ae *AnalyticsEngine) storeReport(ctx context.Context, report *AnalyticsRep
 		Tags:    tagsJSON,
 	})
 	if upsertErr != nil {
-		return fmt.Errorf("store report: %w", upsertErr)
+		return fmt.Errorf("pika/analytics: store report: %w", upsertErr)
 	}
 	return nil
 }
