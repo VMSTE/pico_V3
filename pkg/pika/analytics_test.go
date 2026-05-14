@@ -31,7 +31,7 @@ func setupAnalyticsTestDB(t *testing.T) *sql.DB {
 	CREATE TABLE IF NOT EXISTS request_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		ts TEXT NOT NULL DEFAULT (datetime('now')),
-		session_id TEXT, msg_index INTEGER,
+		chat_id TEXT, msg_index INTEGER,
 		direction TEXT NOT NULL DEFAULT 'outbound',
 		component TEXT NOT NULL DEFAULT 'main',
 		model TEXT NOT NULL DEFAULT '',
@@ -55,7 +55,7 @@ func setupAnalyticsTestDB(t *testing.T) *sql.DB {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		span_id TEXT NOT NULL, parent_span_id TEXT,
 		trace_id TEXT NOT NULL DEFAULT '',
-		session_id TEXT, turn_id INTEGER,
+		chat_id TEXT, pika_session_id TEXT,
 		component TEXT NOT NULL, operation TEXT NOT NULL DEFAULT '',
 		started_at TEXT NOT NULL DEFAULT (datetime('now')),
 		duration_ms INTEGER,
@@ -64,7 +64,7 @@ func setupAnalyticsTestDB(t *testing.T) *sql.DB {
 	CREATE TABLE IF NOT EXISTS knowledge_atoms (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		atom_id TEXT NOT NULL UNIQUE,
-		session_id TEXT NOT NULL DEFAULT '', turn_id INTEGER NOT NULL DEFAULT 0,
+		chat_id TEXT NOT NULL DEFAULT '', pika_session_id TEXT NOT NULL DEFAULT 0,
 		source_event_id INTEGER, source_message_id INTEGER,
 		category TEXT NOT NULL DEFAULT 'pattern',
 		summary TEXT NOT NULL DEFAULT '', detail TEXT,
@@ -77,7 +77,7 @@ func setupAnalyticsTestDB(t *testing.T) *sql.DB {
 	);
 	CREATE TABLE IF NOT EXISTS atom_usage (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		atom_id TEXT NOT NULL, session_id TEXT, turn_id INTEGER,
+		atom_id TEXT NOT NULL, chat_id TEXT, pika_session_id TEXT,
 		invoked_tool_result TEXT,
 		created_at TEXT NOT NULL DEFAULT (datetime('now'))
 	);

@@ -72,7 +72,7 @@ func countEvents(
 	var c int
 	err := db.QueryRow(
 		"SELECT COUNT(*) FROM events "+
-			"WHERE session_id=?", sid,
+			"WHERE chat_id=?", sid,
 	).Scan(&c)
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func getEventTypes(
 	t.Helper()
 	rows, err := db.Query(
 		"SELECT type FROM events "+
-			"WHERE session_id=? ORDER BY id ASC",
+			"WHERE chat_id=? ORDER BY id ASC",
 		sid,
 	)
 	if err != nil {
@@ -114,7 +114,7 @@ func getEventOutcome(
 	var outcome sql.NullString
 	err := db.QueryRow(
 		"SELECT outcome FROM events "+
-			"WHERE session_id=? "+
+			"WHERE chat_id=? "+
 			"ORDER BY id DESC LIMIT 1",
 		sid,
 	).Scan(&outcome)
@@ -262,7 +262,7 @@ func TestAutoEvent_HeartbeatFlush(t *testing.T) {
 	var summary string
 	err = db.QueryRow(
 		"SELECT summary FROM events "+
-			"WHERE session_id=?", sid,
+			"WHERE chat_id=?", sid,
 	).Scan(&summary)
 	if err != nil {
 		t.Fatal(err)

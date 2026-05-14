@@ -142,7 +142,7 @@ func TestFTS5Works(t *testing.T) {
 
 	// Insert a knowledge atom
 	_, err = db.Exec(`INSERT INTO knowledge_atoms
-		(atom_id, session_id, turn_id, category, summary, detail, tags)
+		(atom_id, chat_id, pika_session_id, category, summary, detail, tags)
 		VALUES ('P-1', 'sess-1', 1, 'pattern', 'deploy OOM fix', 'Increased memory limit to 512MB', '["deploy","OOM"]')`)
 	if err != nil {
 		t.Fatalf("insert atom: %v", err)

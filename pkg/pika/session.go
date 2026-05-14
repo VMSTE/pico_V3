@@ -1,6 +1,6 @@
 // PIKA-V3: SessionLifecycle — in-memory FSM for session lifecycle.
 // Manages session ensure/start/close/rotate + idle detection +
-// rotation triggers. No sessions table — session_id is a grouping
+// rotation triggers. No sessions table — pika_session_id is a grouping
 // key in messages/events/request_log.
 //
 // FSM states:
@@ -113,8 +113,8 @@ func (sl *SessionLifecycle) OnRotate(cb RotateCallback) {
 //  1. baseKey = "tg:{chatID}"
 //  2. If active/idle session for same baseKey → check idle
 //     timeout. If expired → rotate. Otherwise return current.
-//  3. Query DB: SELECT session_id FROM messages
-//     WHERE session_id LIKE '<baseKey>:%' ORDER BY id DESC
+//  3. Query DB: SELECT pika_session_id FROM messages
+//     WHERE pika_pika_session_id LIKE '<baseKey>:%' ORDER BY id DESC
 //  4. If found and idle timeout not expired → resume.
 //  5. Otherwise → StartSession(baseKey).
 func (sl *SessionLifecycle) EnsureSession(
@@ -309,7 +309,7 @@ func (sl *SessionLifecycle) fireCallbacksLocked(
 }
 
 // findLastSessionLocked queries BotMemory for the most recent
-// session matching baseKey prefix. Returns session_id and last
+// session matching baseKey prefix. Returns pika_session_id and last
 // message timestamp.
 func (sl *SessionLifecycle) findLastSessionLocked(
 	baseKey string,
@@ -334,7 +334,7 @@ func (sl *SessionLifecycle) findLastSessionLocked(
 
 // --- BotMemory extension ---
 
-// GetLastSessionByPrefix returns the most recent session_id
+// GetLastSessionByPrefix returns the most recent pika_session_id
 // and its last message timestamp matching a LIKE pattern.
 // Returns ("", zero, nil) if no rows match.
 //
@@ -349,10 +349,10 @@ func (bm *BotMemory) GetLastSessionByPrefix(
 	var sid string
 	var epoch int64
 	err := bm.db.QueryRowContext(ctx,
-		`SELECT session_id,
+		`SELECT pika_session_id,
 		        CAST(strftime('%s', ts) AS INTEGER)
 		 FROM messages
-		 WHERE session_id LIKE ?
+		 WHERE pika_session_id LIKE ?
 		 ORDER BY id DESC LIMIT 1`,
 		pattern,
 	).Scan(&sid, &epoch)

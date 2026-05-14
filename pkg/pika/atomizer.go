@@ -151,7 +151,7 @@ func (a *Atomizer) Run(
 		_ = a.mem.CompleteSpan(ctx, spanIDatomizer, "done", nil, "", "")
 	}()
 	// Step 1: Select chunk (oldest turns <= budget)
-	turnIDs, err := a.mem.GetOldestTurnIDs(
+	turnIDs, err := a.mem.GetOldestPikaSessionIDs(
 		ctx, sessionID, a.cfg.ChunkMaxTokens,
 	)
 	if err != nil {
@@ -362,7 +362,7 @@ func validateAtoms(
 		for _, tid := range atom.SourceTurns {
 			if !turnSet[tid] {
 				return fmt.Errorf(
-					"atom[%d]: turn_id %d not in chunk",
+					"atom[%d]: pika_session_id %d not in chunk",
 					i, tid,
 				)
 			}
@@ -396,8 +396,8 @@ func (a *Atomizer) insertAtom(
 
 	row := KnowledgeAtomRow{
 		AtomID:      atomID,
-		SessionID:   sessionID,
-		TurnID:      atom.SourceTurns[0],
+		ChatID:   sessionID,
+		PikaSessionID:      atom.SourceTurns[0],
 		Category:    atom.Category,
 		Summary:     atom.Summary,
 		Detail:      atom.Detail,
@@ -454,7 +454,7 @@ func (a *Atomizer) buildUserContent(
 	for _, m := range msgs {
 		fmt.Fprintf(&sb,
 			"[turn=%d role=%s ts=%s]\n%s\n\n",
-			m.TurnID, m.Role,
+			m.PikaSessionID, m.Role,
 			m.Ts.Format(time.RFC3339), m.Content,
 		)
 	}
@@ -463,7 +463,7 @@ func (a *Atomizer) buildUserContent(
 	for _, e := range events {
 		fmt.Fprintf(&sb,
 			"[turn=%d type=%s outcome=%s ts=%s]\n%s\n",
-			e.TurnID, e.Type, e.Outcome,
+			e.PikaSessionID, e.Type, e.Outcome,
 			e.Ts.Format(time.RFC3339), e.Summary,
 		)
 		if e.Tags != nil {
@@ -487,10 +487,10 @@ func (a *Atomizer) getMessagesByTurns(
 	}
 	args := inArgs(sid, tids)
 	ph := placeholders(len(tids))
-	q := `SELECT id, session_id, turn_id, ts, role,
+	q := `SELECT id, chat_id, pika_session_id, ts, role,
 		content, tokens, msg_index, metadata
-		FROM messages WHERE session_id=?
-		AND turn_id IN (` + ph + `)
+		FROM messages WHERE chat_id=?
+		AND pika_session_id IN (` + ph + `)
 		ORDER BY id ASC`
 	rows, err := a.mem.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -507,7 +507,7 @@ func (a *Atomizer) getMessagesByTurns(
 		var content, meta sql.NullString
 		var mi sql.NullInt64
 		if err := rows.Scan(
-			&m.ID, &m.SessionID, &m.TurnID,
+			&m.ID, &m.ChatID, &m.PikaSessionID,
 			&ts, &m.Role, &content, &m.Tokens,
 			&mi, &meta,
 		); err != nil {
@@ -531,7 +531,7 @@ func (a *Atomizer) getMessagesByTurns(
 
 // --- Tag helpers (D-75) ---
 
-// collectTagsByTurn builds turn_id -> unique tags from events.
+// collectTagsByTurn builds pika_session_id -> unique tags from events.
 func collectTagsByTurn(
 	events []EventRow,
 ) map[int][]string {
@@ -546,8 +546,8 @@ func collectTagsByTurn(
 		); err != nil {
 			continue
 		}
-		result[e.TurnID] = append(
-			result[e.TurnID], tags...,
+		result[e.PikaSessionID] = append(
+			result[e.PikaSessionID], tags...,
 		)
 	}
 	for tid, tags := range result {
@@ -664,7 +664,7 @@ Rules:
 - Polarity: positive (task succeeded), negative
   (fail/problem/user dissatisfied), neutral (informational).
 - Confidence: 0.0 to 1.0 based on clarity of evidence.
-- source_turns: list of turn_ids this atom covers.
+- source_turns: list of pika_session_ids this atom covers.
 - Keep summaries concise but include exact values
   (IPs, ports, paths, versions) verbatim.
 

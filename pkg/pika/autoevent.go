@@ -207,8 +207,8 @@ func (h *AutoEventHandler) FlushHeartbeats(
 			Summary:   summary,
 			Outcome:   "success",
 			Tags:      tagsJSON,
-			SessionID: sessionID,
-			TurnID:    turnID,
+			ChatID: sessionID,
+			PikaSessionID:    turnID,
 		})
 		if err != nil {
 			flushErr = fmt.Errorf(
@@ -351,8 +351,8 @@ func (h *AutoEventHandler) insertEvent(
 		Summary:   summary,
 		Outcome:   outcome,
 		Tags:      tagsJSON,
-		SessionID: sessionID,
-		TurnID:    turnID,
+		ChatID: sessionID,
+		PikaSessionID:    turnID,
 	})
 	if err != nil {
 		return fmt.Errorf(

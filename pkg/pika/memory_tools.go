@@ -298,7 +298,7 @@ func (ms *MemorySearch) searchMessages(
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT id, role, content, ts
 		FROM messages
-		WHERE session_id = ? AND content LIKE ?
+		WHERE pika_session_id = ? AND content LIKE ?
 		ORDER BY id DESC LIMIT ?`,
 		sessionID, pat, limit)
 	if err != nil {

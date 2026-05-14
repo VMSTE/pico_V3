@@ -322,7 +322,7 @@ func TestArchiveTransactionRollback(t *testing.T) {
 	}
 	bm.db.ExecContext(ctx,
 		`INSERT INTO events_archive
-		(id,session_id,turn_id,ts,type,outcome,
+		(id,chat_id,pika_session_id,ts,type,outcome,
 		summary,tags,blob)
 		VALUES(?,?,?,datetime('now'),
 		'x','','',NULL,NULL)`,

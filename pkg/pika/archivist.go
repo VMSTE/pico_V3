@@ -582,7 +582,7 @@ func (a *Archivist) searchKnowledge(
 			continue
 		}
 		// PIKA-V3: record atom_usage (TZ-v2-9a F-2)
-		tid, _ := a.mem.GetMaxTurnID(ctx, a.currentSessionKey)
+		tid, _ := a.mem.GetMaxPikaSessionID(ctx, a.currentSessionKey)
 		_ = a.mem.InsertAtomUsage(ctx, atom.AtomID, a.currentSpanID, tid, "BRIEF", nil, nil, "", "", a.currentSpanID)
 		hits = append(hits, KnowledgeHit{
 			Category:   atom.Category,
@@ -607,7 +607,7 @@ func (a *Archivist) searchMessages(
 
 	// Guaranteed last N messages (most recent, any session)
 	rows, err := a.mem.db.QueryContext(ctx,
-		`SELECT role, content, turn_id
+		`SELECT role, content, pika_chat_id
 		FROM messages ORDER BY id DESC LIMIT ?`,
 		lastN)
 	if err != nil {
@@ -643,7 +643,7 @@ func (a *Archivist) searchMessages(
 	// LIKE search across all sessions
 	if query != "" {
 		likeRows, lErr := a.mem.db.QueryContext(ctx,
-			`SELECT role, content, turn_id
+			`SELECT role, content, pika_chat_id
 			FROM messages
 			WHERE content LIKE '%' || ? || '%'
 			ORDER BY id DESC LIMIT ?`,

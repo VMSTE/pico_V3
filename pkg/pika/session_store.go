@@ -74,20 +74,20 @@ func buildMetadata(msg providers.Message) json.RawMessage {
 	return data
 }
 
-// currentTurnID returns the current turn_id for a session,
+// currentPikaSessionID returns the current pika_session_id for a session,
 // recovering from DB if not in the in-memory cache.
 // Must be called with s.mu held.
-func (s *PikaSessionStore) currentTurnID(key string) int {
+func (s *PikaSessionStore) currentPikaSessionID(key string) int {
 	tid, ok := s.turnIDs[key]
 	if ok {
 		return tid
 	}
-	maxTID, err := s.mem.GetMaxTurnID(
+	maxTID, err := s.mem.GetMaxPikaSessionID(
 		context.Background(), key,
 	)
 	if err != nil {
 		log.Printf(
-			"pika/session_store: recover turn_id %q: %v",
+			"pika/session_store: recover pika_session_id %q: %v",
 			key, err,
 		)
 		return 0
@@ -101,7 +101,7 @@ func (s *PikaSessionStore) currentTurnID(key string) int {
 func (s *PikaSessionStore) addFullMessageLocked(
 	key string, msg providers.Message,
 ) {
-	tid := s.currentTurnID(key)
+	tid := s.currentPikaSessionID(key)
 	if msg.Role == "user" {
 		tid++
 		s.turnIDs[key] = tid
@@ -111,8 +111,8 @@ func (s *PikaSessionStore) addFullMessageLocked(
 	tokens := tokenizer.EstimateMessageTokens(msg)
 
 	row := MessageRow{
-		SessionID: key,
-		TurnID:    tid,
+		ChatID: key,
+		PikaSessionID:    tid,
 		Role:      msg.Role,
 		Content:   msg.Content,
 		Tokens:    tokens,
@@ -243,7 +243,7 @@ func (s *PikaSessionStore) Save(_ string) error {
 
 // ListSessions returns all distinct session keys from the DB.
 func (s *PikaSessionStore) ListSessions() []string {
-	ids, err := s.mem.GetDistinctSessionIDs(
+	ids, err := s.mem.GetDistinctChatIDs(
 		context.Background(),
 	)
 	if err != nil {
