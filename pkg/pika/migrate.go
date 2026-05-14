@@ -58,6 +58,7 @@ func Migrate(dbPath string) (*sql.DB, error) {
 	}
 	migrations := []migration{
 		{version: 1, description: "unified v3 — initial schema", ddl: migrationV1},
+		{version: 2, description: "rename session_id->chat_id, turn_id->pika_session_id", ddl: migrationV2},
 	}
 
 	for _, m := range migrations {
@@ -466,4 +467,101 @@ CREATE TABLE IF NOT EXISTS daily_metrics (
     p95_latency_ms           INTEGER,
     p99_latency_ms           INTEGER
 );
+`
+
+// PIKA-V3: migrationV2 — rename session_id->chat_id, turn_id->pika_session_id (TEXT).
+// Temporary pika_ prefix avoids confusion with upstream "session_id" scattered across code.
+// Final rename pika_session_id->session_id will be a separate migration after full cleanup.
+// NOTE: ALTER TABLE RENAME COLUMN does not change type affinity. Old INTEGER values in
+// pika_session_id columns are auto-cast to TEXT by SQLite when read as string.
+const migrationV2 = `
+-- §1. messages
+ALTER TABLE messages RENAME COLUMN session_id TO chat_id;
+ALTER TABLE messages RENAME COLUMN turn_id TO pika_session_id;
+
+-- §2. events
+ALTER TABLE events RENAME COLUMN session_id TO chat_id;
+ALTER TABLE events RENAME COLUMN turn_id TO pika_session_id;
+
+-- §3. knowledge_atoms
+ALTER TABLE knowledge_atoms RENAME COLUMN session_id TO chat_id;
+ALTER TABLE knowledge_atoms RENAME COLUMN turn_id TO pika_session_id;
+
+-- §4. reasoning_log
+ALTER TABLE reasoning_log RENAME COLUMN session_id TO chat_id;
+ALTER TABLE reasoning_log RENAME COLUMN turn_id TO pika_session_id;
+
+-- §5. trace_spans
+ALTER TABLE trace_spans RENAME COLUMN session_id TO chat_id;
+ALTER TABLE trace_spans RENAME COLUMN turn_id TO pika_session_id;
+
+-- §6. prompt_snapshots
+ALTER TABLE prompt_snapshots RENAME COLUMN session_id TO chat_id;
+ALTER TABLE prompt_snapshots RENAME COLUMN turn_id TO pika_session_id;
+
+-- §7. request_log (session_id only, no turn_id)
+ALTER TABLE request_log RENAME COLUMN session_id TO chat_id;
+
+-- §8. messages_archive
+ALTER TABLE messages_archive RENAME COLUMN session_id TO chat_id;
+ALTER TABLE messages_archive RENAME COLUMN turn_id TO pika_session_id;
+
+-- §9. events_archive
+ALTER TABLE events_archive RENAME COLUMN session_id TO chat_id;
+ALTER TABLE events_archive RENAME COLUMN turn_id TO pika_session_id;
+
+-- §10. reasoning_log_archive
+ALTER TABLE reasoning_log_archive RENAME COLUMN session_id TO chat_id;
+ALTER TABLE reasoning_log_archive RENAME COLUMN turn_id TO pika_session_id;
+
+-- §11. atom_usage (turn_id only, no session_id)
+ALTER TABLE atom_usage RENAME COLUMN turn_id TO pika_session_id;
+
+-- §12. Recreate indices with correct names.
+-- SQLite RENAME COLUMN auto-updates column refs inside indices,
+-- but index NAMES stay old and become misleading. Drop + recreate.
+
+-- messages
+DROP INDEX IF EXISTS idx_messages_session_turn;
+DROP INDEX IF EXISTS idx_messages_session_index;
+CREATE INDEX idx_messages_chat_session ON messages(chat_id, pika_session_id);
+CREATE INDEX idx_messages_chat_index   ON messages(chat_id, msg_index);
+
+-- events
+DROP INDEX IF EXISTS idx_events_session_turn;
+CREATE INDEX idx_events_chat_session ON events(chat_id, pika_session_id);
+
+-- knowledge_atoms
+DROP INDEX IF EXISTS idx_katoms_session;
+CREATE INDEX idx_katoms_chat ON knowledge_atoms(chat_id);
+
+-- messages_archive
+DROP INDEX IF EXISTS idx_msg_arch_session;
+CREATE INDEX idx_msg_arch_chat ON messages_archive(chat_id, pika_session_id);
+
+-- events_archive
+DROP INDEX IF EXISTS idx_evt_arch_session;
+CREATE INDEX idx_evt_arch_chat ON events_archive(chat_id, pika_session_id);
+
+-- request_log
+DROP INDEX IF EXISTS idx_reqlog_session;
+CREATE INDEX idx_reqlog_chat ON request_log(chat_id, msg_index);
+
+-- reasoning_log
+DROP INDEX IF EXISTS idx_reason_session;
+DROP INDEX IF EXISTS idx_reason_turn;
+CREATE INDEX idx_reason_chat         ON reasoning_log(chat_id, msg_index);
+CREATE INDEX idx_reason_pika_session ON reasoning_log(chat_id, pika_session_id);
+
+-- reasoning_log_archive
+DROP INDEX IF EXISTS idx_rlog_arch_session;
+CREATE INDEX idx_rlog_arch_chat ON reasoning_log_archive(chat_id, pika_session_id);
+
+-- trace_spans
+DROP INDEX IF EXISTS idx_spans_session;
+CREATE INDEX idx_spans_chat ON trace_spans(chat_id, pika_session_id);
+
+-- atom_usage
+DROP INDEX IF EXISTS idx_ausage_trace;
+CREATE INDEX idx_ausage_trace ON atom_usage(trace_id, pika_session_id);
 `
