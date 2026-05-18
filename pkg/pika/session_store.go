@@ -1,4 +1,5 @@
 // PIKA-V3: PikaSessionStore implements session.SessionStore via BotMemory.
+// Uses SessionLifecycle per chat key for session ID generation.
 
 package pika
 
@@ -7,7 +8,6 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
-	"strconv"
 
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/session"
@@ -20,10 +20,12 @@ var _ session.SessionStore = (*PikaSessionStore)(nil)
 // PikaSessionStore implements session.SessionStore using BotMemory
 // as the SQLite backend. Thread-safe via mutex for in-memory state.
 // All DB operations delegate to BotMemory (no direct SQL here).
+// PIKA-V3: Each chat key gets its own SessionLifecycle instance
+// that generates session IDs in format "baseKey:unixTimestamp".
 type PikaSessionStore struct {
 	mem          *BotMemory
 	mu           sync.Mutex
-	turnIDs      map[string]int
+	sessions     map[string]*SessionLifecycle
 	summaryCache map[string]string
 }
 
@@ -31,7 +33,7 @@ type PikaSessionStore struct {
 func NewPikaSessionStore(mem *BotMemory) *PikaSessionStore {
 	return &PikaSessionStore{
 		mem:          mem,
-		turnIDs:      make(map[string]int),
+		sessions:     make(map[string]*SessionLifecycle),
 		summaryCache: make(map[string]string),
 	}
 }
@@ -75,26 +77,29 @@ func buildMetadata(msg providers.Message) json.RawMessage {
 	return data
 }
 
-// currentPikaSessionID returns the current pika_session_id for a session,
-// recovering from DB if not in the in-memory cache.
+// getOrCreateSessionLocked returns the SessionLifecycle for a
+// chat key, creating one with default config if needed.
 // Must be called with s.mu held.
-func (s *PikaSessionStore) currentPikaSessionID(key string) int {
-	tid, ok := s.turnIDs[key]
-	if ok {
-		return tid
+func (s *PikaSessionStore) getOrCreateSessionLocked(
+	key string,
+) *SessionLifecycle {
+	sl, ok := s.sessions[key]
+	if !ok {
+		sl = NewSessionLifecycle(s.mem, SessionConfig{})
+		s.sessions[key] = sl
 	}
-	maxTID, err := s.mem.GetMaxPikaSessionID(
-		context.Background(), key,
-	)
-	if err != nil {
-		log.Printf(
-			"pika/session_store: recover pika_session_id %q: %v",
-			key, err,
-		)
-		return 0
-	}
-	n, _ := strconv.Atoi(maxTID); s.turnIDs[key] = n
-	return n
+	return sl
+}
+
+// Session returns the SessionLifecycle for a chat key,
+// creating one if needed. Used by upstream to check rotation
+// triggers, register callbacks, get session ID, etc.
+func (s *PikaSessionStore) Session(
+	key string,
+) *SessionLifecycle {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.getOrCreateSessionLocked(key)
 }
 
 // addFullMessageLocked is the internal implementation.
@@ -102,22 +107,22 @@ func (s *PikaSessionStore) currentPikaSessionID(key string) int {
 func (s *PikaSessionStore) addFullMessageLocked(
 	key string, msg providers.Message,
 ) {
-	tid := s.currentPikaSessionID(key)
+	sl := s.getOrCreateSessionLocked(key)
+	sid := sl.EnsureSession(key)
 	if msg.Role == "user" {
-		tid++
-		s.turnIDs[key] = tid
+		sl.Touch()
 	}
 
 	meta := buildMetadata(msg)
 	tokens := tokenizer.EstimateMessageTokens(msg)
 
 	row := MessageRow{
-		ChatID: key,
-		PikaSessionID:    strconv.Itoa(tid),
-		Role:      msg.Role,
-		Content:   msg.Content,
-		Tokens:    tokens,
-		Metadata:  meta,
+		ChatID:        key,
+		PikaSessionID: sid,
+		Role:          msg.Role,
+		Content:       msg.Content,
+		Tokens:        tokens,
+		Metadata:      meta,
 	}
 	_, err := s.mem.SaveMessage(context.Background(), row)
 	if err != nil {
@@ -174,7 +179,8 @@ func (s *PikaSessionStore) GetHistory(
 				r.Metadata, &meta,
 			); jErr != nil {
 				log.Printf(
-					"pika/session_store: unmarshal metadata id=%d: %v",
+					"pika/session_store: "+
+						"unmarshal metadata id=%d: %v",
 					r.ID, jErr,
 				)
 			} else {
@@ -222,7 +228,11 @@ func (s *PikaSessionStore) SetHistory(
 		)
 		return
 	}
-	s.turnIDs[key] = 0
+	// PIKA-V3: close old session; fresh one created on next access
+	if sl, ok := s.sessions[key]; ok {
+		sl.CloseSession("history_reset")
+		delete(s.sessions, key)
+	}
 	for _, msg := range history {
 		s.addFullMessageLocked(key, msg)
 	}
