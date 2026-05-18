@@ -80,6 +80,7 @@ type ArchivistCaller interface {
 	BuildPrompt(
 		ctx context.Context, input ArchivistInput,
 	) (*ArchivistResult, error)
+	InvalidateBrief()
 }
 
 // noopArchivistCaller is an ArchivistCaller that always returns
@@ -91,6 +92,8 @@ func (noopArchivistCaller) BuildPrompt(
 ) (*ArchivistResult, error) {
 	return &ArchivistResult{}, nil
 }
+
+func (noopArchivistCaller) InvalidateBrief() {}
 
 // NewNoopArchivistCaller returns an ArchivistCaller stub
 // that always returns an empty MEMORY BRIEF.
