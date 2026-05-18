@@ -27,7 +27,7 @@ var categoryPrefix = map[string]string{
 type MessageRow struct {
 	ID        int64           `json:"id"`
 	ChatID string          `json:"chat_id"`
-	PikaSessionID    int             `json:"pika_session_id"`
+	PikaSessionID    string             `json:"pika_session_id"`
 	Ts        time.Time       `json:"ts"`
 	Role      string          `json:"role"`
 	Content   string          `json:"content"`
@@ -46,7 +46,7 @@ type EventRow struct {
 	Tags      json.RawMessage `json:"tags,omitempty"`
 	Data      json.RawMessage `json:"data,omitempty"`
 	ChatID string          `json:"chat_id"`
-	PikaSessionID    int             `json:"pika_session_id"`
+	PikaSessionID    string             `json:"pika_session_id"`
 }
 
 // KnowledgeAtomRow represents a row in the knowledge_atoms table.
@@ -54,7 +54,7 @@ type KnowledgeAtomRow struct {
 	ID              int64           `json:"id"`
 	AtomID          string          `json:"atom_id"`
 	ChatID       string          `json:"chat_id"`
-	PikaSessionID          int             `json:"pika_session_id"`
+	PikaSessionID          string             `json:"pika_session_id"`
 	SourceEventID   *int64          `json:"source_event_id,omitempty"`
 	SourceMessageID *int64          `json:"source_message_id,omitempty"`
 	Category        string          `json:"category"`
@@ -121,7 +121,7 @@ type ReasoningLogRow struct {
 	ToolCalls         json.RawMessage `json:"tool_calls,omitempty"`
 	ContextPct        float64         `json:"context_pct"`
 	ReasoningKeywords json.RawMessage `json:"reasoning_keywords,omitempty"`
-	PikaSessionID            int             `json:"pika_session_id"`
+	PikaSessionID            string             `json:"pika_session_id"`
 }
 
 // TraceSpanRow represents a row in the trace_spans table.
@@ -130,7 +130,7 @@ type TraceSpanRow struct {
 	ParentSpanID string          `json:"parent_span_id,omitempty"`
 	TraceID      string          `json:"trace_id"`
 	ChatID    string          `json:"chat_id,omitempty"`
-	PikaSessionID       *int            `json:"pika_session_id,omitempty"`
+	PikaSessionID       *string            `json:"pika_session_id,omitempty"`
 	Component    string          `json:"component"`
 	Operation    string          `json:"operation"`
 	StartedAt    time.Time       `json:"started_at"`
@@ -142,7 +142,7 @@ type TraceSpanRow struct {
 type EventArchiveRow struct {
 	ID        int64           `json:"id"`
 	ChatID string          `json:"chat_id"`
-	PikaSessionID    int             `json:"pika_session_id"`
+	PikaSessionID    string             `json:"pika_session_id"`
 	Ts        time.Time       `json:"ts"`
 	Type      string          `json:"type"`
 	Outcome   string          `json:"outcome"`
@@ -206,7 +206,7 @@ func placeholders(n int) string {
 	return strings.Repeat("?,", n-1) + "?"
 }
 
-func inArgs(sid string, ids []int) []any {
+func inArgs(sid string, ids []string) []any {
 	a := make([]any, 0, 1+len(ids))
 	a = append(a, sid)
 	for _, id := range ids {
@@ -309,7 +309,7 @@ func (bm *BotMemory) SumTokensBySession(ctx context.Context, sid string) (int64,
 }
 
 // GetOldestPikaSessionIDs returns turn IDs from oldest to newest up to a token budget.
-func (bm *BotMemory) GetOldestPikaSessionIDs(ctx context.Context, sid string, budget int) ([]int, error) {
+func (bm *BotMemory) GetOldestPikaSessionIDs(ctx context.Context, sid string, budget int) ([]string, error) {
 	rows, err := bm.db.QueryContext(ctx,
 		`SELECT pika_session_id, SUM(tokens) as t FROM messages
 		WHERE chat_id=? GROUP BY pika_session_id ORDER BY MIN(id) ASC`, sid)
@@ -317,10 +317,10 @@ func (bm *BotMemory) GetOldestPikaSessionIDs(ctx context.Context, sid string, bu
 		return nil, fmt.Errorf("pika/botmemory: oldest turns: %w", err)
 	}
 	defer rows.Close()
-	var ids []int
+	var ids []string
 	var acc int
 	for rows.Next() {
-		var tid, tok int
+		var tid string; var tok int
 		if err := rows.Scan(&tid, &tok); err != nil {
 			return nil, err
 		}
@@ -345,12 +345,12 @@ func (bm *BotMemory) CountMessagesBySession(ctx context.Context, sid string) (in
 }
 
 // GetMaxPikaSessionID returns the highest pika_session_id for a session.
-func (bm *BotMemory) GetMaxPikaSessionID(ctx context.Context, sid string) (int, error) {
-	var m int
+func (bm *BotMemory) GetMaxPikaSessionID(ctx context.Context, sid string) (string, error) {
+	var m string
 	err := bm.db.QueryRowContext(ctx,
-		`SELECT COALESCE(MAX(pika_session_id),0) FROM messages WHERE chat_id=?`, sid).Scan(&m)
+		`SELECT COALESCE(MAX(pika_session_id),'') FROM messages WHERE chat_id=?`, sid).Scan(&m)
 	if err != nil {
-		return 0, fmt.Errorf("pika/botmemory: max turn id: %w", err)
+		return "", fmt.Errorf("pika/botmemory: max turn id: %w", err)
 	}
 	return m, nil
 }
@@ -378,7 +378,7 @@ func (bm *BotMemory) SaveEvent(ctx context.Context, e EventRow) (int64, error) {
 }
 
 // GetEventsByTurns returns events for specific turn IDs in a session.
-func (bm *BotMemory) GetEventsByTurns(ctx context.Context, sid string, tids []int) ([]EventRow, error) {
+func (bm *BotMemory) GetEventsByTurns(ctx context.Context, sid string, tids []string) ([]EventRow, error) {
 	if len(tids) == 0 {
 		return nil, nil
 	}
@@ -653,7 +653,7 @@ func (bm *BotMemory) InsertReasoningLog(ctx context.Context, r ReasoningLogRow) 
 }
 
 // GetReasoningByTurns returns reasoning log rows for specific turn IDs in a session.
-func (bm *BotMemory) GetReasoningByTurns(ctx context.Context, sid string, tids []int) ([]ReasoningLogRow, error) {
+func (bm *BotMemory) GetReasoningByTurns(ctx context.Context, sid string, tids []string) ([]ReasoningLogRow, error) {
 	if len(tids) == 0 {
 		return nil, nil
 	}
@@ -748,7 +748,7 @@ func (bm *BotMemory) recoverStaleSpans(ctx context.Context) error {
 
 // ArchiveAndDeleteTurns archives messages+events+reasoning for turnIDs
 // into *_archive tables, then deletes from hot. Single TX.
-func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turnIDs []int) error {
+func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turnIDs []string) error {
 	if len(turnIDs) == 0 {
 		return nil
 	}
@@ -808,7 +808,7 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 		var ts, typ, summary string
 		var outcome, tags, data sql.NullString
 		var sessID string
-		var turnID int
+		var turnID string
 		scanErr := eRows.Scan(&id, &ts, &typ, &summary, &outcome, &tags, &data, &sessID, &turnID)
 		if scanErr != nil {
 			return fmt.Errorf("pika/botmemory: archive scan evt: %w", scanErr)
@@ -841,7 +841,7 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 	for rRows.Next() {
 		var id int64
 		var sessID string
-		var turnID int
+		var turnID string
 		var ts string
 		var task, mode, rText sql.NullString
 		var rTokens int
@@ -959,7 +959,7 @@ func (bm *BotMemory) UpsertPromptVersion(
 // InsertPromptSnapshot records a prompt composition snapshot for a trace.
 func (bm *BotMemory) InsertPromptSnapshot(
 	ctx context.Context, snapshotID, traceID, sessionID string,
-	turnID int, coreID, ctxID, briefHash string,
+	turnID string, coreID, ctxID, briefHash string,
 	tokens map[string]int, fullHash, preview string, buildMs int,
 ) error {
 	_, err := bm.db.ExecContext(ctx,
@@ -982,7 +982,7 @@ func (bm *BotMemory) InsertPromptSnapshot(
 
 // InsertAtomUsage records usage of a knowledge atom in a prompt.
 func (bm *BotMemory) InsertAtomUsage(
-	ctx context.Context, atomID, traceID string, turnID int,
+	ctx context.Context, atomID, traceID string, turnID string,
 	usedIn string, position, promptTokens *int,
 	toolAfter, toolResult, archSpanID string,
 ) error {

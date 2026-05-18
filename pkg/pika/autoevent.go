@@ -120,7 +120,7 @@ func (h *AutoEventHandler) HandleToolResult(
 	operation string,
 	isError bool,
 	sessionID string,
-	turnID int,
+	turnID string,
 ) error {
 	// 1. Build key
 	key := toolName + "." + operation
@@ -186,7 +186,7 @@ func (h *AutoEventHandler) HandleToolResult(
 func (h *AutoEventHandler) FlushHeartbeats(
 	ctx context.Context,
 	sessionID string,
-	turnID int,
+	turnID string,
 ) error {
 	var flushErr error
 	h.heartbeatCtrs.Range(func(key, value any) bool {
@@ -336,7 +336,7 @@ func (h *AutoEventHandler) incrementHeartbeat(
 func (h *AutoEventHandler) insertEvent(
 	ctx context.Context,
 	sessionID string,
-	turnID int,
+	turnID string,
 	eventType string,
 	summary string,
 	outcome string,

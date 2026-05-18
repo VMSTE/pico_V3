@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"strconv"
 
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/session"
@@ -92,8 +93,8 @@ func (s *PikaSessionStore) currentPikaSessionID(key string) int {
 		)
 		return 0
 	}
-	s.turnIDs[key] = maxTID
-	return maxTID
+	n, _ := strconv.Atoi(maxTID); s.turnIDs[key] = n
+	return n
 }
 
 // addFullMessageLocked is the internal implementation.
@@ -112,7 +113,7 @@ func (s *PikaSessionStore) addFullMessageLocked(
 
 	row := MessageRow{
 		ChatID: key,
-		PikaSessionID:    tid,
+		PikaSessionID:    strconv.Itoa(tid),
 		Role:      msg.Role,
 		Content:   msg.Content,
 		Tokens:    tokens,

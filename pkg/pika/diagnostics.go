@@ -123,7 +123,7 @@ func (d *DiagnosticsEngine) Diagnose(ctx context.Context, traceID string) Diagno
 
 	var span TraceSpanRow
 	var parentSpanID, sessionID string
-	var turnID int
+	var turnID string
 	err := row.Scan(
 		&span.SpanID, &parentSpanID, &span.TraceID,
 		&sessionID, &turnID,
@@ -137,7 +137,7 @@ func (d *DiagnosticsEngine) Diagnose(ctx context.Context, traceID string) Diagno
 	}
 	span.ParentSpanID = parentSpanID
 	span.ChatID = sessionID
-	if turnID != 0 {
+	if turnID != "" {
 		span.PikaSessionID = &turnID
 	}
 

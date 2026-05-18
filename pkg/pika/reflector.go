@@ -734,7 +734,7 @@ func (r *ReflectorPipeline) applyPattern(
 	row := KnowledgeAtomRow{
 		AtomID:      atomID,
 		ChatID:   "reflector",
-		PikaSessionID:      0,
+		PikaSessionID:      "",
 		Category:    "pattern",
 		Summary:     pat.Summary,
 		Detail:      pat.SuggestedAction,
@@ -799,7 +799,7 @@ func (r *ReflectorPipeline) applyRunbook(
 	row := KnowledgeAtomRow{
 		AtomID:      atomID,
 		ChatID:   "reflector",
-		PikaSessionID:      0,
+		PikaSessionID:      "",
 		Category:    "runbook_draft",
 		Summary:     rd.Trigger,
 		Detail:      string(detail),

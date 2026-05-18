@@ -49,7 +49,7 @@ type AtomLLMOutput struct {
 	Detail      string  `json:"detail,omitempty"`
 	Polarity    string  `json:"polarity"`
 	Confidence  float64 `json:"confidence"`
-	SourceTurns []int   `json:"source_turns"`
+	SourceTurns []string   `json:"source_turns"`
 }
 
 // atomizerLLMResponse is the full structured output from LLM.
@@ -244,7 +244,7 @@ func (a *Atomizer) Run(
 func (a *Atomizer) callWithRetry(
 	ctx context.Context,
 	promptText, userContent string,
-	validTurns []int,
+	validTurns []string,
 ) (*atomizerLLMResponse, error) {
 	var lastErr error
 	for attempt := 0; attempt <= a.cfg.MaxRetries; attempt++ {
@@ -321,12 +321,12 @@ func parseAtomizerOutput(
 
 // validateAtoms checks schema constraints on all atoms.
 func validateAtoms(
-	atoms []AtomLLMOutput, validTurns []int,
+	atoms []AtomLLMOutput, validTurns []string,
 ) error {
 	if len(atoms) == 0 {
 		return fmt.Errorf("no atoms in output")
 	}
-	turnSet := make(map[int]bool, len(validTurns))
+	turnSet := make(map[string]bool, len(validTurns))
 	for _, t := range validTurns {
 		turnSet[t] = true
 	}
@@ -376,7 +376,7 @@ func (a *Atomizer) insertAtom(
 	ctx context.Context,
 	sessionID string,
 	atom AtomLLMOutput,
-	tagsByTurn map[int][]string,
+	tagsByTurn map[string][]string,
 ) error {
 	atomID, err := a.atomGen.Next(ctx, atom.Category)
 	if err != nil {
@@ -437,7 +437,7 @@ func (a *Atomizer) loadPromptFile() (string, error) {
 func (a *Atomizer) buildUserContent(
 	msgs []MessageRow,
 	events []EventRow,
-	turnIDs []int,
+	turnIDs []string,
 ) string {
 	var sb strings.Builder
 
@@ -480,7 +480,7 @@ func (a *Atomizer) buildUserContent(
 // getMessagesByTurns fetches messages for specific turn IDs.
 // Same package as BotMemory — accesses unexported db field.
 func (a *Atomizer) getMessagesByTurns(
-	ctx context.Context, sid string, tids []int,
+	ctx context.Context, sid string, tids []string,
 ) ([]MessageRow, error) {
 	if len(tids) == 0 {
 		return nil, nil
@@ -534,8 +534,8 @@ func (a *Atomizer) getMessagesByTurns(
 // collectTagsByTurn builds pika_session_id -> unique tags from events.
 func collectTagsByTurn(
 	events []EventRow,
-) map[int][]string {
-	result := make(map[int][]string)
+) map[string][]string {
+	result := make(map[string][]string)
 	for _, e := range events {
 		if e.Tags == nil {
 			continue
@@ -558,7 +558,7 @@ func collectTagsByTurn(
 
 // mergeTagsForTurns collects unique tags from specified turns.
 func mergeTagsForTurns(
-	turns []int, tagsByTurn map[int][]string,
+	turns []string, tagsByTurn map[string][]string,
 ) []string {
 	seen := make(map[string]bool)
 	var result []string
