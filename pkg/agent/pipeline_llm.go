@@ -400,6 +400,16 @@ func (p *Pipeline) CallLLM(
 		})
 	}
 
+	// PIKA-V3: wire CheckRotationTriggers after LLM response
+	if ps, ok := ts.agent.Sessions.(*pika.PikaSessionStore); ok {
+		if exec.response.Usage != nil && ts.agent.ContextWindow > 0 {
+			ctxPct := float64(exec.response.Usage.PromptTokens) /
+				float64(ts.agent.ContextWindow)
+			sl := ps.Session(ts.sessionKey)
+			sl.CheckRotationTriggers(ctxPct, iteration)
+		}
+	}
+
 	llmResponseFields := map[string]any{
 		"agent_id":       ts.agent.ID,
 		"iteration":      iteration,
