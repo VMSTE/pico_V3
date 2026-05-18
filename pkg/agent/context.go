@@ -25,7 +25,6 @@ import (
 type ContextBuilder struct {
 	workspace      string
 	skillsLoader   *skills.SkillsLoader
-	memory         *MemoryStore
 	splitOnMarker  bool
 	promptRegistry *PromptRegistry
 
@@ -84,7 +83,6 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 	return &ContextBuilder{
 		workspace:      workspace,
 		skillsLoader:   skills.NewSkillsLoader(workspace, globalSkillsDir, builtinSkillsDir),
-		memory:         NewMemoryStore(workspace),
 		promptRegistry: NewPromptRegistry(),
 	}
 }
@@ -219,20 +217,6 @@ The following skills extend your capabilities. To use a skill, read its SKILL.md
 		})
 	}
 
-	// Memory context
-	memoryContext := cb.memory.GetMemoryContext()
-	if memoryContext != "" {
-		add(PromptPart{
-			ID:      "context.memory",
-			Layer:   PromptLayerContext,
-			Slot:    PromptSlotMemory,
-			Source:  PromptSource{ID: PromptSourceMemory, Name: "memory:workspace"},
-			Title:   "memory",
-			Content: "# Memory\n\n" + memoryContext,
-			Stable:  true,
-			Cache:   PromptCacheEphemeral,
-		})
-	}
 
 	// Multi-Message Sending (if enabled)
 	if cb.splitOnMarker {
