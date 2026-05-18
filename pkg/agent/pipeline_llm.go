@@ -380,7 +380,7 @@ func (p *Pipeline) CallLLM(
 			tokOut = exec.response.Usage.CompletionTokens
 		}
 		al.telemetry.RecordLLMCall(turnCtx, pika.RecordLLMParams{
-			SessionID: ts.sessionKey,
+			ChatID:    ts.sessionKey,
 			Model:     exec.llmModel,
 			Direction: "chat",
 			Component: "main",
@@ -391,12 +391,12 @@ func (p *Pipeline) CallLLM(
 	}
 	// PIKA-V3: Record reasoning -> reasoning_log (TZ-v2-9a)
 	if al.botmem != nil && exec.response != nil && reasoningContent != "" {
-		tid, _ := al.botmem.GetMaxTurnID(turnCtx, ts.sessionKey)
+		tid, _ := al.botmem.GetMaxPikaSessionID(turnCtx, ts.sessionKey)
 		_, _ = al.botmem.InsertReasoningLog(turnCtx, pika.ReasoningLogRow{
-			SessionID:       ts.sessionKey,
+			ChatID:          ts.sessionKey,
 			ReasoningText:   reasoningContent,
 			ReasoningTokens: len(reasoningContent) / 4,
-			TurnID:          tid,
+			PikaSessionID:   tid,
 		})
 	}
 
