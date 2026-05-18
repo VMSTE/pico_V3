@@ -157,9 +157,25 @@ func (s *PikaSessionStore) AddMessage(
 func (s *PikaSessionStore) GetHistory(
 	key string,
 ) []providers.Message {
-	rows, err := s.mem.GetMessages(
-		context.Background(), key,
+	// PIKA-V3: session-scoped history
+	s.mu.Lock()
+	sl := s.sessions[key]
+	s.mu.Unlock()
+
+	var (
+		rows []MessageRow
+		err  error
 	)
+	if sl != nil {
+		sid := sl.SessionID()
+		rows, err = s.mem.GetMessagesBySession(
+			context.Background(), key, sid,
+		)
+	} else {
+		rows, err = s.mem.GetMessages(
+			context.Background(), key,
+		)
+	}
 	if err != nil {
 		log.Printf(
 			"pika/session_store: get history %q: %v",
