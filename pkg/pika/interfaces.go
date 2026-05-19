@@ -41,9 +41,9 @@ func NewAlwaysHealthyProvider() SystemStateProvider {
 // ArchivistInput holds the parameters for an Archivist
 // BuildPrompt call.
 type ArchivistInput struct {
-	SessionKey string
-	Message    string
-	IsRotation bool
+	SessionKey   string
+	Message      string
+	IsRotation   bool
 	ToolCatalog  []string // PIKA-V3: available tool names
 	SkillCatalog []string // PIKA-V3: available skill names
 }
@@ -69,9 +69,9 @@ type MemoryBrief struct {
 
 // ArchivistResult holds the structured output from the Archivist.
 type ArchivistResult struct {
-	Focus     Focus
-	Brief     MemoryBrief
-	BriefText string // serialized text for system prompt
+	Focus             Focus
+	Brief             MemoryBrief
+	BriefText         string   // serialized text for system prompt
 	RecommendedTools  []string // PIKA-V3: tools selected by Archivist
 	RecommendedSkills []string // PIKA-V3: skills selected by Archivist
 }

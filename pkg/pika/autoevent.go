@@ -203,12 +203,12 @@ func (h *AutoEventHandler) FlushHeartbeats(
 			[]string{"heartbeat", "aggregated"},
 		)
 		_, err := h.bm.SaveEvent(ctx, EventRow{
-			Type:      eventType,
-			Summary:   summary,
-			Outcome:   "success",
-			Tags:      tagsJSON,
-			ChatID: sessionID,
-			PikaSessionID:    turnID,
+			Type:          eventType,
+			Summary:       summary,
+			Outcome:       "success",
+			Tags:          tagsJSON,
+			ChatID:        sessionID,
+			PikaSessionID: turnID,
 		})
 		if err != nil {
 			flushErr = fmt.Errorf(
@@ -347,12 +347,12 @@ func (h *AutoEventHandler) insertEvent(
 		tagsJSON, _ = json.Marshal(tags)
 	}
 	_, err := h.bm.SaveEvent(ctx, EventRow{
-		Type:      eventType,
-		Summary:   summary,
-		Outcome:   outcome,
-		Tags:      tagsJSON,
-		ChatID: sessionID,
-		PikaSessionID:    turnID,
+		Type:          eventType,
+		Summary:       summary,
+		Outcome:       outcome,
+		Tags:          tagsJSON,
+		ChatID:        sessionID,
+		PikaSessionID: turnID,
 	})
 	if err != nil {
 		return fmt.Errorf(

@@ -122,10 +122,10 @@ type MessageHit struct {
 
 // archivistLLMOutput is the structured JSON from the LLM.
 type archivistLLMOutput struct {
-	Focus       Focus       `json:"focus"`
-	MemoryBrief MemoryBrief `json:"memory_brief"`
-	RecommendedTools  []string `json:"recommended_tools"`
-	RecommendedSkills []string `json:"recommended_skills"`
+	Focus             Focus       `json:"focus"`
+	MemoryBrief       MemoryBrief `json:"memory_brief"`
+	RecommendedTools  []string    `json:"recommended_tools"`
+	RecommendedSkills []string    `json:"recommended_skills"`
 }
 
 // Archivist implements ArchivistCaller via an agentic LLM session.
@@ -139,8 +139,8 @@ type Archivist struct {
 	diag     *DiagnosticsEngine
 
 	mu          sync.RWMutex
-	lastResult   *ArchivistResult
-	cachedFocus  *Focus
+	lastResult  *ArchivistResult
+	cachedFocus *Focus
 
 	// PIKA-V3: transient tracking for atom_usage (TZ-v2-9a F-2)
 	currentSessionKey string

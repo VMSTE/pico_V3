@@ -78,13 +78,13 @@ func TestSearchMemory_BasicQuery(t *testing.T) {
 
 	// Layer 2: knowledge atom
 	err = bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID:     "P-1",
-		ChatID:  "s1",
+		AtomID:        "P-1",
+		ChatID:        "s1",
 		PikaSessionID: "1",
-		Category:   "pattern",
-		Summary:    "nginx deploy requires confirmation",
-		Confidence: 0.8,
-		Polarity:   "neutral",
+		Category:      "pattern",
+		Summary:       "nginx deploy requires confirmation",
+		Confidence:    0.8,
+		Polarity:      "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -162,13 +162,13 @@ func TestSearchMemory_EmptySessionID(t *testing.T) {
 	ctx := context.Background()
 
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID:     "P-1",
-		ChatID:  "s1",
+		AtomID:        "P-1",
+		ChatID:        "s1",
 		PikaSessionID: "1",
-		Category:   "pattern",
-		Summary:    "test pattern for empty session",
-		Confidence: 0.5,
-		Polarity:   "neutral",
+		Category:      "pattern",
+		Summary:       "test pattern for empty session",
+		Confidence:    0.5,
+		Polarity:      "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -193,13 +193,13 @@ func TestSearchMemory_LayerFailure(t *testing.T) {
 	ctx := context.Background()
 
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID:     "P-1",
-		ChatID:  "s1",
+		AtomID:        "P-1",
+		ChatID:        "s1",
 		PikaSessionID: "1",
-		Category:   "pattern",
-		Summary:    "surviving layer data",
-		Confidence: 0.5,
-		Polarity:   "neutral",
+		Category:      "pattern",
+		Summary:       "surviving layer data",
+		Confidence:    0.5,
+		Polarity:      "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -262,8 +262,8 @@ func TestSearchMemory_Dedup(t *testing.T) {
 	msgID := int64(1)
 	err = bm.InsertAtom(ctx, KnowledgeAtomRow{
 		AtomID:          "P-1",
-		ChatID:       "s1",
-		PikaSessionID: "1",
+		ChatID:          "s1",
+		PikaSessionID:   "1",
 		SourceMessageID: &msgID,
 		Category:        "pattern",
 		Summary:         "duplicate content atom",
@@ -310,13 +310,13 @@ func TestSearchMemory_ScoringOrder(t *testing.T) {
 	ctx := context.Background()
 
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID:     "P-1",
-		ChatID:  "s1",
+		AtomID:        "P-1",
+		ChatID:        "s1",
 		PikaSessionID: "1",
-		Category:   "pattern",
-		Summary:    "important deploy knowledge",
-		Confidence: 0.9,
-		Polarity:   "neutral",
+		Category:      "pattern",
+		Summary:       "important deploy knowledge",
+		Confidence:    0.9,
+		Polarity:      "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -376,8 +376,8 @@ func TestSearchMemory_ArchivePipeline(t *testing.T) {
 
 	err = bm.InsertAtom(ctx, KnowledgeAtomRow{
 		AtomID:          "P-1",
-		ChatID:       "s1",
-		PikaSessionID: "1",
+		ChatID:          "s1",
+		PikaSessionID:   "1",
 		SourceMessageID: &msgID,
 		Category:        "pattern",
 		Summary:         "nginx workers config update",
@@ -414,8 +414,8 @@ func TestSearchMemory_ReasoningJsonEach(t *testing.T) {
 		"nginx", "deployment", "workers",
 	})
 	_, err := bm.InsertReasoningLog(ctx, ReasoningLogRow{
-		ChatID:         "s1",
-		PikaSessionID: "1",
+		ChatID:            "s1",
+		PikaSessionID:     "1",
 		Task:              "deploy nginx",
 		Mode:              "deploy",
 		ReasoningKeywords: kw,

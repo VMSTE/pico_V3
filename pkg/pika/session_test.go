@@ -205,11 +205,11 @@ func TestEnsureSession_DBResume(t *testing.T) {
 	_, err := bm.SaveMessage(
 		context.Background(),
 		MessageRow{
-			ChatID: sid,
+			ChatID:        sid,
 			PikaSessionID: "1",
-			Role:      "user",
-			Content:   "hello",
-			Tokens:    5,
+			Role:          "user",
+			Content:       "hello",
+			Tokens:        5,
 		},
 	)
 	if err != nil {

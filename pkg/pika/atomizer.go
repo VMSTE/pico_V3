@@ -44,12 +44,12 @@ func DefaultAtomizerConfig() AtomizerConfig {
 
 // AtomLLMOutput represents a single knowledge atom from LLM.
 type AtomLLMOutput struct {
-	Category    string  `json:"category"`
-	Summary     string  `json:"summary"`
-	Detail      string  `json:"detail,omitempty"`
-	Polarity    string  `json:"polarity"`
-	Confidence  float64 `json:"confidence"`
-	SourceTurns []string   `json:"source_turns"`
+	Category    string   `json:"category"`
+	Summary     string   `json:"summary"`
+	Detail      string   `json:"detail,omitempty"`
+	Polarity    string   `json:"polarity"`
+	Confidence  float64  `json:"confidence"`
+	SourceTurns []string `json:"source_turns"`
 }
 
 // atomizerLLMResponse is the full structured output from LLM.
@@ -395,16 +395,16 @@ func (a *Atomizer) insertAtom(
 	stJSON, _ := json.Marshal(atom.SourceTurns)
 
 	row := KnowledgeAtomRow{
-		AtomID:      atomID,
-		ChatID:   sessionID,
-		PikaSessionID:      atom.SourceTurns[0],
-		Category:    atom.Category,
-		Summary:     atom.Summary,
-		Detail:      atom.Detail,
-		Confidence:  atom.Confidence,
-		Polarity:    atom.Polarity,
-		Tags:        tagsJSON,
-		SourceTurns: stJSON,
+		AtomID:        atomID,
+		ChatID:        sessionID,
+		PikaSessionID: atom.SourceTurns[0],
+		Category:      atom.Category,
+		Summary:       atom.Summary,
+		Detail:        atom.Detail,
+		Confidence:    atom.Confidence,
+		Polarity:      atom.Polarity,
+		Tags:          tagsJSON,
+		SourceTurns:   stJSON,
 	}
 	return a.mem.InsertAtom(ctx, row)
 }

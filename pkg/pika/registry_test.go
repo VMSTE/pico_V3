@@ -66,13 +66,13 @@ func TestAtomIDGenerator_RecoveryFromDB(t *testing.T) {
 	// Insert P-1..P-5 directly via BotMemory
 	for i := 1; i <= 5; i++ {
 		err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-			AtomID:     fmt.Sprintf("P-%d", i),
-			ChatID:  "s1",
+			AtomID:        fmt.Sprintf("P-%d", i),
+			ChatID:        "s1",
 			PikaSessionID: "1",
-			Category:   "pattern",
-			Summary:    fmt.Sprintf("pattern %d", i),
-			Confidence: 0.8,
-			Polarity:   "positive",
+			Category:      "pattern",
+			Summary:       fmt.Sprintf("pattern %d", i),
+			Confidence:    0.8,
+			Polarity:      "positive",
 		})
 		if err != nil {
 			t.Fatalf("InsertAtom P-%d: %v", i, err)

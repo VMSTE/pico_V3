@@ -217,7 +217,6 @@ The following skills extend your capabilities. To use a skill, read its SKILL.md
 		})
 	}
 
-
 	// Multi-Message Sending (if enabled)
 	if cb.splitOnMarker {
 		add(PromptPart{

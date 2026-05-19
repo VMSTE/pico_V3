@@ -179,11 +179,11 @@ func TestTurnIDRecovery(t *testing.T) {
 	_, err := bm.SaveMessage(
 		context.Background(),
 		MessageRow{
-			ChatID: key,
+			ChatID:        key,
 			PikaSessionID: "5",
-			Role:      "user",
-			Content:   "old msg",
-			Tokens:    10,
+			Role:          "user",
+			Content:       "old msg",
+			Tokens:        10,
 		},
 	)
 	if err != nil {

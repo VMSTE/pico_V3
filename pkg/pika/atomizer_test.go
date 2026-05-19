@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -79,9 +79,9 @@ func seedAtomizerData(
 	ctx := context.Background()
 	for turn := 1; turn <= turnCount; turn++ {
 		_, err := mem.SaveMessage(ctx, MessageRow{
-			ChatID: sid,
-			PikaSessionID:    strconv.Itoa(turn),
-			Role:      "user",
+			ChatID:        sid,
+			PikaSessionID: strconv.Itoa(turn),
+			Role:          "user",
 			Content: fmt.Sprintf(
 				"user message turn %d", turn,
 			),
@@ -91,9 +91,9 @@ func seedAtomizerData(
 			t.Fatalf("save user msg: %v", err)
 		}
 		_, err = mem.SaveMessage(ctx, MessageRow{
-			ChatID: sid,
-			PikaSessionID:    strconv.Itoa(turn),
-			Role:      "assistant",
+			ChatID:        sid,
+			PikaSessionID: strconv.Itoa(turn),
+			Role:          "assistant",
 			Content: fmt.Sprintf(
 				"assistant response turn %d", turn,
 			),
@@ -106,12 +106,12 @@ func seedAtomizerData(
 			[]string{"deploy", "nginx"},
 		)
 		_, err = mem.SaveEvent(ctx, EventRow{
-			Type:      "compose_restart",
-			Summary:   fmt.Sprintf("event %d", turn),
-			Outcome:   "success",
-			ChatID: sid,
-			PikaSessionID:    strconv.Itoa(turn),
-			Tags:      tags,
+			Type:          "compose_restart",
+			Summary:       fmt.Sprintf("event %d", turn),
+			Outcome:       "success",
+			ChatID:        sid,
+			PikaSessionID: strconv.Itoa(turn),
+			Tags:          tags,
 		})
 		if err != nil {
 			t.Fatalf("save event: %v", err)

@@ -61,7 +61,7 @@ func TestRecordLLMCall_InsertsAndUpdatesSpent(t *testing.T) {
 	tel := NewTelemetry(defaultTelemetryCfg(), bm, nil)
 
 	tel.RecordLLMCall(context.Background(), RecordLLMParams{
-		ChatID: "s1",
+		ChatID:    "s1",
 		Model:     "main",
 		Direction: "chat",
 		Component: "main",
@@ -97,7 +97,7 @@ func TestCheckBudget_Exceeded(t *testing.T) {
 
 	ctx := context.Background()
 	tel.RecordLLMCall(ctx, RecordLLMParams{
-		ChatID: "s1",
+		ChatID:    "s1",
 		Model:     "main",
 		Direction: "chat",
 		Component: "main",

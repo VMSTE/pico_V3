@@ -25,36 +25,36 @@ var categoryPrefix = map[string]string{
 
 // MessageRow represents a row in the messages table.
 type MessageRow struct {
-	ID        int64           `json:"id"`
-	ChatID string          `json:"chat_id"`
-	PikaSessionID    string             `json:"pika_session_id"`
-	Ts        time.Time       `json:"ts"`
-	Role      string          `json:"role"`
-	Content   string          `json:"content"`
-	Tokens    int             `json:"tokens"`
-	MsgIndex  *int            `json:"msg_index,omitempty"`
-	Metadata  json.RawMessage `json:"metadata,omitempty"`
+	ID            int64           `json:"id"`
+	ChatID        string          `json:"chat_id"`
+	PikaSessionID string          `json:"pika_session_id"`
+	Ts            time.Time       `json:"ts"`
+	Role          string          `json:"role"`
+	Content       string          `json:"content"`
+	Tokens        int             `json:"tokens"`
+	MsgIndex      *int            `json:"msg_index,omitempty"`
+	Metadata      json.RawMessage `json:"metadata,omitempty"`
 }
 
 // EventRow represents a row in the events table.
 type EventRow struct {
-	ID        int64           `json:"id"`
-	Ts        time.Time       `json:"ts"`
-	Type      string          `json:"type"`
-	Summary   string          `json:"summary"`
-	Outcome   string          `json:"outcome"`
-	Tags      json.RawMessage `json:"tags,omitempty"`
-	Data      json.RawMessage `json:"data,omitempty"`
-	ChatID string          `json:"chat_id"`
-	PikaSessionID    string             `json:"pika_session_id"`
+	ID            int64           `json:"id"`
+	Ts            time.Time       `json:"ts"`
+	Type          string          `json:"type"`
+	Summary       string          `json:"summary"`
+	Outcome       string          `json:"outcome"`
+	Tags          json.RawMessage `json:"tags,omitempty"`
+	Data          json.RawMessage `json:"data,omitempty"`
+	ChatID        string          `json:"chat_id"`
+	PikaSessionID string          `json:"pika_session_id"`
 }
 
 // KnowledgeAtomRow represents a row in the knowledge_atoms table.
 type KnowledgeAtomRow struct {
 	ID              int64           `json:"id"`
 	AtomID          string          `json:"atom_id"`
-	ChatID       string          `json:"chat_id"`
-	PikaSessionID          string             `json:"pika_session_id"`
+	ChatID          string          `json:"chat_id"`
+	PikaSessionID   string          `json:"pika_session_id"`
 	SourceEventID   *int64          `json:"source_event_id,omitempty"`
 	SourceMessageID *int64          `json:"source_message_id,omitempty"`
 	Category        string          `json:"category"`
@@ -85,7 +85,7 @@ type RegistryRow struct {
 
 // RequestLogRow represents a row in the request_log table.
 type RequestLogRow struct {
-	ChatID          string          `json:"chat_id,omitempty"`
+	ChatID             string          `json:"chat_id,omitempty"`
 	MsgIndex           *int            `json:"msg_index,omitempty"`
 	Direction          string          `json:"direction"`
 	Component          string          `json:"component"`
@@ -111,7 +111,7 @@ type RequestLogRow struct {
 
 // ReasoningLogRow represents a row in the reasoning_log table.
 type ReasoningLogRow struct {
-	ChatID         string          `json:"chat_id,omitempty"`
+	ChatID            string          `json:"chat_id,omitempty"`
 	MsgIndex          *int            `json:"msg_index,omitempty"`
 	Task              string          `json:"task,omitempty"`
 	Mode              string          `json:"mode,omitempty"`
@@ -121,33 +121,33 @@ type ReasoningLogRow struct {
 	ToolCalls         json.RawMessage `json:"tool_calls,omitempty"`
 	ContextPct        float64         `json:"context_pct"`
 	ReasoningKeywords json.RawMessage `json:"reasoning_keywords,omitempty"`
-	PikaSessionID            string             `json:"pika_session_id"`
+	PikaSessionID     string          `json:"pika_session_id"`
 }
 
 // TraceSpanRow represents a row in the trace_spans table.
 type TraceSpanRow struct {
-	SpanID       string          `json:"span_id"`
-	ParentSpanID string          `json:"parent_span_id,omitempty"`
-	TraceID      string          `json:"trace_id"`
-	ChatID    string          `json:"chat_id,omitempty"`
-	PikaSessionID       *string            `json:"pika_session_id,omitempty"`
-	Component    string          `json:"component"`
-	Operation    string          `json:"operation"`
-	StartedAt    time.Time       `json:"started_at"`
-	Status       string          `json:"status"`
-	InputData    json.RawMessage `json:"input_data,omitempty"`
+	SpanID        string          `json:"span_id"`
+	ParentSpanID  string          `json:"parent_span_id,omitempty"`
+	TraceID       string          `json:"trace_id"`
+	ChatID        string          `json:"chat_id,omitempty"`
+	PikaSessionID *string         `json:"pika_session_id,omitempty"`
+	Component     string          `json:"component"`
+	Operation     string          `json:"operation"`
+	StartedAt     time.Time       `json:"started_at"`
+	Status        string          `json:"status"`
+	InputData     json.RawMessage `json:"input_data,omitempty"`
 }
 
 // EventArchiveRow represents a row in the event_archive table.
 type EventArchiveRow struct {
-	ID        int64           `json:"id"`
-	ChatID string          `json:"chat_id"`
-	PikaSessionID    string             `json:"pika_session_id"`
-	Ts        time.Time       `json:"ts"`
-	Type      string          `json:"type"`
-	Outcome   string          `json:"outcome"`
-	Summary   string          `json:"summary"`
-	Tags      json.RawMessage `json:"tags"`
+	ID            int64           `json:"id"`
+	ChatID        string          `json:"chat_id"`
+	PikaSessionID string          `json:"pika_session_id"`
+	Ts            time.Time       `json:"ts"`
+	Type          string          `json:"type"`
+	Outcome       string          `json:"outcome"`
+	Summary       string          `json:"summary"`
+	Tags          json.RawMessage `json:"tags"`
 }
 
 type msgArchivePayload struct {
@@ -262,7 +262,17 @@ func (bm *BotMemory) GetMessages(ctx context.Context, sid string) ([]MessageRow,
 		var ts string
 		var content, meta sql.NullString
 		var mi sql.NullInt64
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.PikaSessionID, &ts, &m.Role, &content, &m.Tokens, &mi, &meta); err != nil {
+		if err := rows.Scan(
+			&m.ID,
+			&m.ChatID,
+			&m.PikaSessionID,
+			&ts,
+			&m.Role,
+			&content,
+			&m.Tokens,
+			&mi,
+			&meta,
+		); err != nil {
 			return nil, fmt.Errorf("pika/botmemory: scan message: %w", err)
 		}
 		m.Ts = parseSQLiteTime(ts)
@@ -320,7 +330,8 @@ func (bm *BotMemory) GetOldestPikaSessionIDs(ctx context.Context, sid string, bu
 	var ids []string
 	var acc int
 	for rows.Next() {
-		var tid string; var tok int
+		var tid string
+		var tok int
 		if err := rows.Scan(&tid, &tok); err != nil {
 			return nil, err
 		}
@@ -674,7 +685,19 @@ func (bm *BotMemory) GetReasoningByTurns(ctx context.Context, sid string, tids [
 		var mi sql.NullInt64
 		var pc, tc, rk sql.NullString
 		var cp sql.NullFloat64
-		if err := rows.Scan(&s, &mi, &tk, &md, &rt, &r.ReasoningTokens, &pc, &tc, &cp, &rk, &r.PikaSessionID); err != nil {
+		if err := rows.Scan(
+			&s,
+			&mi,
+			&tk,
+			&md,
+			&rt,
+			&r.ReasoningTokens,
+			&pc,
+			&tc,
+			&cp,
+			&rk,
+			&r.PikaSessionID,
+		); err != nil {
 			return nil, fmt.Errorf("pika/botmemory: scan reasoning: %w", err)
 		}
 		r.ChatID = s.String
@@ -927,7 +950,16 @@ func (bm *BotMemory) SearchEventsArchiveFTS(ctx context.Context, q string, limit
 		var e EventArchiveRow
 		var ts string
 		var tags sql.NullString
-		if err := rows.Scan(&e.ID, &e.ChatID, &e.PikaSessionID, &ts, &e.Type, &e.Outcome, &e.Summary, &tags); err != nil {
+		if err := rows.Scan(
+			&e.ID,
+			&e.ChatID,
+			&e.PikaSessionID,
+			&ts,
+			&e.Type,
+			&e.Outcome,
+			&e.Summary,
+			&tags,
+		); err != nil {
 			return nil, fmt.Errorf("pika/botmemory: scan archive evt: %w", err)
 		}
 		e.Ts = parseSQLiteTime(ts)

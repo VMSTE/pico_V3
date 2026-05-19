@@ -7,7 +7,7 @@ import (
 	"fmt"
 )
 
-// PIKA-V3: session-scoped message retrieval —
+// GetMessagesBySession returns messages for a given session.
 // returns only messages from the specified session.
 func (bm *BotMemory) GetMessagesBySession(
 	ctx context.Context,

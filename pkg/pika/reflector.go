@@ -732,16 +732,16 @@ func (r *ReflectorPipeline) applyPattern(
 	}
 
 	row := KnowledgeAtomRow{
-		AtomID:      atomID,
-		ChatID:   "reflector",
-		PikaSessionID:      "",
-		Category:    "pattern",
-		Summary:     pat.Summary,
-		Detail:      pat.SuggestedAction,
-		Confidence:  0.5,
-		Polarity:    polarity,
-		Tags:        tagsJSON,
-		SourceTurns: evidenceJSON,
+		AtomID:        atomID,
+		ChatID:        "reflector",
+		PikaSessionID: "",
+		Category:      "pattern",
+		Summary:       pat.Summary,
+		Detail:        pat.SuggestedAction,
+		Confidence:    0.5,
+		Polarity:      polarity,
+		Tags:          tagsJSON,
+		SourceTurns:   evidenceJSON,
 	}
 	return r.mem.InsertAtom(ctx, row)
 }
@@ -797,16 +797,16 @@ func (r *ReflectorPipeline) applyRunbook(
 	)
 
 	row := KnowledgeAtomRow{
-		AtomID:      atomID,
-		ChatID:   "reflector",
-		PikaSessionID:      "",
-		Category:    "runbook_draft",
-		Summary:     rd.Trigger,
-		Detail:      string(detail),
-		Confidence:  0.5,
-		Polarity:    "negative",
-		Tags:        tagsJSON,
-		SourceTurns: evidenceJSON,
+		AtomID:        atomID,
+		ChatID:        "reflector",
+		PikaSessionID: "",
+		Category:      "runbook_draft",
+		Summary:       rd.Trigger,
+		Detail:        string(detail),
+		Confidence:    0.5,
+		Polarity:      "negative",
+		Tags:          tagsJSON,
+		SourceTurns:   evidenceJSON,
 	}
 	return r.mem.InsertAtom(ctx, row)
 }

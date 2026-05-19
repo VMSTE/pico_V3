@@ -481,13 +481,13 @@ func TestInsertAndQueryKnowledgeFTS(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID:     "P-1",
-		ChatID:  "s1",
+		AtomID:        "P-1",
+		ChatID:        "s1",
 		PikaSessionID: "1",
-		Category:   "pattern",
-		Summary:    "docker OOM restart observed",
-		Confidence: 0.8,
-		Polarity:   "negative",
+		Category:      "pattern",
+		Summary:       "docker OOM restart observed",
+		Confidence:    0.8,
+		Polarity:      "negative",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -524,7 +524,7 @@ func TestInsertRequestLog(t *testing.T) {
 	mi := 0
 	cp := 1
 	id, err := bm.InsertRequestLog(ctx, RequestLogRow{
-		ChatID:          "s1",
+		ChatID:             "s1",
 		MsgIndex:           &mi,
 		Direction:          "chat",
 		Component:          "main",
