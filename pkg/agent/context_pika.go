@@ -318,10 +318,10 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 		ctx, pika.ArchivistInput{SessionKey: sk},
 	)
 	if err != nil {
-		return nil, nil //nolint:nilerr // archivist failure is not fatal
+		return nil, fmt.Errorf("pika/archivist: BuildPrompt: %w", err)
 	}
 	if result == nil || strings.TrimSpace(result.BriefText) == "" {
-		return nil, nil
+		return nil, fmt.Errorf("pika/archivist: empty brief from BuildPrompt")
 	}
 	return []PromptPart{{
 		ID:      "context.pika_memory_brief",
