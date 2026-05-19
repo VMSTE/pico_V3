@@ -44,6 +44,8 @@ type ArchivistInput struct {
 	SessionKey string
 	Message    string
 	IsRotation bool
+	ToolCatalog  []string // PIKA-V3: available tool names
+	SkillCatalog []string // PIKA-V3: available skill names
 }
 
 // Focus represents the current task focus — 6 fields (D-55).
@@ -70,7 +72,8 @@ type ArchivistResult struct {
 	Focus     Focus
 	Brief     MemoryBrief
 	BriefText string // serialized text for system prompt
-	ToolSet   []string
+	RecommendedTools  []string // PIKA-V3: tools selected by Archivist
+	RecommendedSkills []string // PIKA-V3: skills selected by Archivist
 }
 
 // ArchivistCaller abstracts the Archivist service for building
@@ -81,6 +84,7 @@ type ArchivistCaller interface {
 		ctx context.Context, input ArchivistInput,
 	) (*ArchivistResult, error)
 	InvalidateBrief()
+	LastResult() *ArchivistResult // PIKA-V3: cached result
 }
 
 // noopArchivistCaller is an ArchivistCaller that always returns
@@ -94,6 +98,8 @@ func (noopArchivistCaller) BuildPrompt(
 }
 
 func (noopArchivistCaller) InvalidateBrief() {}
+
+func (noopArchivistCaller) LastResult() *ArchivistResult { return nil }
 
 // NewNoopArchivistCaller returns an ArchivistCaller stub
 // that always returns an empty MEMORY BRIEF.
