@@ -67,8 +67,8 @@ func TestAtomIDGenerator_RecoveryFromDB(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		err := bm.InsertAtom(ctx, KnowledgeAtomRow{
 			AtomID:     fmt.Sprintf("P-%d", i),
-			SessionID:  "s1",
-			TurnID:     1,
+			ChatID:  "s1",
+			PikaSessionID: "1",
 			Category:   "pattern",
 			Summary:    fmt.Sprintf("pattern %d", i),
 			Confidence: 0.8,

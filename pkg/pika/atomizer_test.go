@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,8 +79,8 @@ func seedAtomizerData(
 	ctx := context.Background()
 	for turn := 1; turn <= turnCount; turn++ {
 		_, err := mem.SaveMessage(ctx, MessageRow{
-			SessionID: sid,
-			TurnID:    turn,
+			ChatID: sid,
+			PikaSessionID:    strconv.Itoa(turn),
 			Role:      "user",
 			Content: fmt.Sprintf(
 				"user message turn %d", turn,
@@ -90,8 +91,8 @@ func seedAtomizerData(
 			t.Fatalf("save user msg: %v", err)
 		}
 		_, err = mem.SaveMessage(ctx, MessageRow{
-			SessionID: sid,
-			TurnID:    turn,
+			ChatID: sid,
+			PikaSessionID:    strconv.Itoa(turn),
 			Role:      "assistant",
 			Content: fmt.Sprintf(
 				"assistant response turn %d", turn,
@@ -108,8 +109,8 @@ func seedAtomizerData(
 			Type:      "compose_restart",
 			Summary:   fmt.Sprintf("event %d", turn),
 			Outcome:   "success",
-			SessionID: sid,
-			TurnID:    turn,
+			ChatID: sid,
+			PikaSessionID:    strconv.Itoa(turn),
 			Tags:      tags,
 		})
 		if err != nil {
@@ -189,14 +190,14 @@ func TestAtomizer_Run_HappyPath(t *testing.T) {
 					"detail": "nginx v1.25",
 					"polarity": "positive",
 					"confidence": 0.95,
-					"source_turns": [1, 2]
+					"source_turns": ["1", "2"]
 				},
 				{
 					"category": "decision",
 					"summary": "use port 8080",
 					"polarity": "neutral",
 					"confidence": 0.8,
-					"source_turns": [2]
+					"source_turns": ["2"]
 				}
 			]
 		}`,
@@ -258,7 +259,7 @@ func TestAtomizer_Run_ValidationRetry(t *testing.T) {
 			`"summary":"test",` +
 			`"polarity":"positive",` +
 			`"confidence":0.9,` +
-			`"source_turns":[1]}]}`,
+			`"source_turns":["1"]}]}`,
 	}
 	// Second: valid
 	goodResp := &providers.LLMResponse{
@@ -267,7 +268,7 @@ func TestAtomizer_Run_ValidationRetry(t *testing.T) {
 			`"summary":"test",` +
 			`"polarity":"positive",` +
 			`"confidence":0.9,` +
-			`"source_turns":[1]}]}`,
+			`"source_turns":["1"]}]}`,
 	}
 	prov := newMockProvider(badResp, goodResp)
 	cfg := &AtomizerConfig{
@@ -385,17 +386,17 @@ func TestValidateAtoms_Valid(t *testing.T) {
 			Summary:     "test summary",
 			Polarity:    "positive",
 			Confidence:  0.9,
-			SourceTurns: []int{1, 2},
+			SourceTurns: []string{"1", "2"},
 		},
 		{
 			Category:    "decision",
 			Summary:     "use port 80",
 			Polarity:    "neutral",
 			Confidence:  0.7,
-			SourceTurns: []int{2},
+			SourceTurns: []string{"2"},
 		},
 	}
-	err := validateAtoms(atoms, []int{1, 2, 3})
+	err := validateAtoms(atoms, []string{"1", "2", "3"})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -408,10 +409,10 @@ func TestValidateAtoms_InvalidCategory(t *testing.T) {
 			Summary:     "test",
 			Polarity:    "positive",
 			Confidence:  0.9,
-			SourceTurns: []int{1},
+			SourceTurns: []string{"1"},
 		},
 	}
-	err := validateAtoms(atoms, []int{1})
+	err := validateAtoms(atoms, []string{"1"})
 	if err == nil {
 		t.Error("expected error for invalid category")
 	}
@@ -424,10 +425,10 @@ func TestValidateAtoms_InvalidPolarity(t *testing.T) {
 			Summary:     "test",
 			Polarity:    "bad",
 			Confidence:  0.9,
-			SourceTurns: []int{1},
+			SourceTurns: []string{"1"},
 		},
 	}
-	err := validateAtoms(atoms, []int{1})
+	err := validateAtoms(atoms, []string{"1"})
 	if err == nil {
 		t.Error("expected error for invalid polarity")
 	}
@@ -442,10 +443,10 @@ func TestValidateAtoms_ConfidenceOutOfRange(
 			Summary:     "test",
 			Polarity:    "positive",
 			Confidence:  1.5,
-			SourceTurns: []int{1},
+			SourceTurns: []string{"1"},
 		},
 	}
-	err := validateAtoms(atoms, []int{1})
+	err := validateAtoms(atoms, []string{"1"})
 	if err == nil {
 		t.Error("expected error for confidence > 1")
 	}
@@ -458,17 +459,17 @@ func TestValidateAtoms_TurnNotInChunk(t *testing.T) {
 			Summary:     "test",
 			Polarity:    "positive",
 			Confidence:  0.9,
-			SourceTurns: []int{99},
+			SourceTurns: []string{"99"},
 		},
 	}
-	err := validateAtoms(atoms, []int{1, 2})
+	err := validateAtoms(atoms, []string{"1", "2"})
 	if err == nil {
 		t.Error("expected error for turn not in chunk")
 	}
 }
 
 func TestValidateAtoms_Empty(t *testing.T) {
-	err := validateAtoms(nil, []int{1})
+	err := validateAtoms(nil, []string{"1"})
 	if err == nil {
 		t.Error("expected error for empty atoms")
 	}
@@ -481,10 +482,10 @@ func TestValidateAtoms_EmptySummary(t *testing.T) {
 			Summary:     "",
 			Polarity:    "positive",
 			Confidence:  0.9,
-			SourceTurns: []int{1},
+			SourceTurns: []string{"1"},
 		},
 	}
-	err := validateAtoms(atoms, []int{1})
+	err := validateAtoms(atoms, []string{"1"})
 	if err == nil {
 		t.Error("expected error for empty summary")
 	}
@@ -516,32 +517,32 @@ func TestCollectTagsByTurn(t *testing.T) {
 	tags1, _ := json.Marshal([]string{"a", "b"})
 	tags2, _ := json.Marshal([]string{"b", "c"})
 	events := []EventRow{
-		{TurnID: 1, Tags: tags1},
-		{TurnID: 1, Tags: tags2},
-		{TurnID: 2, Tags: tags1},
+		{PikaSessionID: "1", Tags: tags1},
+		{PikaSessionID: "1", Tags: tags2},
+		{PikaSessionID: "2", Tags: tags1},
 	}
 	result := collectTagsByTurn(events)
-	if len(result[1]) != 3 {
+	if len(result["1"]) != 3 {
 		t.Errorf(
 			"turn 1 tags = %v, want [a b c]",
-			result[1],
+			result["1"],
 		)
 	}
-	if len(result[2]) != 2 {
+	if len(result["2"]) != 2 {
 		t.Errorf(
 			"turn 2 tags = %v, want [a b]",
-			result[2],
+			result["2"],
 		)
 	}
 }
 
 func TestMergeTagsForTurns(t *testing.T) {
-	tagsByTurn := map[int][]string{
-		1: {"a", "b"},
-		2: {"b", "c"},
+	tagsByTurn := map[string][]string{
+		"1": {"a", "b"},
+		"2": {"b", "c"},
 	}
 	merged := mergeTagsForTurns(
-		[]int{1, 2}, tagsByTurn,
+		[]string{"1", "2"}, tagsByTurn,
 	)
 	if len(merged) != 3 {
 		t.Errorf(

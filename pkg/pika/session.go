@@ -113,8 +113,8 @@ func (sl *SessionLifecycle) OnRotate(cb RotateCallback) {
 //  1. baseKey = "tg:{chatID}"
 //  2. If active/idle session for same baseKey → check idle
 //     timeout. If expired → rotate. Otherwise return current.
-//  3. Query DB: SELECT pika_session_id FROM messages
-//     WHERE pika_pika_session_id LIKE '<baseKey>:%' ORDER BY id DESC
+//  3. Query DB: SELECT chat_id FROM messages
+//     WHERE chat_id LIKE '<baseKey>:%' ORDER BY id DESC
 //  4. If found and idle timeout not expired → resume.
 //  5. Otherwise → StartSession(baseKey).
 func (sl *SessionLifecycle) EnsureSession(
@@ -334,7 +334,7 @@ func (sl *SessionLifecycle) findLastSessionLocked(
 
 // --- BotMemory extension ---
 
-// GetLastSessionByPrefix returns the most recent pika_session_id
+// GetLastSessionByPrefix returns the most recent chat_id
 // and its last message timestamp matching a LIKE pattern.
 // Returns ("", zero, nil) if no rows match.
 //
@@ -349,10 +349,10 @@ func (bm *BotMemory) GetLastSessionByPrefix(
 	var sid string
 	var epoch int64
 	err := bm.db.QueryRowContext(ctx,
-		`SELECT pika_session_id,
+		`SELECT chat_id,
 		        CAST(strftime('%s', ts) AS INTEGER)
 		 FROM messages
-		 WHERE pika_session_id LIKE ?
+		 WHERE chat_id LIKE ?
 		 ORDER BY id DESC LIMIT 1`,
 		pattern,
 	).Scan(&sid, &epoch)

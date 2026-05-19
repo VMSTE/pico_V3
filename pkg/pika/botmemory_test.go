@@ -29,7 +29,7 @@ func TestSaveAndGetMessages(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
 	id, err := bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "user",
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
 		Content: "hello", Tokens: 5,
 	})
 	if err != nil {
@@ -57,11 +57,11 @@ func TestSumTokensAndCount(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
 	bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "user",
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
 		Content: "a", Tokens: 10,
 	})
 	bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "assistant",
+		ChatID: "s1", PikaSessionID: "1", Role: "assistant",
 		Content: "b", Tokens: 20,
 	})
 	sum, err := bm.SumTokensBySession(ctx, "s1")
@@ -80,46 +80,46 @@ func TestSumTokensAndCount(t *testing.T) {
 	}
 }
 
-func TestGetMaxTurnID(t *testing.T) {
+func TestGetMaxPikaSessionID(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
-	m, _ := bm.GetMaxTurnID(ctx, "s1")
-	if m != 0 {
-		t.Errorf("empty max = %d, want 0", m)
+	m, _ := bm.GetMaxPikaSessionID(ctx, "s1")
+	if m != "" {
+		t.Errorf("empty max = %s, want empty string", m)
 	}
 	bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 3, Role: "user",
+		ChatID: "s1", PikaSessionID: "3", Role: "user",
 		Content: "c", Tokens: 1,
 	})
-	m, _ = bm.GetMaxTurnID(ctx, "s1")
-	if m != 3 {
-		t.Errorf("max = %d, want 3", m)
+	m, _ = bm.GetMaxPikaSessionID(ctx, "s1")
+	if m != "3" {
+		t.Errorf("max = %s, want 3", m)
 	}
 }
 
-func TestGetOldestTurnIDs(t *testing.T) {
+func TestGetOldestPikaSessionIDs(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
 	bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "user",
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
 		Content: "a", Tokens: 10,
 	})
 	bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 2, Role: "user",
+		ChatID: "s1", PikaSessionID: "2", Role: "user",
 		Content: "b", Tokens: 20,
 	})
 	bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 3, Role: "user",
+		ChatID: "s1", PikaSessionID: "3", Role: "user",
 		Content: "c", Tokens: 30,
 	})
-	ids, err := bm.GetOldestTurnIDs(ctx, "s1", 25)
+	ids, err := bm.GetOldestPikaSessionIDs(ctx, "s1", 25)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ids) != 1 || ids[0] != 1 {
+	if len(ids) != 1 || ids[0] != "1" {
 		t.Errorf("oldest = %v, want [1]", ids)
 	}
-	ids2, _ := bm.GetOldestTurnIDs(ctx, "s1", 35)
+	ids2, _ := bm.GetOldestPikaSessionIDs(ctx, "s1", 35)
 	if len(ids2) != 2 {
 		t.Errorf("oldest = %v, want [1,2]", ids2)
 	}
@@ -130,7 +130,7 @@ func TestSaveAndGetEvents(t *testing.T) {
 	ctx := context.Background()
 	id, err := bm.SaveEvent(ctx, EventRow{
 		Type: "tool_call", Summary: "called api",
-		Outcome: "success", SessionID: "s1", TurnID: 1,
+		Outcome: "success", ChatID: "s1", PikaSessionID: "1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestSaveAndGetEvents(t *testing.T) {
 	if id == 0 {
 		t.Fatal("expected non-zero id")
 	}
-	evts, err := bm.GetEventsByTurns(ctx, "s1", []int{1})
+	evts, err := bm.GetEventsByTurns(ctx, "s1", []string{"1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,18 +272,18 @@ func TestArchiveAndDeleteTurns(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
 	bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "user",
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
 		Content: "hello", Tokens: 5,
 	})
 	bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "assistant",
+		ChatID: "s1", PikaSessionID: "1", Role: "assistant",
 		Content: "hi", Tokens: 3,
 	})
 	bm.SaveEvent(ctx, EventRow{
 		Type: "msg", Summary: "test",
-		SessionID: "s1", TurnID: 1,
+		ChatID: "s1", PikaSessionID: "1",
 	})
-	err := bm.ArchiveAndDeleteTurns(ctx, "s1", []int{1})
+	err := bm.ArchiveAndDeleteTurns(ctx, "s1", []string{"1"})
 	if err != nil {
 		t.Fatalf("ArchiveAndDeleteTurns: %v", err)
 	}
@@ -308,15 +308,15 @@ func TestArchiveTransactionRollback(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
 	bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "user",
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
 		Content: "keep me", Tokens: 5,
 	})
 	bm.SaveEvent(ctx, EventRow{
 		Type: "msg", Summary: "evt",
-		SessionID: "s1", TurnID: 1,
+		ChatID: "s1", PikaSessionID: "1",
 	})
 	// Pre-insert conflicting row in events_archive
-	evts, _ := bm.GetEventsByTurns(ctx, "s1", []int{1})
+	evts, _ := bm.GetEventsByTurns(ctx, "s1", []string{"1"})
 	if len(evts) == 0 {
 		t.Fatal("no events")
 	}
@@ -326,10 +326,10 @@ func TestArchiveTransactionRollback(t *testing.T) {
 		summary,tags,blob)
 		VALUES(?,?,?,datetime('now'),
 		'x','','',NULL,NULL)`,
-		evts[0].ID, "s1", 1)
+		evts[0].ID, "s1", "1")
 	// Archive should fail due to PK conflict
 	err := bm.ArchiveAndDeleteTurns(
-		ctx, "s1", []int{1})
+		ctx, "s1", []string{"1"})
 	if err == nil {
 		t.Fatal("expected error from PK conflict")
 	}
@@ -371,7 +371,7 @@ func TestPromptVersionsAndSnapshots(t *testing.T) {
 		"trail": 3, "plan": 2,
 	}
 	err = bm.InsertPromptSnapshot(ctx,
-		"snap-1", "trace-1", "s1", 1,
+		"snap-1", "trace-1", "s1", "1",
 		promptID, "", "", tokens,
 		"fullhash", "preview text", 42)
 	if err != nil {
@@ -384,25 +384,25 @@ func TestAtomUsage(t *testing.T) {
 	ctx := context.Background()
 	// Need atoms for FK constraint
 	bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-1", SessionID: "s1", TurnID: 1,
+		AtomID: "P-1", ChatID: "s1", PikaSessionID: "1",
 		Category: "pattern", Summary: "test",
 		Confidence: 0.8, Polarity: "positive",
 	})
 	bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-2", SessionID: "s1", TurnID: 1,
+		AtomID: "P-2", ChatID: "s1", PikaSessionID: "1",
 		Category: "pattern", Summary: "test2",
 		Confidence: 0.7, Polarity: "neutral",
 	})
 	pos := 0
 	tok := 100
 	err := bm.InsertAtomUsage(ctx,
-		"P-1", "trace-1", 1, "BRIEF",
+		"P-1", "trace-1", "1", "BRIEF",
 		&pos, &tok, "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	err = bm.InsertAtomUsage(ctx,
-		"P-2", "trace-1", 1, "CONTEXT",
+		"P-2", "trace-1", "1", "CONTEXT",
 		nil, nil, "", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -426,12 +426,12 @@ func TestGetMaxAtomN(t *testing.T) {
 		t.Errorf("empty max = %d, want 0", n)
 	}
 	bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-1", SessionID: "s1", TurnID: 1,
+		AtomID: "P-1", ChatID: "s1", PikaSessionID: "1",
 		Category: "pattern", Summary: "test",
 		Confidence: 0.8, Polarity: "positive",
 	})
 	bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "P-5", SessionID: "s1", TurnID: 1,
+		AtomID: "P-5", ChatID: "s1", PikaSessionID: "1",
 		Category: "pattern", Summary: "test2",
 		Confidence: 0.9, Polarity: "positive",
 	})
@@ -452,7 +452,7 @@ func TestUpdateAtomConfidence(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()
 	bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID: "D-1", SessionID: "s1", TurnID: 1,
+		AtomID: "D-1", ChatID: "s1", PikaSessionID: "1",
 		Category: "decision", Summary: "use redis",
 		Confidence: 0.7, Polarity: "positive",
 	})
@@ -482,8 +482,8 @@ func TestInsertAndQueryKnowledgeFTS(t *testing.T) {
 	ctx := context.Background()
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
 		AtomID:     "P-1",
-		SessionID:  "s1",
-		TurnID:     1,
+		ChatID:  "s1",
+		PikaSessionID: "1",
 		Category:   "pattern",
 		Summary:    "docker OOM restart observed",
 		Confidence: 0.8,
@@ -524,7 +524,7 @@ func TestInsertRequestLog(t *testing.T) {
 	mi := 0
 	cp := 1
 	id, err := bm.InsertRequestLog(ctx, RequestLogRow{
-		SessionID:          "s1",
+		ChatID:          "s1",
 		MsgIndex:           &mi,
 		Direction:          "chat",
 		Component:          "main",

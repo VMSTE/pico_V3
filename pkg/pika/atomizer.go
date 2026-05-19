@@ -362,7 +362,7 @@ func validateAtoms(
 		for _, tid := range atom.SourceTurns {
 			if !turnSet[tid] {
 				return fmt.Errorf(
-					"atom[%d]: pika_session_id %d not in chunk",
+					"atom[%d]: pika_session_id %s not in chunk",
 					i, tid,
 				)
 			}
@@ -446,14 +446,14 @@ func (a *Atomizer) buildUserContent(
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		fmt.Fprintf(&sb, "%d", tid)
+		fmt.Fprintf(&sb, "%s", tid)
 	}
 	sb.WriteString("\n\n")
 
 	sb.WriteString("## Messages\n")
 	for _, m := range msgs {
 		fmt.Fprintf(&sb,
-			"[turn=%d role=%s ts=%s]\n%s\n\n",
+			"[turn=%s role=%s ts=%s]\n%s\n\n",
 			m.PikaSessionID, m.Role,
 			m.Ts.Format(time.RFC3339), m.Content,
 		)
@@ -462,7 +462,7 @@ func (a *Atomizer) buildUserContent(
 	sb.WriteString("## Events\n")
 	for _, e := range events {
 		fmt.Fprintf(&sb,
-			"[turn=%d type=%s outcome=%s ts=%s]\n%s\n",
+			"[turn=%s type=%s outcome=%s ts=%s]\n%s\n",
 			e.PikaSessionID, e.Type, e.Outcome,
 			e.Ts.Format(time.RFC3339), e.Summary,
 		)

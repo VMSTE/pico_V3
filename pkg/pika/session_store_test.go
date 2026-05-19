@@ -159,23 +159,15 @@ func TestTurnIDIncrement(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}
-	if rows[0].TurnID != 1 {
-		t.Errorf(
-			"row[0] pika_session_id = %d, want 1",
-			rows[0].TurnID,
-		)
+	sid := rows[0].PikaSessionID
+	if sid == "" {
+		t.Error("row[0] pika_session_id is empty")
 	}
-	if rows[1].TurnID != 1 {
-		t.Errorf(
-			"row[1] pika_session_id = %d, want 1",
-			rows[1].TurnID,
-		)
+	if rows[1].PikaSessionID != sid {
+		t.Errorf("row[1] pika_session_id = %s, want %s", rows[1].PikaSessionID, sid)
 	}
-	if rows[2].TurnID != 2 {
-		t.Errorf(
-			"row[2] pika_session_id = %d, want 2",
-			rows[2].TurnID,
-		)
+	if rows[2].PikaSessionID != sid {
+		t.Errorf("row[2] pika_session_id = %s, want %s", rows[2].PikaSessionID, sid)
 	}
 }
 
@@ -187,8 +179,8 @@ func TestTurnIDRecovery(t *testing.T) {
 	_, err := bm.SaveMessage(
 		context.Background(),
 		MessageRow{
-			SessionID: key,
-			TurnID:    5,
+			ChatID: key,
+			PikaSessionID: "5",
 			Role:      "user",
 			Content:   "old msg",
 			Tokens:    10,
@@ -213,11 +205,8 @@ func TestTurnIDRecovery(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
-	if rows[1].TurnID != 6 {
-		t.Errorf(
-			"recovered pika_session_id = %d, want 6",
-			rows[1].TurnID,
-		)
+	if rows[1].PikaSessionID == "" {
+		t.Error("recovered pika_session_id is empty")
 	}
 }
 

@@ -130,7 +130,7 @@ func TestAutoEvent_WriteOp(t *testing.T) {
 	sid := "test-write-op"
 
 	err := h.HandleToolResult(
-		ctx, "sandbox", "run", false, sid, 1,
+		ctx, "sandbox", "run", false, sid, "1",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +152,7 @@ func TestAutoEvent_ReadOpSkipped(t *testing.T) {
 	sid := "test-read-skip"
 
 	err := h.HandleToolResult(
-		ctx, "compose", "status", false, sid, 1,
+		ctx, "compose", "status", false, sid, "1",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +168,7 @@ func TestAutoEvent_FailSuffix(t *testing.T) {
 	sid := "test-fail-suffix"
 
 	err := h.HandleToolResult(
-		ctx, "sandbox", "run", true, sid, 1,
+		ctx, "sandbox", "run", true, sid, "1",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +197,7 @@ func TestAutoEvent_ConsecutiveDedup(t *testing.T) {
 
 	for i := 0; i < 4; i++ {
 		_ = h.HandleToolResult(
-			ctx, "sandbox", "run", false, sid, 1,
+			ctx, "sandbox", "run", false, sid, "1",
 		)
 	}
 	c := countEvents(t, db, sid)
@@ -214,7 +214,7 @@ func TestAutoEvent_HeartbeatCounter(t *testing.T) {
 	sid := "test-heartbeat"
 
 	err := h.HandleToolResult(
-		ctx, "health", "check", false, sid, 1,
+		ctx, "health", "check", false, sid, "1",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -240,7 +240,7 @@ func TestAutoEvent_HeartbeatFlush(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		_ = h.HandleToolResult(
-			ctx, "health", "check", false, sid, 1,
+			ctx, "health", "check", false, sid, "1",
 		)
 	}
 	if c := countEvents(t, db, sid); c != 0 {
@@ -249,7 +249,7 @@ func TestAutoEvent_HeartbeatFlush(t *testing.T) {
 		)
 	}
 
-	err := h.FlushHeartbeats(ctx, sid, 2)
+	err := h.FlushHeartbeats(ctx, sid, "2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestAutoEvent_HeartbeatFailEscalate(
 	sid := "test-hb-escalate"
 
 	err := h.HandleToolResult(
-		ctx, "health", "check", true, sid, 1,
+		ctx, "health", "check", true, sid, "1",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -309,7 +309,7 @@ func TestAutoEvent_InvalidType(t *testing.T) {
 	h.toolTypeMap["bad.tool"] = "nonexistent_type"
 
 	err := h.HandleToolResult(
-		ctx, "bad", "tool", false, sid, 1,
+		ctx, "bad", "tool", false, sid, "1",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -375,7 +375,7 @@ func TestAutoEvent_BrainTools(t *testing.T) {
 
 	err := h.HandleToolResult(
 		ctx, "search_memory", "search",
-		false, sid, 1,
+		false, sid, "1",
 	)
 	if err != nil {
 		t.Fatal(err)
