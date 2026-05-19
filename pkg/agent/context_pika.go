@@ -314,8 +314,19 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 		}
 	}
 
+	// PIKA-V3: collect tool & skill catalogs for Archivist
+	agent := c.adapter.al.registry.GetDefaultAgent()
+	var toolCat, skillCat []string
+	if agent != nil {
+		toolCat = agent.Tools.List()
+		skillCat = agent.ContextBuilder.ListSkillNames()
+	}
 	result, err := c.adapter.cm.GetArchivist().BuildPrompt(
-		ctx, pika.ArchivistInput{SessionKey: sk},
+		ctx, pika.ArchivistInput{
+			SessionKey:   sk,
+			ToolCatalog:  toolCat,
+			SkillCatalog: skillCat,
+		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("pika/archivist: BuildPrompt: %w", err)
@@ -323,13 +334,23 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 	if result == nil || strings.TrimSpace(result.BriefText) == "" {
 		return nil, fmt.Errorf("pika/archivist: empty brief from BuildPrompt")
 	}
+	// PIKA-V3: build content with brief + recommended tools/skills
+	content := "--- MEMORY BRIEF ---\n" + result.BriefText
+	if len(result.RecommendedTools) > 0 {
+		content += "\n--- RECOMMENDED TOOLS ---\n" +
+			strings.Join(result.RecommendedTools, ", ")
+	}
+	if len(result.RecommendedSkills) > 0 {
+		content += "\n--- RECOMMENDED SKILLS ---\n" +
+			strings.Join(result.RecommendedSkills, ", ")
+	}
 	return []PromptPart{{
 		ID:      "context.pika_memory_brief",
 		Layer:   PromptLayerContext,
 		Slot:    PromptSlotMemory,
 		Source:  PromptSource{ID: "pika:memory_brief", Name: "pika:archivist"},
 		Title:   "memory brief",
-		Content: "--- MEMORY BRIEF ---\n" + result.BriefText,
+		Content: content,
 		Stable:  false,
 		Cache:   PromptCacheEphemeral,
 	}}, nil
