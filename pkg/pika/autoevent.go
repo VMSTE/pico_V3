@@ -120,7 +120,7 @@ func (h *AutoEventHandler) HandleToolResult(
 	operation string,
 	isError bool,
 	sessionID string,
-	turnID int,
+	turnID string,
 ) error {
 	// 1. Build key
 	key := toolName + "." + operation
@@ -186,7 +186,7 @@ func (h *AutoEventHandler) HandleToolResult(
 func (h *AutoEventHandler) FlushHeartbeats(
 	ctx context.Context,
 	sessionID string,
-	turnID int,
+	turnID string,
 ) error {
 	var flushErr error
 	h.heartbeatCtrs.Range(func(key, value any) bool {
@@ -203,12 +203,12 @@ func (h *AutoEventHandler) FlushHeartbeats(
 			[]string{"heartbeat", "aggregated"},
 		)
 		_, err := h.bm.SaveEvent(ctx, EventRow{
-			Type:      eventType,
-			Summary:   summary,
-			Outcome:   "success",
-			Tags:      tagsJSON,
-			SessionID: sessionID,
-			TurnID:    turnID,
+			Type:          eventType,
+			Summary:       summary,
+			Outcome:       "success",
+			Tags:          tagsJSON,
+			ChatID:        sessionID,
+			PikaSessionID: turnID,
 		})
 		if err != nil {
 			flushErr = fmt.Errorf(
@@ -336,7 +336,7 @@ func (h *AutoEventHandler) incrementHeartbeat(
 func (h *AutoEventHandler) insertEvent(
 	ctx context.Context,
 	sessionID string,
-	turnID int,
+	turnID string,
 	eventType string,
 	summary string,
 	outcome string,
@@ -347,12 +347,12 @@ func (h *AutoEventHandler) insertEvent(
 		tagsJSON, _ = json.Marshal(tags)
 	}
 	_, err := h.bm.SaveEvent(ctx, EventRow{
-		Type:      eventType,
-		Summary:   summary,
-		Outcome:   outcome,
-		Tags:      tagsJSON,
-		SessionID: sessionID,
-		TurnID:    turnID,
+		Type:          eventType,
+		Summary:       summary,
+		Outcome:       outcome,
+		Tags:          tagsJSON,
+		ChatID:        sessionID,
+		PikaSessionID: turnID,
 	})
 	if err != nil {
 		return fmt.Errorf(

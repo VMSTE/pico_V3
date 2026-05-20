@@ -44,12 +44,12 @@ func DefaultAtomizerConfig() AtomizerConfig {
 
 // AtomLLMOutput represents a single knowledge atom from LLM.
 type AtomLLMOutput struct {
-	Category    string  `json:"category"`
-	Summary     string  `json:"summary"`
-	Detail      string  `json:"detail,omitempty"`
-	Polarity    string  `json:"polarity"`
-	Confidence  float64 `json:"confidence"`
-	SourceTurns []int   `json:"source_turns"`
+	Category    string   `json:"category"`
+	Summary     string   `json:"summary"`
+	Detail      string   `json:"detail,omitempty"`
+	Polarity    string   `json:"polarity"`
+	Confidence  float64  `json:"confidence"`
+	SourceTurns []string `json:"source_turns"`
 }
 
 // atomizerLLMResponse is the full structured output from LLM.
@@ -151,7 +151,7 @@ func (a *Atomizer) Run(
 		_ = a.mem.CompleteSpan(ctx, spanIDatomizer, "done", nil, "", "")
 	}()
 	// Step 1: Select chunk (oldest turns <= budget)
-	turnIDs, err := a.mem.GetOldestTurnIDs(
+	turnIDs, err := a.mem.GetOldestPikaSessionIDs(
 		ctx, sessionID, a.cfg.ChunkMaxTokens,
 	)
 	if err != nil {
@@ -244,7 +244,7 @@ func (a *Atomizer) Run(
 func (a *Atomizer) callWithRetry(
 	ctx context.Context,
 	promptText, userContent string,
-	validTurns []int,
+	validTurns []string,
 ) (*atomizerLLMResponse, error) {
 	var lastErr error
 	for attempt := 0; attempt <= a.cfg.MaxRetries; attempt++ {
@@ -321,12 +321,12 @@ func parseAtomizerOutput(
 
 // validateAtoms checks schema constraints on all atoms.
 func validateAtoms(
-	atoms []AtomLLMOutput, validTurns []int,
+	atoms []AtomLLMOutput, validTurns []string,
 ) error {
 	if len(atoms) == 0 {
 		return fmt.Errorf("no atoms in output")
 	}
-	turnSet := make(map[int]bool, len(validTurns))
+	turnSet := make(map[string]bool, len(validTurns))
 	for _, t := range validTurns {
 		turnSet[t] = true
 	}
@@ -362,7 +362,7 @@ func validateAtoms(
 		for _, tid := range atom.SourceTurns {
 			if !turnSet[tid] {
 				return fmt.Errorf(
-					"atom[%d]: turn_id %d not in chunk",
+					"atom[%d]: pika_session_id %s not in chunk",
 					i, tid,
 				)
 			}
@@ -376,7 +376,7 @@ func (a *Atomizer) insertAtom(
 	ctx context.Context,
 	sessionID string,
 	atom AtomLLMOutput,
-	tagsByTurn map[int][]string,
+	tagsByTurn map[string][]string,
 ) error {
 	atomID, err := a.atomGen.Next(ctx, atom.Category)
 	if err != nil {
@@ -395,16 +395,16 @@ func (a *Atomizer) insertAtom(
 	stJSON, _ := json.Marshal(atom.SourceTurns)
 
 	row := KnowledgeAtomRow{
-		AtomID:      atomID,
-		SessionID:   sessionID,
-		TurnID:      atom.SourceTurns[0],
-		Category:    atom.Category,
-		Summary:     atom.Summary,
-		Detail:      atom.Detail,
-		Confidence:  atom.Confidence,
-		Polarity:    atom.Polarity,
-		Tags:        tagsJSON,
-		SourceTurns: stJSON,
+		AtomID:        atomID,
+		ChatID:        sessionID,
+		PikaSessionID: atom.SourceTurns[0],
+		Category:      atom.Category,
+		Summary:       atom.Summary,
+		Detail:        atom.Detail,
+		Confidence:    atom.Confidence,
+		Polarity:      atom.Polarity,
+		Tags:          tagsJSON,
+		SourceTurns:   stJSON,
 	}
 	return a.mem.InsertAtom(ctx, row)
 }
@@ -437,7 +437,7 @@ func (a *Atomizer) loadPromptFile() (string, error) {
 func (a *Atomizer) buildUserContent(
 	msgs []MessageRow,
 	events []EventRow,
-	turnIDs []int,
+	turnIDs []string,
 ) string {
 	var sb strings.Builder
 
@@ -446,15 +446,15 @@ func (a *Atomizer) buildUserContent(
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		fmt.Fprintf(&sb, "%d", tid)
+		fmt.Fprintf(&sb, "%s", tid)
 	}
 	sb.WriteString("\n\n")
 
 	sb.WriteString("## Messages\n")
 	for _, m := range msgs {
 		fmt.Fprintf(&sb,
-			"[turn=%d role=%s ts=%s]\n%s\n\n",
-			m.TurnID, m.Role,
+			"[turn=%s role=%s ts=%s]\n%s\n\n",
+			m.PikaSessionID, m.Role,
 			m.Ts.Format(time.RFC3339), m.Content,
 		)
 	}
@@ -462,8 +462,8 @@ func (a *Atomizer) buildUserContent(
 	sb.WriteString("## Events\n")
 	for _, e := range events {
 		fmt.Fprintf(&sb,
-			"[turn=%d type=%s outcome=%s ts=%s]\n%s\n",
-			e.TurnID, e.Type, e.Outcome,
+			"[turn=%s type=%s outcome=%s ts=%s]\n%s\n",
+			e.PikaSessionID, e.Type, e.Outcome,
 			e.Ts.Format(time.RFC3339), e.Summary,
 		)
 		if e.Tags != nil {
@@ -480,17 +480,17 @@ func (a *Atomizer) buildUserContent(
 // getMessagesByTurns fetches messages for specific turn IDs.
 // Same package as BotMemory — accesses unexported db field.
 func (a *Atomizer) getMessagesByTurns(
-	ctx context.Context, sid string, tids []int,
+	ctx context.Context, sid string, tids []string,
 ) ([]MessageRow, error) {
 	if len(tids) == 0 {
 		return nil, nil
 	}
 	args := inArgs(sid, tids)
 	ph := placeholders(len(tids))
-	q := `SELECT id, session_id, turn_id, ts, role,
+	q := `SELECT id, chat_id, pika_session_id, ts, role,
 		content, tokens, msg_index, metadata
-		FROM messages WHERE session_id=?
-		AND turn_id IN (` + ph + `)
+		FROM messages WHERE chat_id=?
+		AND pika_session_id IN (` + ph + `)
 		ORDER BY id ASC`
 	rows, err := a.mem.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -507,7 +507,7 @@ func (a *Atomizer) getMessagesByTurns(
 		var content, meta sql.NullString
 		var mi sql.NullInt64
 		if err := rows.Scan(
-			&m.ID, &m.SessionID, &m.TurnID,
+			&m.ID, &m.ChatID, &m.PikaSessionID,
 			&ts, &m.Role, &content, &m.Tokens,
 			&mi, &meta,
 		); err != nil {
@@ -531,11 +531,11 @@ func (a *Atomizer) getMessagesByTurns(
 
 // --- Tag helpers (D-75) ---
 
-// collectTagsByTurn builds turn_id -> unique tags from events.
+// collectTagsByTurn builds pika_session_id -> unique tags from events.
 func collectTagsByTurn(
 	events []EventRow,
-) map[int][]string {
-	result := make(map[int][]string)
+) map[string][]string {
+	result := make(map[string][]string)
 	for _, e := range events {
 		if e.Tags == nil {
 			continue
@@ -546,8 +546,8 @@ func collectTagsByTurn(
 		); err != nil {
 			continue
 		}
-		result[e.TurnID] = append(
-			result[e.TurnID], tags...,
+		result[e.PikaSessionID] = append(
+			result[e.PikaSessionID], tags...,
 		)
 	}
 	for tid, tags := range result {
@@ -558,7 +558,7 @@ func collectTagsByTurn(
 
 // mergeTagsForTurns collects unique tags from specified turns.
 func mergeTagsForTurns(
-	turns []int, tagsByTurn map[int][]string,
+	turns []string, tagsByTurn map[string][]string,
 ) []string {
 	seen := make(map[string]bool)
 	var result []string
@@ -664,7 +664,7 @@ Rules:
 - Polarity: positive (task succeeded), negative
   (fail/problem/user dissatisfied), neutral (informational).
 - Confidence: 0.0 to 1.0 based on clarity of evidence.
-- source_turns: list of turn_ids this atom covers.
+- source_turns: list of pika_session_ids this atom covers.
 - Keep summaries concise but include exact values
   (IPs, ports, paths, versions) verbatim.
 

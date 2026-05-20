@@ -397,3 +397,48 @@ Each entry maps to a single wave/phase and its merged PR.
   - Engine created before setupCronTool so it's captured in SetOnJob closure — avoids needing engine in services struct.
   - analytics_cron_service.go reuses schedToCronExpr from reflector_cron.go — no duplicate parsing logic.
   - Fallback defaults "Sun 04:30" / "1st 05:30" when config schedule is empty — backward-compatible.
+
+## Memory Pipeline Refactoring
+
+### [2026-05-19] feat(pika): Рефакторинг memory pipeline — chat_id/session_id + Архивариус + SessionLifecycle
+- **ТЗ:** ТЗ-v2-fix-memory-pipeline (7 фаз, 12 коммитов)
+- **PR:** TBD
+- **Files:**
+  - `pkg/pika/migrate.go` — MOD: migrationV2 — rename session_id→chat_id, turn_id→pika_session_id (idempotent)
+  - `pkg/pika/migrate_test.go` — MOD: адаптация под новые имена колонок
+  - `pkg/pika/botmemory.go` — MOD: все SQL переведены на chat_id/pika_session_id, session-scoped queries
+  - `pkg/pika/botmemory_session.go` — NEW: session-scoped helpers
+  - `pkg/pika/botmemory_test.go` — MOD: адаптация тестов
+  - `pkg/pika/session_store.go` — MOD: rewrite — turnIDs→SessionLifecycle, PikaSessionID int→string (pika_ prefix)
+  - `pkg/pika/session_store_accessor.go` — MOD: string session ID adaptation
+  - `pkg/pika/session_store_test.go` — MOD: тесты под новую логику
+  - `pkg/pika/session.go` — MOD: wire SessionLifecycle — EnsureSession, Touch, CheckRotationTriggers
+  - `pkg/pika/interfaces.go` — MOD: расширение интерфейсов (session/archivist types)
+  - `pkg/pika/archivist.go` — MOD: ArchivistInput expanded (catalogs, tool_prefs, correlated_tools), mandatory blocking
+  - `pkg/pika/discover_tools.go` — NEW: dynamic tool discovery из registry
+  - `pkg/pika/memory_tools.go` — MOD: session-scoped GetHistory
+  - `pkg/pika/atomizer.go` — MOD: session_id rename
+  - `pkg/pika/reflector.go` — MOD: session_id rename
+  - `pkg/pika/reflector_test.go` — MOD: тесты
+  - `pkg/pika/diagnostics.go` — MOD: session_id rename
+  - `pkg/pika/telemetry.go` — MOD: session_id rename
+  - `pkg/pika/autoevent.go` — MOD: session_id rename в event keys
+  - `pkg/pika/autoevent_test.go` — MOD: тесты
+  - `pkg/pika/analytics_test.go` — MOD: session_id rename в fixtures
+  - `pkg/agent/context_pika.go` — MOD: wire Archivist mandatory blocking + catalogs + recommended tools/skills
+  - `pkg/agent/context.go` — MOD: удалены legacy memory references
+  - `pkg/agent/memory.go` — DELETED: legacy MemoryStore (158 строк)
+  - `pkg/agent/hook_pika.go` — MOD: session_id type adaptation
+  - `pkg/agent/pipeline_llm.go` — MOD: tool defs filtering по recommended_tools
+  - `pkg/agent/pipeline_setup.go` — MOD: session_id type adaptation
+  - `pkg/agent/turn_coord.go` — MOD: session lifecycle touch point
+  - `workspace/prompts/archivist_build.md` — MOD: расширенный промпт (catalogs, enrichment, JSON schema)
+- **Breaking:** session_id→chat_id, turn_id→pika_session_id (migration included). PikaSessionID int→string. Legacy MemoryStore deleted
+- **Rollback:** git revert 12 коммитов. ALTER TABLE RENAME COLUMN обратим. memory.go из git history
+- **Dependencies:** archivist.go (3a), session.go (4b), session_store.go (1b), botmemory.go (1a)
+- **Design decisions:**
+  - session_id=TEXT с pika_ prefix — отличает новые сессии от legacy int
+  - Архивариус = mandatory blocking, без fallback. Лучше подождать чем отвечать без памяти
+  - Legacy MemoryStore удалён полностью — Archivist pipeline заменяет его
+  - discover_tools.go создан но НЕ зарегистрирован в ToolRouter (wiring в отдельном ТЗ)
+  - correlated_tools + tool_prefs enrichment в ТЗ Ф5 но ещё не в коде

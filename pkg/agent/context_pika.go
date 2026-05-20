@@ -12,7 +12,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
@@ -140,6 +142,13 @@ func pikaContextManagerFactory(
 		cm: cm,
 		al: al,
 	}
+	agentCfg := al.cfg.ResolveAgentConfig(agent.Name)
+	// PIKA-V3: Phase 6 — compile topic trigger regexes
+	for _, pat := range agentCfg.TopicTriggers {
+		if re, err := regexp.Compile(pat); err == nil {
+			adapter.topicRegexes = append(adapter.topicRegexes, re)
+		}
+	}
 
 	// Register 4 Pika PromptContributors on the agent's ContextBuilder.
 	// These provide MEMORY BRIEF, TRAIL, ACTIVE_PLAN, DEGRADATION via the
@@ -204,6 +213,10 @@ type pikaContextManagerAdapter struct {
 	// lastSessionKey is stored during Assemble so that PromptContributors
 	// (which don't receive sessionKey in PromptBuildRequest) can access it.
 	lastSessionKey string
+
+	// PIKA-V3: Phase 6
+	topicRegexes     []*regexp.Regexp
+	rotateRegistered sync.Map
 }
 
 // Assemble returns history and summary from PikaSessionStore.
@@ -220,6 +233,17 @@ func (a *pikaContextManagerAdapter) Assemble(
 
 	// Store sessionKey for PromptContributors.
 	a.lastSessionKey = req.SessionKey
+
+	// PIKA-V3: Phase 6 — lazy-register OnRotate → InvalidateBrief
+	if _, loaded := a.rotateRegistered.LoadOrStore(req.SessionKey, true); !loaded {
+		if ps, ok := agent.Sessions.(*pika.PikaSessionStore); ok {
+			if sl := ps.Session(req.SessionKey); sl != nil {
+				sl.OnRotate(func(_ string) {
+					a.cm.GetArchivist().InvalidateBrief()
+				})
+			}
+		}
+	}
 
 	// Get history from PikaSessionStore (SQLite)
 	history := agent.Sessions.GetHistory(req.SessionKey)
@@ -276,20 +300,49 @@ func (c *pikaMemoryBriefContributor) PromptSource() PromptSourceDescriptor {
 }
 
 func (c *pikaMemoryBriefContributor) ContributePrompt(
-	ctx context.Context, _ PromptBuildRequest,
+	ctx context.Context, req PromptBuildRequest,
 ) ([]PromptPart, error) {
 	sk := c.adapter.lastSessionKey
 	if sk == "" {
 		return nil, nil
 	}
+	// PIKA-V3: Phase 6 — topic trigger → InvalidateBrief
+	for _, re := range c.adapter.topicRegexes {
+		if re.MatchString(req.CurrentMessage) {
+			c.adapter.cm.GetArchivist().InvalidateBrief()
+			break
+		}
+	}
+
+	// PIKA-V3: collect tool & skill catalogs for Archivist
+	agent := c.adapter.al.registry.GetDefaultAgent()
+	var toolCat, skillCat []string
+	if agent != nil {
+		toolCat = agent.Tools.List()
+		skillCat = agent.ContextBuilder.ListSkillNames()
+	}
 	result, err := c.adapter.cm.GetArchivist().BuildPrompt(
-		ctx, pika.ArchivistInput{SessionKey: sk},
+		ctx, pika.ArchivistInput{
+			SessionKey:   sk,
+			ToolCatalog:  toolCat,
+			SkillCatalog: skillCat,
+		},
 	)
 	if err != nil {
-		return nil, nil //nolint:nilerr // archivist failure is not fatal
+		return nil, fmt.Errorf("pika/archivist: BuildPrompt: %w", err)
 	}
 	if result == nil || strings.TrimSpace(result.BriefText) == "" {
-		return nil, nil
+		return nil, fmt.Errorf("pika/archivist: empty brief from BuildPrompt")
+	}
+	// PIKA-V3: build content with brief + recommended tools/skills
+	content := "--- MEMORY BRIEF ---\n" + result.BriefText
+	if len(result.RecommendedTools) > 0 {
+		content += "\n--- RECOMMENDED TOOLS ---\n" +
+			strings.Join(result.RecommendedTools, ", ")
+	}
+	if len(result.RecommendedSkills) > 0 {
+		content += "\n--- RECOMMENDED SKILLS ---\n" +
+			strings.Join(result.RecommendedSkills, ", ")
 	}
 	return []PromptPart{{
 		ID:      "context.pika_memory_brief",
@@ -297,7 +350,7 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 		Slot:    PromptSlotMemory,
 		Source:  PromptSource{ID: "pika:memory_brief", Name: "pika:archivist"},
 		Title:   "memory brief",
-		Content: "--- MEMORY BRIEF ---\n" + result.BriefText,
+		Content: content,
 		Stable:  false,
 		Cache:   PromptCacheEphemeral,
 	}}, nil
@@ -359,7 +412,7 @@ func (c *pikaActivePlanContributor) PromptSource() PromptSourceDescriptor {
 }
 
 func (c *pikaActivePlanContributor) ContributePrompt(
-	ctx context.Context, _ PromptBuildRequest,
+	ctx context.Context, req PromptBuildRequest,
 ) ([]PromptPart, error) {
 	sk := c.adapter.lastSessionKey
 	if sk == "" {

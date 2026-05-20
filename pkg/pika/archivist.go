@@ -122,9 +122,10 @@ type MessageHit struct {
 
 // archivistLLMOutput is the structured JSON from the LLM.
 type archivistLLMOutput struct {
-	Focus       Focus       `json:"focus"`
-	MemoryBrief MemoryBrief `json:"memory_brief"`
-	ToolSet     []string    `json:"tool_set"`
+	Focus             Focus       `json:"focus"`
+	MemoryBrief       MemoryBrief `json:"memory_brief"`
+	RecommendedTools  []string    `json:"recommended_tools"`
+	RecommendedSkills []string    `json:"recommended_skills"`
 }
 
 // Archivist implements ArchivistCaller via an agentic LLM session.
@@ -138,7 +139,7 @@ type Archivist struct {
 	diag     *DiagnosticsEngine
 
 	mu          sync.RWMutex
-	cachedBrief string
+	lastResult  *ArchivistResult
 	cachedFocus *Focus
 
 	// PIKA-V3: transient tracking for atom_usage (TZ-v2-9a F-2)
@@ -187,8 +188,7 @@ func NewArchivist(
 // InvalidateBrief clears cached brief and focus.
 func (a *Archivist) InvalidateBrief() {
 	a.mu.Lock()
-	a.cachedBrief = ""
-	a.cachedFocus = nil
+	a.lastResult = nil
 	a.mu.Unlock()
 }
 
@@ -196,7 +196,10 @@ func (a *Archivist) InvalidateBrief() {
 func (a *Archivist) GetCachedBrief() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.cachedBrief
+	if a.lastResult != nil {
+		return a.lastResult.BriefText
+	}
+	return ""
 }
 
 // SetDiagnostics injects the diagnostics engine (post-construction wiring).
@@ -218,16 +221,12 @@ func (a *Archivist) BuildPrompt(
 	ctx context.Context,
 	input ArchivistInput,
 ) (*ArchivistResult, error) {
-	// Fast path: return cached brief (~80% of calls)
+	// Fast path: return cached result (~80% of calls)
 	a.mu.RLock()
-	cb := a.cachedBrief
-	cf := a.cachedFocus
+	cached := a.lastResult
 	a.mu.RUnlock()
-	if cb != "" && cf != nil {
-		return &ArchivistResult{
-			Focus:     *cf,
-			BriefText: cb,
-		}, nil
+	if cached != nil {
+		return cached, nil
 	}
 
 	// PIKA-V3: Trace span (TZ-v2-9a block 3)
@@ -292,17 +291,25 @@ func (a *Archivist) BuildPrompt(
 	// hard_limit is a metric only — insert as-is (D-107)
 
 	// Cache result
+	result := &ArchivistResult{
+		Focus:             output.Focus,
+		Brief:             output.MemoryBrief,
+		BriefText:         briefText,
+		RecommendedTools:  output.RecommendedTools,
+		RecommendedSkills: output.RecommendedSkills,
+	}
 	a.mu.Lock()
-	a.cachedBrief = briefText
-	a.cachedFocus = &output.Focus
+	a.lastResult = result
 	a.mu.Unlock()
 
-	return &ArchivistResult{
-		Focus:     output.Focus,
-		Brief:     output.MemoryBrief,
-		BriefText: briefText,
-		ToolSet:   output.ToolSet,
-	}, nil
+	return result, nil
+}
+
+// LastResult returns the last cached ArchivistResult, or nil.
+func (a *Archivist) LastResult() *ArchivistResult {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.lastResult
 }
 
 // loadPromptFile reads the archivist prompt from disk.
@@ -374,6 +381,17 @@ func (a *Archivist) buildUserMessage(
 		"max_tool_calls: %d\n", a.cfg.MaxToolCalls)
 	fmt.Fprintf(&sb,
 		"is_rotation: %v\n", input.IsRotation)
+	// PIKA-V3: inject tool/skill catalogs for LLM selection
+	if len(input.ToolCatalog) > 0 {
+		fmt.Fprintf(&sb,
+			"available_tools: %v\n",
+			input.ToolCatalog)
+	}
+	if len(input.SkillCatalog) > 0 {
+		fmt.Fprintf(&sb,
+			"available_skills: %v\n",
+			input.SkillCatalog)
+	}
 
 	return sb.String()
 }
@@ -582,7 +600,7 @@ func (a *Archivist) searchKnowledge(
 			continue
 		}
 		// PIKA-V3: record atom_usage (TZ-v2-9a F-2)
-		tid, _ := a.mem.GetMaxTurnID(ctx, a.currentSessionKey)
+		tid, _ := a.mem.GetMaxPikaSessionID(ctx, a.currentSessionKey)
 		_ = a.mem.InsertAtomUsage(ctx, atom.AtomID, a.currentSpanID, tid, "BRIEF", nil, nil, "", "", a.currentSpanID)
 		hits = append(hits, KnowledgeHit{
 			Category:   atom.Category,
@@ -607,7 +625,7 @@ func (a *Archivist) searchMessages(
 
 	// Guaranteed last N messages (most recent, any session)
 	rows, err := a.mem.db.QueryContext(ctx,
-		`SELECT role, content, turn_id
+		`SELECT role, content, pika_chat_id
 		FROM messages ORDER BY id DESC LIMIT ?`,
 		lastN)
 	if err != nil {
@@ -643,7 +661,7 @@ func (a *Archivist) searchMessages(
 	// LIKE search across all sessions
 	if query != "" {
 		likeRows, lErr := a.mem.db.QueryContext(ctx,
-			`SELECT role, content, turn_id
+			`SELECT role, content, pika_chat_id
 			FROM messages
 			WHERE content LIKE '%' || ? || '%'
 			ORDER BY id DESC LIMIT ?`,
@@ -929,7 +947,8 @@ Return a JSON object:
     "avoid": [...], "constraints": [...],
     "prefer": [...], "context": [...]
   },
-  "tool_set": [...]
+  "recommended_tools": [...],
+"recommended_skills": [...]
 }
 
 Rules:

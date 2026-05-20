@@ -1,4 +1,5 @@
 // PIKA-V3: PikaSessionStore implements session.SessionStore via BotMemory.
+// Uses SessionLifecycle per chat key for session ID generation.
 
 package pika
 
@@ -19,10 +20,12 @@ var _ session.SessionStore = (*PikaSessionStore)(nil)
 // PikaSessionStore implements session.SessionStore using BotMemory
 // as the SQLite backend. Thread-safe via mutex for in-memory state.
 // All DB operations delegate to BotMemory (no direct SQL here).
+// PIKA-V3: Each chat key gets its own SessionLifecycle instance
+// that generates session IDs in format "baseKey:unixTimestamp".
 type PikaSessionStore struct {
 	mem          *BotMemory
 	mu           sync.Mutex
-	turnIDs      map[string]int
+	sessions     map[string]*SessionLifecycle
 	summaryCache map[string]string
 }
 
@@ -30,7 +33,7 @@ type PikaSessionStore struct {
 func NewPikaSessionStore(mem *BotMemory) *PikaSessionStore {
 	return &PikaSessionStore{
 		mem:          mem,
-		turnIDs:      make(map[string]int),
+		sessions:     make(map[string]*SessionLifecycle),
 		summaryCache: make(map[string]string),
 	}
 }
@@ -74,26 +77,29 @@ func buildMetadata(msg providers.Message) json.RawMessage {
 	return data
 }
 
-// currentTurnID returns the current turn_id for a session,
-// recovering from DB if not in the in-memory cache.
+// getOrCreateSessionLocked returns the SessionLifecycle for a
+// chat key, creating one with default config if needed.
 // Must be called with s.mu held.
-func (s *PikaSessionStore) currentTurnID(key string) int {
-	tid, ok := s.turnIDs[key]
-	if ok {
-		return tid
+func (s *PikaSessionStore) getOrCreateSessionLocked(
+	key string,
+) *SessionLifecycle {
+	sl, ok := s.sessions[key]
+	if !ok {
+		sl = NewSessionLifecycle(s.mem, SessionConfig{})
+		s.sessions[key] = sl
 	}
-	maxTID, err := s.mem.GetMaxTurnID(
-		context.Background(), key,
-	)
-	if err != nil {
-		log.Printf(
-			"pika/session_store: recover turn_id %q: %v",
-			key, err,
-		)
-		return 0
-	}
-	s.turnIDs[key] = maxTID
-	return maxTID
+	return sl
+}
+
+// Session returns the SessionLifecycle for a chat key,
+// creating one if needed. Used by upstream to check rotation
+// triggers, register callbacks, get session ID, etc.
+func (s *PikaSessionStore) Session(
+	key string,
+) *SessionLifecycle {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.getOrCreateSessionLocked(key)
 }
 
 // addFullMessageLocked is the internal implementation.
@@ -101,22 +107,22 @@ func (s *PikaSessionStore) currentTurnID(key string) int {
 func (s *PikaSessionStore) addFullMessageLocked(
 	key string, msg providers.Message,
 ) {
-	tid := s.currentTurnID(key)
+	sl := s.getOrCreateSessionLocked(key)
+	sid := sl.EnsureSession(key)
 	if msg.Role == "user" {
-		tid++
-		s.turnIDs[key] = tid
+		sl.Touch()
 	}
 
 	meta := buildMetadata(msg)
 	tokens := tokenizer.EstimateMessageTokens(msg)
 
 	row := MessageRow{
-		SessionID: key,
-		TurnID:    tid,
-		Role:      msg.Role,
-		Content:   msg.Content,
-		Tokens:    tokens,
-		Metadata:  meta,
+		ChatID:        key,
+		PikaSessionID: sid,
+		Role:          msg.Role,
+		Content:       msg.Content,
+		Tokens:        tokens,
+		Metadata:      meta,
 	}
 	_, err := s.mem.SaveMessage(context.Background(), row)
 	if err != nil {
@@ -151,9 +157,25 @@ func (s *PikaSessionStore) AddMessage(
 func (s *PikaSessionStore) GetHistory(
 	key string,
 ) []providers.Message {
-	rows, err := s.mem.GetMessages(
-		context.Background(), key,
+	// PIKA-V3: session-scoped history
+	s.mu.Lock()
+	sl := s.sessions[key]
+	s.mu.Unlock()
+
+	var (
+		rows []MessageRow
+		err  error
 	)
+	if sl != nil {
+		sid := sl.SessionID()
+		rows, err = s.mem.GetMessagesBySession(
+			context.Background(), key, sid,
+		)
+	} else {
+		rows, err = s.mem.GetMessages(
+			context.Background(), key,
+		)
+	}
 	if err != nil {
 		log.Printf(
 			"pika/session_store: get history %q: %v",
@@ -173,7 +195,8 @@ func (s *PikaSessionStore) GetHistory(
 				r.Metadata, &meta,
 			); jErr != nil {
 				log.Printf(
-					"pika/session_store: unmarshal metadata id=%d: %v",
+					"pika/session_store: "+
+						"unmarshal metadata id=%d: %v",
 					r.ID, jErr,
 				)
 			} else {
@@ -221,7 +244,11 @@ func (s *PikaSessionStore) SetHistory(
 		)
 		return
 	}
-	s.turnIDs[key] = 0
+	// PIKA-V3: close old session; fresh one created on next access
+	if sl, ok := s.sessions[key]; ok {
+		sl.CloseSession("history_reset")
+		delete(s.sessions, key)
+	}
 	for _, msg := range history {
 		s.addFullMessageLocked(key, msg)
 	}
@@ -243,7 +270,7 @@ func (s *PikaSessionStore) Save(_ string) error {
 
 // ListSessions returns all distinct session keys from the DB.
 func (s *PikaSessionStore) ListSessions() []string {
-	ids, err := s.mem.GetDistinctSessionIDs(
+	ids, err := s.mem.GetDistinctChatIDs(
 		context.Background(),
 	)
 	if err != nil {

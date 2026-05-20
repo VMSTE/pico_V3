@@ -29,7 +29,7 @@ type CallResult struct {
 
 // RecordLLMParams holds parameters for recording an LLM call.
 type RecordLLMParams struct {
-	SessionID string
+	ChatID    string
 	Model     string
 	Direction string
 	Component string
@@ -137,7 +137,7 @@ func (t *Telemetry) RecordLLMCall(
 		return
 	}
 	row := RequestLogRow{
-		SessionID:        p.SessionID,
+		ChatID:           p.ChatID,
 		Direction:        p.Direction,
 		Component:        p.Component,
 		Model:            p.Model,

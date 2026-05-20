@@ -10,6 +10,7 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
@@ -24,6 +25,13 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 
 	al.registerActiveTurn(ts)
 	defer al.clearActiveTurn(ts)
+
+	// PIKA-V3: wire SessionLifecycle — EnsureSession + Touch on turn start
+	if ps, ok := ts.agent.Sessions.(*pika.PikaSessionStore); ok {
+		sl := ps.Session(ts.sessionKey)
+		sl.EnsureSession(ts.sessionKey)
+		sl.Touch()
+	}
 
 	turnStatus := TurnEndStatusCompleted
 	defer func() {

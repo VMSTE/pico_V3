@@ -68,7 +68,7 @@ func TestSearchMemory_BasicQuery(t *testing.T) {
 
 	// Layer 1: message
 	_, err := bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "user",
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
 		Content: "deploy nginx to production",
 		Tokens:  10,
 	})
@@ -78,13 +78,13 @@ func TestSearchMemory_BasicQuery(t *testing.T) {
 
 	// Layer 2: knowledge atom
 	err = bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID:     "P-1",
-		SessionID:  "s1",
-		TurnID:     1,
-		Category:   "pattern",
-		Summary:    "nginx deploy requires confirmation",
-		Confidence: 0.8,
-		Polarity:   "neutral",
+		AtomID:        "P-1",
+		ChatID:        "s1",
+		PikaSessionID: "1",
+		Category:      "pattern",
+		Summary:       "nginx deploy requires confirmation",
+		Confidence:    0.8,
+		Polarity:      "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -162,13 +162,13 @@ func TestSearchMemory_EmptySessionID(t *testing.T) {
 	ctx := context.Background()
 
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID:     "P-1",
-		SessionID:  "s1",
-		TurnID:     1,
-		Category:   "pattern",
-		Summary:    "test pattern for empty session",
-		Confidence: 0.5,
-		Polarity:   "neutral",
+		AtomID:        "P-1",
+		ChatID:        "s1",
+		PikaSessionID: "1",
+		Category:      "pattern",
+		Summary:       "test pattern for empty session",
+		Confidence:    0.5,
+		Polarity:      "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -193,13 +193,13 @@ func TestSearchMemory_LayerFailure(t *testing.T) {
 	ctx := context.Background()
 
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID:     "P-1",
-		SessionID:  "s1",
-		TurnID:     1,
-		Category:   "pattern",
-		Summary:    "surviving layer data",
-		Confidence: 0.5,
-		Polarity:   "neutral",
+		AtomID:        "P-1",
+		ChatID:        "s1",
+		PikaSessionID: "1",
+		Category:      "pattern",
+		Summary:       "surviving layer data",
+		Confidence:    0.5,
+		Polarity:      "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +252,7 @@ func TestSearchMemory_Dedup(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "user",
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
 		Content: "duplicate test content", Tokens: 10,
 	})
 	if err != nil {
@@ -262,8 +262,8 @@ func TestSearchMemory_Dedup(t *testing.T) {
 	msgID := int64(1)
 	err = bm.InsertAtom(ctx, KnowledgeAtomRow{
 		AtomID:          "P-1",
-		SessionID:       "s1",
-		TurnID:          1,
+		ChatID:          "s1",
+		PikaSessionID:   "1",
 		SourceMessageID: &msgID,
 		Category:        "pattern",
 		Summary:         "duplicate content atom",
@@ -310,13 +310,13 @@ func TestSearchMemory_ScoringOrder(t *testing.T) {
 	ctx := context.Background()
 
 	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
-		AtomID:     "P-1",
-		SessionID:  "s1",
-		TurnID:     1,
-		Category:   "pattern",
-		Summary:    "important deploy knowledge",
-		Confidence: 0.9,
-		Polarity:   "neutral",
+		AtomID:        "P-1",
+		ChatID:        "s1",
+		PikaSessionID: "1",
+		Category:      "pattern",
+		Summary:       "important deploy knowledge",
+		Confidence:    0.9,
+		Polarity:      "neutral",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -361,7 +361,7 @@ func TestSearchMemory_ArchivePipeline(t *testing.T) {
 	ctx := context.Background()
 
 	msgID, err := bm.SaveMessage(ctx, MessageRow{
-		SessionID: "s1", TurnID: 1, Role: "assistant",
+		ChatID: "s1", PikaSessionID: "1", Role: "assistant",
 		Content: "nginx config updated to 4096 workers",
 		Tokens:  15,
 	})
@@ -369,15 +369,15 @@ func TestSearchMemory_ArchivePipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = bm.ArchiveAndDeleteTurns(ctx, "s1", []int{1})
+	err = bm.ArchiveAndDeleteTurns(ctx, "s1", []string{"1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	err = bm.InsertAtom(ctx, KnowledgeAtomRow{
 		AtomID:          "P-1",
-		SessionID:       "s1",
-		TurnID:          1,
+		ChatID:          "s1",
+		PikaSessionID:   "1",
 		SourceMessageID: &msgID,
 		Category:        "pattern",
 		Summary:         "nginx workers config update",
@@ -414,8 +414,8 @@ func TestSearchMemory_ReasoningJsonEach(t *testing.T) {
 		"nginx", "deployment", "workers",
 	})
 	_, err := bm.InsertReasoningLog(ctx, ReasoningLogRow{
-		SessionID:         "s1",
-		TurnID:            1,
+		ChatID:            "s1",
+		PikaSessionID:     "1",
 		Task:              "deploy nginx",
 		Mode:              "deploy",
 		ReasoningKeywords: kw,

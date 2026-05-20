@@ -176,7 +176,7 @@ func (a *autoEventAdapter) OnEvent(ctx context.Context, evt Event) error {
 	if !ok {
 		return nil
 	}
-	return a.handler.HandleToolResult(ctx, p.Tool, "", p.IsError, "", 0)
+	return a.handler.HandleToolResult(ctx, p.Tool, "", p.IsError, "", "")
 }
 
 var (

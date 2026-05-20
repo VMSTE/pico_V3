@@ -114,7 +114,7 @@ func (d *DiagnosticsEngine) Diagnose(ctx context.Context, traceID string) Diagno
 	// 1. Find first error/timeout span for this trace.
 	row := d.mem.db.QueryRowContext(ctx,
 		`SELECT span_id, COALESCE(parent_span_id,''), trace_id,
-		        COALESCE(session_id,''), COALESCE(turn_id,0),
+		        COALESCE(chat_id,''), COALESCE(pika_session_id,0),
 		        component, operation, started_at, status
 		 FROM trace_spans
 		 WHERE trace_id = ? AND status IN ('error','timeout')
@@ -123,7 +123,7 @@ func (d *DiagnosticsEngine) Diagnose(ctx context.Context, traceID string) Diagno
 
 	var span TraceSpanRow
 	var parentSpanID, sessionID string
-	var turnID int
+	var turnID string
 	err := row.Scan(
 		&span.SpanID, &parentSpanID, &span.TraceID,
 		&sessionID, &turnID,
@@ -136,9 +136,9 @@ func (d *DiagnosticsEngine) Diagnose(ctx context.Context, traceID string) Diagno
 		return result // no error spans or query failed
 	}
 	span.ParentSpanID = parentSpanID
-	span.SessionID = sessionID
-	if turnID != 0 {
-		span.TurnID = &turnID
+	span.ChatID = sessionID
+	if turnID != "" {
+		span.PikaSessionID = &turnID
 	}
 
 	result.Component = span.Component

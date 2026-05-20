@@ -97,7 +97,7 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 			snapTS := time.Now()
 			snapID := fmt.Sprintf("psnap_%d", snapTS.UnixNano())
 			trID := fmt.Sprintf("ptrace_%d", snapTS.UnixNano())
-			tid, _ := bm.GetMaxTurnID(ctx, ts.sessionKey)
+			tid, _ := bm.GetMaxPikaSessionID(ctx, ts.sessionKey)
 			h := sha256.Sum256([]byte(systemPrompt))
 			preview := systemPrompt
 			if len(preview) > 200 {

@@ -71,7 +71,7 @@ func insertTestAtom(
 	}
 	_, err := db.Exec(
 		`INSERT INTO knowledge_atoms
-		(atom_id, session_id, turn_id, category,
+		(atom_id, chat_id, pika_session_id, category,
 		 summary, confidence, polarity, tags)
 		VALUES (?,?,?,?,?,?,?,?)`,
 		atomID, "test-session", 1,

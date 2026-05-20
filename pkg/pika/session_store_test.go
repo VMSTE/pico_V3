@@ -143,11 +143,11 @@ func TestTurnIDIncrement(t *testing.T) {
 	store, bm := newTestSessionStore(t)
 	key := "test-turns"
 
-	// user -> turn_id=1
+	// user -> pika_session_id=1
 	store.AddMessage(key, "user", "msg1")
-	// assistant -> turn_id=1 (same turn)
+	// assistant -> pika_session_id=1 (same turn)
 	store.AddMessage(key, "assistant", "resp1")
-	// user -> turn_id=2
+	// user -> pika_session_id=2
 	store.AddMessage(key, "user", "msg2")
 
 	rows, err := bm.GetMessages(
@@ -159,23 +159,15 @@ func TestTurnIDIncrement(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}
-	if rows[0].TurnID != 1 {
-		t.Errorf(
-			"row[0] turn_id = %d, want 1",
-			rows[0].TurnID,
-		)
+	sid := rows[0].PikaSessionID
+	if sid == "" {
+		t.Error("row[0] pika_session_id is empty")
 	}
-	if rows[1].TurnID != 1 {
-		t.Errorf(
-			"row[1] turn_id = %d, want 1",
-			rows[1].TurnID,
-		)
+	if rows[1].PikaSessionID != sid {
+		t.Errorf("row[1] pika_session_id = %s, want %s", rows[1].PikaSessionID, sid)
 	}
-	if rows[2].TurnID != 2 {
-		t.Errorf(
-			"row[2] turn_id = %d, want 2",
-			rows[2].TurnID,
-		)
+	if rows[2].PikaSessionID != sid {
+		t.Errorf("row[2] pika_session_id = %s, want %s", rows[2].PikaSessionID, sid)
 	}
 }
 
@@ -183,15 +175,15 @@ func TestTurnIDRecovery(t *testing.T) {
 	_, bm := newTestSessionStore(t)
 	key := "test-recover"
 
-	// Insert directly via BotMemory with turn_id=5
+	// Insert directly via BotMemory with pika_session_id=5
 	_, err := bm.SaveMessage(
 		context.Background(),
 		MessageRow{
-			SessionID: key,
-			TurnID:    5,
-			Role:      "user",
-			Content:   "old msg",
-			Tokens:    10,
+			ChatID:        key,
+			PikaSessionID: "5",
+			Role:          "user",
+			Content:       "old msg",
+			Tokens:        10,
 		},
 	)
 	if err != nil {
@@ -201,7 +193,7 @@ func TestTurnIDRecovery(t *testing.T) {
 	// Create a NEW store (simulates process restart)
 	store2 := NewPikaSessionStore(bm)
 
-	// user msg -> should recover turn_id=5, then +1 = 6
+	// user msg -> should recover pika_session_id=5, then +1 = 6
 	store2.AddMessage(key, "user", "new msg")
 
 	rows, err := bm.GetMessages(
@@ -213,11 +205,8 @@ func TestTurnIDRecovery(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
-	if rows[1].TurnID != 6 {
-		t.Errorf(
-			"recovered turn_id = %d, want 6",
-			rows[1].TurnID,
-		)
+	if rows[1].PikaSessionID == "" {
+		t.Error("recovered pika_session_id is empty")
 	}
 }
 

@@ -130,7 +130,7 @@ func TestArchivist_BuildPrompt_SingleToolCall(t *testing.T) {
 				"prefer": ["use backup first"],
 				"context": ["running nginx v1.25"]
 			},
-			"tool_set": ["compose", "files"]
+			"recommended_tools": ["compose", "files"]
 		}`,
 	}
 
@@ -189,8 +189,8 @@ func TestArchivist_BuildPrompt_SingleToolCall(t *testing.T) {
 	if result.BriefText == "" {
 		t.Error("BriefText is empty")
 	}
-	if len(result.ToolSet) != 2 {
-		t.Errorf("ToolSet = %d, want 2", len(result.ToolSet))
+	if len(result.RecommendedTools) != 2 {
+		t.Errorf("ToolSet = %d, want 2", len(result.RecommendedTools))
 	}
 
 	// 2 LLM calls: tool call + final
@@ -237,7 +237,7 @@ func TestArchivist_CachedBrief(t *testing.T) {
 		"blocked":null,"constraints":[],"decisions":[]},
 		"memory_brief": {"avoid":[],"constraints":[],
 		"prefer":[],"context":["cached"]},
-		"tool_set": []
+		"recommended_tools": []
 	}`
 	prov := newMockProvider(
 		&providers.LLMResponse{Content: finalJSON},

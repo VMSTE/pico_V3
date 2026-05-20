@@ -238,7 +238,7 @@ func (r *ReflectorPipeline) fetchAtoms(
 	var query string
 	switch mode {
 	case ReflectorDaily:
-		query = `SELECT id, atom_id, session_id, turn_id,
+		query = `SELECT id, atom_id, chat_id, pika_session_id,
 			source_event_id, source_message_id, category,
 			summary, detail, confidence, polarity, verified,
 			tags, source_turns, history,
@@ -247,7 +247,7 @@ func (r *ReflectorPipeline) fetchAtoms(
 			WHERE created_at > datetime('now', '-1 day')
 			ORDER BY id ASC`
 	case ReflectorWeekly:
-		query = `SELECT id, atom_id, session_id, turn_id,
+		query = `SELECT id, atom_id, chat_id, pika_session_id,
 			source_event_id, source_message_id, category,
 			summary, detail, confidence, polarity, verified,
 			tags, source_turns, history,
@@ -256,7 +256,7 @@ func (r *ReflectorPipeline) fetchAtoms(
 			WHERE created_at > datetime('now', '-7 days')
 			ORDER BY id ASC`
 	case ReflectorMonthly:
-		query = `SELECT id, atom_id, session_id, turn_id,
+		query = `SELECT id, atom_id, chat_id, pika_session_id,
 			source_event_id, source_message_id, category,
 			summary, detail, confidence, polarity, verified,
 			tags, source_turns, history,
@@ -285,7 +285,7 @@ func scanKnowledgeAtomRows(
 		var det, tg, st, hi sql.NullString
 		var ca, ua string
 		if err := rows.Scan(
-			&a.ID, &a.AtomID, &a.SessionID, &a.TurnID,
+			&a.ID, &a.AtomID, &a.ChatID, &a.PikaSessionID,
 			&se, &sm, &a.Category, &a.Summary, &det,
 			&a.Confidence, &a.Polarity, &a.Verified,
 			&tg, &st, &hi, &ca, &ua,
@@ -672,11 +672,11 @@ func (r *ReflectorPipeline) applyMerge(
 
 	_, err = tx.ExecContext(ctx,
 		`INSERT INTO knowledge_atoms
-		(atom_id, session_id, turn_id, category,
+		(atom_id, chat_id, pika_session_id, category,
 		 summary, detail, confidence, polarity,
 		 tags, source_turns, history)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-		newAtomID, keeper.SessionID, keeper.TurnID,
+		newAtomID, keeper.ChatID, keeper.PikaSessionID,
 		keeper.Category, keeper.Summary,
 		strOrNil(keeper.Detail), avgConf,
 		keeper.Polarity, jsonArg(tagsJSON),
@@ -732,16 +732,16 @@ func (r *ReflectorPipeline) applyPattern(
 	}
 
 	row := KnowledgeAtomRow{
-		AtomID:      atomID,
-		SessionID:   "reflector",
-		TurnID:      0,
-		Category:    "pattern",
-		Summary:     pat.Summary,
-		Detail:      pat.SuggestedAction,
-		Confidence:  0.5,
-		Polarity:    polarity,
-		Tags:        tagsJSON,
-		SourceTurns: evidenceJSON,
+		AtomID:        atomID,
+		ChatID:        "reflector",
+		PikaSessionID: "",
+		Category:      "pattern",
+		Summary:       pat.Summary,
+		Detail:        pat.SuggestedAction,
+		Confidence:    0.5,
+		Polarity:      polarity,
+		Tags:          tagsJSON,
+		SourceTurns:   evidenceJSON,
 	}
 	return r.mem.InsertAtom(ctx, row)
 }
@@ -797,16 +797,16 @@ func (r *ReflectorPipeline) applyRunbook(
 	)
 
 	row := KnowledgeAtomRow{
-		AtomID:      atomID,
-		SessionID:   "reflector",
-		TurnID:      0,
-		Category:    "runbook_draft",
-		Summary:     rd.Trigger,
-		Detail:      string(detail),
-		Confidence:  0.5,
-		Polarity:    "negative",
-		Tags:        tagsJSON,
-		SourceTurns: evidenceJSON,
+		AtomID:        atomID,
+		ChatID:        "reflector",
+		PikaSessionID: "",
+		Category:      "runbook_draft",
+		Summary:       rd.Trigger,
+		Detail:        string(detail),
+		Confidence:    0.5,
+		Polarity:      "negative",
+		Tags:          tagsJSON,
+		SourceTurns:   evidenceJSON,
 	}
 	return r.mem.InsertAtom(ctx, row)
 }
