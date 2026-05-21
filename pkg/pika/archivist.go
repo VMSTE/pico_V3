@@ -102,7 +102,9 @@ type SearchContextParams struct {
 type SearchContextResult struct {
 	Knowledge         []KnowledgeHit `json:"knowledge,omitempty"`
 	Messages          []MessageHit   `json:"messages,omitempty"`
-	ReasoningKeywords []string       `json:"reasoning_keywords,omitempty"`
+	ReasoningKeywords []string             `json:"reasoning_keywords,omitempty"`
+	CorrelatedTools  []CorrelatedToolRow `json:"correlated_tools,omitempty"`
+	ToolPrefs        []KnowledgeHit      `json:"tool_prefs,omitempty"`
 }
 
 // KnowledgeHit is a single knowledge atom search result.
@@ -507,7 +509,7 @@ func (a *Archivist) executeSearchContext(
 	aspects := params.Aspects
 	if len(aspects) == 0 {
 		aspects = []string{
-			"knowledge", "messages", "reasoning",
+			"knowledge", "messages", "reasoning", "correlated_tools", "tool_prefs",
 		}
 	}
 
@@ -556,6 +558,24 @@ func (a *Archivist) executeSearchContext(
 						},
 					)
 				}
+			}
+		case "correlated_tools":
+			ct, err := a.mem.QueryCorrelatedTools(ctx, params.Query, limit)
+			if err == nil {
+				result.CorrelatedTools = ct
+			}
+		case "tool_prefs":
+			hits, err := a.searchKnowledge(
+				ctx, params.Query, "", limit,
+			)
+			if err == nil {
+				var prefs []KnowledgeHit
+				for _, h := range hits {
+					if h.Category == "tool_pref" {
+						prefs = append(prefs, h)
+					}
+				}
+				result.ToolPrefs = prefs
 			}
 		}
 	}
