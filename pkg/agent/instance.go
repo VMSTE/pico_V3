@@ -124,6 +124,7 @@ func NewAgentInstance(
 
 	// PIKA-V3: 🧠 BRAIN tools — always-on, IsCore=true
 	toolsRegistry.Register(pika.NewMemorySearch(botMem))
+	toolsRegistry.Register(pika.NewDiscoverTools(toolsRegistry))
 
 	mcpDiscoveryActive := cfg.Tools.MCP.Enabled && cfg.Tools.MCP.Discovery.Enabled
 	contextBuilder := NewContextBuilder(workspace).

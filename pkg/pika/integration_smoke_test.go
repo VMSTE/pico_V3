@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/tools"
 )
 
 // ===========================================================================
@@ -113,13 +114,13 @@ func TestPikaIntegrationSmoke(t *testing.T) {
 		t.Error("step 4e: GetMeta returned different meta")
 	}
 
-	// Step 5: ToolRouter — classify unknown tool (no panic)
-	router := NewToolRouter(nil)
-	if router == nil {
-		t.Fatal("step 5: ToolRouter is nil")
+	// Step 5: DiscoverTools — construct with empty registry (no panic)
+	dt := NewDiscoverTools(tools.NewToolRegistry())
+	if dt == nil {
+		t.Fatal("step 5: DiscoverTools is nil")
 	}
-	cat := router.Classify("unknown_tool_xyz")
-	_ = cat // returned a ToolCategory, no panic = pass
+	result := dt.Execute(context.Background(), nil)
+	_ = result // returned a ToolResult, no panic = pass
 
 	// Step 6: ConfirmGate — factory with real config
 	gate := ConfirmGateFactory(cfg, tg, NewAlwaysHealthyProvider())
