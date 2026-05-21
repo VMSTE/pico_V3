@@ -50,6 +50,13 @@ type clarifyState struct {
 	lastQuestions []string
 }
 
+// ClarifyBus is the minimal bus interface needed by ClarifyHandler.
+// Satisfied by both *bus.MessageBus and interfaces.MessageBus.
+type ClarifyBus interface {
+	PublishOutbound(ctx context.Context, msg bus.OutboundMessage) error
+	InboundChan() <-chan bus.InboundMessage
+}
+
 // ClarifyHandler is the HITL clarify tool.
 // NOT stateless: holds per-session state via sync.Map.
 // Uses MessageBus directly for sending questions and receiving replies.
@@ -57,7 +64,7 @@ type clarifyState struct {
 type ClarifyHandler struct {
 	cfg      *ClarifyConfig
 	bm       *BotMemory
-	mb       *bus.MessageBus  // send via PublishOutbound, receive via InboundChan
+	mb       ClarifyBus  // send via PublishOutbound, receive via InboundChan
 	sessions sync.Map         // sessionID → *clarifyState
 	patterns []*regexp.Regexp // decision/confirmation
 }
@@ -68,7 +75,7 @@ type ClarifyHandler struct {
 func NewClarifyHandler(
 	cfg *ClarifyConfig,
 	bm *BotMemory,
-	mb *bus.MessageBus,
+	mb ClarifyBus,
 ) *ClarifyHandler {
 	patternStrings := []string{
 		`(?i)делать\s*\?`,

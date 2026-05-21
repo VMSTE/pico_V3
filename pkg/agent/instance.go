@@ -63,6 +63,7 @@ func NewAgentInstance(
 	defaults *config.AgentDefaults,
 	cfg *config.Config,
 	provider providers.LLMProvider,
+	msgBus pika.ClarifyBus,
 ) *AgentInstance {
 	if cfg != nil {
 		// Keep the subprocess isolation runtime aligned with the latest loaded config
@@ -125,6 +126,17 @@ func NewAgentInstance(
 	// PIKA-V3: 🧠 BRAIN tools — always-on, IsCore=true
 	toolsRegistry.Register(pika.NewMemorySearch(botMem))
 	toolsRegistry.Register(pika.NewDiscoverTools(toolsRegistry))
+
+	// PIKA-V3: clarify — HITL tool, uses MessageBus for user communication
+	if msgBus != nil && cfg.Clarify.Enabled {
+		clarifyCfg := &pika.ClarifyConfig{
+			Enabled:              cfg.Clarify.Enabled,
+			TimeoutMin:           cfg.Clarify.TimeoutMin,
+			MaxStreakBeforeBypass: cfg.Clarify.MaxStreakBeforeBypass,
+			PrecheckTimeoutMs:    cfg.Clarify.PrecheckTimeoutMs,
+		}
+		toolsRegistry.Register(pika.NewClarifyHandler(clarifyCfg, botMem, msgBus))
+	}
 
 	mcpDiscoveryActive := cfg.Tools.MCP.Enabled && cfg.Tools.MCP.Discovery.Enabled
 	contextBuilder := NewContextBuilder(workspace).

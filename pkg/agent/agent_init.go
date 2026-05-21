@@ -26,7 +26,7 @@ func NewAgentLoop(
 	msgBus *bus.MessageBus,
 	provider providers.LLMProvider,
 ) *AgentLoop {
-	registry := NewAgentRegistry(cfg, provider)
+	registry := NewAgentRegistry(cfg, provider, msgBus)
 
 	// Set up shared fallback chain with rate limiting.
 	cooldown := providers.NewCooldownTracker()

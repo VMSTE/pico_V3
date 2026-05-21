@@ -348,7 +348,7 @@ func (al *AgentLoop) ReloadProviderAndConfig(
 			close(done)
 		}()
 
-		registry = NewAgentRegistry(cfg, provider)
+		registry = NewAgentRegistry(cfg, provider, al.bus)
 	}()
 
 	// Wait for completion or context cancellation

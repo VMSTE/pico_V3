@@ -5263,7 +5263,7 @@ func TestProcessMessage_ContextOverflowRecovery(t *testing.T) {
 	_ = cfg
 
 	provider := &overflowProvider{}
-	al.registry = NewAgentRegistry(al.cfg, provider)
+	al.registry = NewAgentRegistry(al.cfg, provider, nil)
 
 	sessionKey := "agent:main:test-session"
 	agent := al.GetRegistry().GetDefaultAgent()
@@ -5299,7 +5299,7 @@ func TestProcessMessage_ContextOverflow_AnthropicStyle(t *testing.T) {
 	_ = cfg
 
 	provider := &overflowProvider{}
-	al.registry = NewAgentRegistry(al.cfg, provider)
+	al.registry = NewAgentRegistry(al.cfg, provider, nil)
 
 	recoveryMsg := "error: status 400: context_window_exceeded"
 
