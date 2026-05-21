@@ -4,8 +4,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/tools"
 )
@@ -24,16 +24,6 @@ func (s *smokeTG) EditMessage(_ context.Context, _, _ string) error           { 
 func (s *smokeTG) DeleteMessage(_ context.Context, _ string) error            { return nil }
 func (s *smokeTG) SendConfirmation(_ context.Context, _ string) (bool, error) { return true, nil }
 
-type smokeClarSender struct{ sent []string }
-
-func (s *smokeClarSender) SendMessage(_, text string) (string, error) {
-	s.sent = append(s.sent, text)
-	return "1", nil
-}
-
-func (s *smokeClarSender) WaitForReply(_ context.Context, _ string, _ time.Duration) (string, error) {
-	return "ok", nil
-}
 
 type smokeNotifier struct{}
 
@@ -227,7 +217,7 @@ func TestPikaIntegrationSmoke_Pipelines(t *testing.T) {
 	}
 
 	// Step 3: Clarify
-	clarify := NewClarifyHandler(&ClarifyConfig{}, mem, &smokeClarSender{}, "test-chat")
+	clarify := NewClarifyHandler(&ClarifyConfig{}, mem, bus.NewMessageBus())
 	if clarify == nil {
 		t.Fatal("step 3: Clarify is nil")
 	}
