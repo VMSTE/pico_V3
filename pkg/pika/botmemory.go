@@ -1045,10 +1045,10 @@ func (bm *BotMemory) QueryCorrelatedTools(
 	rows, err := bm.db.QueryContext(ctx, `
 		SELECT au.invoked_tool_after AS tool_name, COUNT(*) AS cnt
 		FROM atom_usage au
-		JOIN knowledge_atoms_fts fts ON fts.rowid = (
+		JOIN knowledge_fts fts ON fts.rowid = (
 			SELECT ka.id FROM knowledge_atoms ka WHERE ka.atom_id = au.atom_id LIMIT 1
 		)
-		WHERE fts.knowledge_atoms_fts MATCH ?
+		WHERE knowledge_fts MATCH ?
 		  AND au.invoked_tool_after IS NOT NULL
 		  AND au.invoked_tool_after != ''
 		GROUP BY au.invoked_tool_after

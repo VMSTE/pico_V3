@@ -442,3 +442,43 @@ Each entry maps to a single wave/phase and its merged PR.
   - Legacy MemoryStore удалён полностью — Archivist pipeline заменяет его
   - discover_tools.go создан но НЕ зарегистрирован в ToolRouter (wiring в отдельном ТЗ)
   - correlated_tools + tool_prefs enrichment в ТЗ Ф5 но ещё не в коде
+
+## Tool Injector + Progressive Disclosure
+
+### [2026-05-21] feat(pika): ТЗ-v2-3b-wiring — Tool Injector + Progressive Disclosure
+- **ТЗ:** ТЗ-v2-3b-wiring
+- **Branch:** feat/toolrouter-wiring
+- **Commits:** 38e69196, 9f419abc, 3b351df6, 49dea032, dea0d493, 6ca55096, e5bd6137, 8c4d17f9
+- **Files:**
+  - `pkg/pika/tool_router.go` — DELETED: мёртвый dispatch (Route, RegisterBrain, RegisterBase, RegisterMCPTool). 310 строк.
+  - `pkg/pika/tool_router_test.go` — DELETED: тесты для удалённого dispatch. 630 строк.
+  - `pkg/pika/discover_tools.go` — MOD: переписан — правильная сигнатура Execute(ctx, args), работает с upstream ToolRegistry (GetSummaries + SnapshotHiddenTools). Зарегистрирован через Register(), IsCore=true.
+  - `pkg/pika/memory_tools.go` — MOD: зарегистрирован в upstream ToolRegistry через Register(), IsCore=true.
+  - `pkg/pika/clarify.go` — MOD: удалён мёртвый ClarifySender интерфейс. Добавлен ClarifyBus интерфейс (PublishOutbound + InboundChan) — удовлетворяется и *bus.MessageBus и interfaces.MessageBus. chatID/channel из ctx (toolshared.ToolChatID/ToolChannel) вместо хардкода в struct.
+  - `pkg/pika/clarify_test.go` — MOD: удалён mockSender, тесты используют *bus.MessageBus + toolshared.WithToolInboundContext для ctx.
+  - `pkg/pika/integration_smoke_test.go` — MOD: Step 5 обновлён (ToolRouter → DiscoverTools), smokeClarSender удалён.
+  - `pkg/pika/archivist.go` — MOD: SearchContextResult расширен (CorrelatedTools, ToolPrefs). Два новых аспекта в executeSearchContext: correlated_tools (atom_usage JOIN), tool_prefs (category filter). Добавлены в default aspects.
+  - `pkg/pika/botmemory.go` — MOD: добавлен CorrelatedToolRow struct + QueryCorrelatedTools() — SQL JOIN atom_usage × knowledge_atoms_fts.
+  - `pkg/agent/instance.go` — MOD: добавлен msgBus pika.ClarifyBus параметр в NewAgentInstance. Блок регистрации clarify (guarded by msgBus != nil && cfg.Clarify.Enabled).
+  - `pkg/agent/registry.go` — MOD: добавлен msgBus pika.ClarifyBus параметр в NewAgentRegistry, проброс в NewAgentInstance. Добавлен import pika.
+  - `pkg/agent/agent.go` — MOD: NewAgentRegistry вызов с al.bus (interfaces.MessageBus удовлетворяет pika.ClarifyBus).
+  - `pkg/agent/agent_init.go` — MOD: NewAgentRegistry вызов с msgBus (*bus.MessageBus).
+  - `pkg/agent/context_pika.go` — MOD: добавлен вызов agent.Tools.PromoteTools(RecommendedTools, TTL=2) после BuildPrompt, guarded by cfg.ToolSelection.Enabled.
+  - `pkg/agent/instance_test.go` — MOD: все NewAgentInstance вызовы с nil msgBus.
+  - `pkg/agent/agent_test.go` — MOD: все NewAgentRegistry вызовы с nil msgBus.
+  - `pkg/agent/registry_test.go` — MOD: все NewAgentRegistry вызовы с nil msgBus.
+  - `pkg/config/config_pika.go` — MOD: добавлен ToolSelectionConfig struct (Enabled, MaxRecommendedTools, MaxRecommendedSkills).
+  - `pkg/config/config.go` — MOD: добавлено поле ToolSelection ToolSelectionConfig.
+  - `pkg/config/defaults.go` — MOD: дефолты ToolSelection (enabled=false, max_tools=8, max_skills=3).
+  - `workspace/prompts/archivist_build.md` — MOD: документация correlated_tools + tool_prefs в fan-out выходе, инструкции по использованию.
+- **Breaking:** NewAgentRegistry и NewAgentInstance — новый параметр msgBus (nil-safe). NewAgentRegistry import pika добавлен.
+- **Rollback:** git revert 8 коммитов. ToolRouter восстановить из git history. Убрать ClarifyBus, вернуть *bus.MessageBus. Убрать ToolSelectionConfig из config.
+- **Dependencies:** upstream ToolRegistry (Register, PromoteTools, ToProviderDefs), upstream toolshared (ToolChatID, ToolChannel, WithToolInboundContext), bus.MessageBus
+- **Design decisions:**
+  - ToolRouter полностью удалён — dispatch дублировал upstream ExecuteWithContext(). -940 строк мёртвого кода.
+  - ClarifyBus — минимальный интерфейс в pika (2 метода), избегает import cycle agent/interfaces → pika. Удовлетворяется обоими типами.
+  - chatID не хардкодится — берётся из ctx на каждый вызов Execute(). Upstream уже кладёт через WithToolInboundContext.
+  - ToolSelection.Enabled=false по умолчанию — Progressive Disclosure выключен, безопасно мержить. Включение через конфиг.
+  - PromoteTools TTL=2 — рекомендованные тулы живут текущий turn + 1 запасной.
+  - correlated_tools: статистический сигнал из atom_usage (какие тулы вызывались после похожих атомов).
+  - tool_prefs: пользовательские предпочтения из knowledge_atoms с category=tool_pref.
