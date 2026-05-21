@@ -24,7 +24,6 @@ func (s *smokeTG) EditMessage(_ context.Context, _, _ string) error           { 
 func (s *smokeTG) DeleteMessage(_ context.Context, _ string) error            { return nil }
 func (s *smokeTG) SendConfirmation(_ context.Context, _ string) (bool, error) { return true, nil }
 
-
 type smokeNotifier struct{}
 
 func (smokeNotifier) NotifyDegradation(_, _ string) {}

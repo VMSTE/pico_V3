@@ -22,13 +22,12 @@ import (
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
 )
 
-
 // ClarifyConfig holds config for the clarify tool.
 type ClarifyConfig struct {
-	Enabled              bool `json:"enabled"`
-	TimeoutMin           int  `json:"timeout_min"`
+	Enabled               bool `json:"enabled"`
+	TimeoutMin            int  `json:"timeout_min"`
 	MaxStreakBeforeBypass int  `json:"max_streak_before_bypass"`
-	PrecheckTimeoutMs    int  `json:"precheck_timeout_ms"`
+	PrecheckTimeoutMs     int  `json:"precheck_timeout_ms"`
 }
 
 // ClarifyInput holds the parsed tool arguments.
@@ -64,7 +63,7 @@ type ClarifyBus interface {
 type ClarifyHandler struct {
 	cfg      *ClarifyConfig
 	bm       *BotMemory
-	mb       ClarifyBus  // send via PublishOutbound, receive via InboundChan
+	mb       ClarifyBus       // send via PublishOutbound, receive via InboundChan
 	sessions sync.Map         // sessionID → *clarifyState
 	patterns []*regexp.Regexp // decision/confirmation
 }

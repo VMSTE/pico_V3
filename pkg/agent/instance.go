@@ -130,10 +130,10 @@ func NewAgentInstance(
 	// PIKA-V3: clarify — HITL tool, uses MessageBus for user communication
 	if msgBus != nil && cfg.Clarify.Enabled {
 		clarifyCfg := &pika.ClarifyConfig{
-			Enabled:              cfg.Clarify.Enabled,
-			TimeoutMin:           cfg.Clarify.TimeoutMin,
+			Enabled:               cfg.Clarify.Enabled,
+			TimeoutMin:            cfg.Clarify.TimeoutMin,
 			MaxStreakBeforeBypass: cfg.Clarify.MaxStreakBeforeBypass,
-			PrecheckTimeoutMs:    cfg.Clarify.PrecheckTimeoutMs,
+			PrecheckTimeoutMs:     cfg.Clarify.PrecheckTimeoutMs,
 		}
 		toolsRegistry.Register(pika.NewClarifyHandler(clarifyCfg, botMem, msgBus))
 	}

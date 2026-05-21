@@ -9,9 +9,10 @@ import (
 	"testing"
 	"time"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/sipeed/picoclaw/pkg/bus"
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
-	_ "modernc.org/sqlite"
 )
 
 func newTestClarifyDB(t *testing.T) *sql.DB {
@@ -91,10 +92,10 @@ func newTestClarifyWithCfg(
 	db := newTestClarifyDB(t)
 	bm := &BotMemory{db: db}
 	cfg := &ClarifyConfig{
-		Enabled:              true,
-		TimeoutMin:           1,
+		Enabled:               true,
+		TimeoutMin:            1,
 		MaxStreakBeforeBypass: 2,
-		PrecheckTimeoutMs:    3000,
+		PrecheckTimeoutMs:     3000,
 	}
 	if cfgFn != nil {
 		cfgFn(cfg)
@@ -414,10 +415,10 @@ func TestClarify_PrecheckTimeout(t *testing.T) {
 
 	bm := &BotMemory{db: db}
 	cfg := &ClarifyConfig{
-		Enabled:              true,
-		TimeoutMin:           0, // immediate waitForReply timeout
+		Enabled:               true,
+		TimeoutMin:            0, // immediate waitForReply timeout
 		MaxStreakBeforeBypass: 2,
-		PrecheckTimeoutMs:    1, // very short FTS5 timeout
+		PrecheckTimeoutMs:     1, // very short FTS5 timeout
 	}
 	mb := bus.NewMessageBus()
 	ch := NewClarifyHandler(cfg, bm, mb)

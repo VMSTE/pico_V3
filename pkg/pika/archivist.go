@@ -100,11 +100,11 @@ type SearchContextParams struct {
 
 // SearchContextResult is the Go fan-out result.
 type SearchContextResult struct {
-	Knowledge         []KnowledgeHit `json:"knowledge,omitempty"`
-	Messages          []MessageHit   `json:"messages,omitempty"`
-	ReasoningKeywords []string             `json:"reasoning_keywords,omitempty"`
-	CorrelatedTools  []CorrelatedToolRow `json:"correlated_tools,omitempty"`
-	ToolPrefs        []KnowledgeHit      `json:"tool_prefs,omitempty"`
+	Knowledge         []KnowledgeHit      `json:"knowledge,omitempty"`
+	Messages          []MessageHit        `json:"messages,omitempty"`
+	ReasoningKeywords []string            `json:"reasoning_keywords,omitempty"`
+	CorrelatedTools   []CorrelatedToolRow `json:"correlated_tools,omitempty"`
+	ToolPrefs         []KnowledgeHit      `json:"tool_prefs,omitempty"`
 }
 
 // KnowledgeHit is a single knowledge atom search result.
