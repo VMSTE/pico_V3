@@ -120,7 +120,10 @@ func NewAgentInstance(
 	// PIKA-V3 Phase B: use MemoryDBPath from config instead of hardcoded sessions/
 	memoryDBPath := cfg.Agents.Defaults.MemoryDBPath
 	migrateMemoryDB(workspace, memoryDBPath)
-	sessions := initSessionStore(memoryDBPath)
+	sessions, botMem := initSessionStore(memoryDBPath)
+
+	// PIKA-V3: 🧠 BRAIN tools — always-on, IsCore=true
+	toolsRegistry.Register(pika.NewMemorySearch(botMem))
 
 	mcpDiscoveryActive := cfg.Tools.MCP.Enabled && cfg.Tools.MCP.Discovery.Enabled
 	contextBuilder := NewContextBuilder(workspace).
@@ -405,7 +408,7 @@ func migrateMemoryDB(workspace, newPath string) {
 // using PikaSessionStore backed by SQLite (bot_memory.db).
 // Falls back to in-memory SQLite if file-based init fails.
 // Panics only when in-memory fallback also fails (unrecoverable).
-func initSessionStore(dbPath string) session.SessionStore {
+func initSessionStore(dbPath string) (session.SessionStore, *pika.BotMemory) {
 	os.MkdirAll(filepath.Dir(dbPath), 0o755)
 
 	db, err := pika.Migrate(dbPath)
@@ -446,7 +449,7 @@ func initSessionStore(dbPath string) session.SessionStore {
 		}
 	}
 
-	return pika.NewPikaSessionStore(mem)
+	return pika.NewPikaSessionStore(mem), mem
 }
 
 func expandHome(path string) string {
