@@ -529,6 +529,11 @@ func DefaultConfig() *Config {
 			},
 		},
 		Onboard: OnboardConfig{PreserveUserPrompts: true},
+		ToolSelection: ToolSelectionConfig{
+			Enabled:              false,
+			MaxRecommendedTools:  8,
+			MaxRecommendedSkills: 3,
+		},
 	}
 }
 
