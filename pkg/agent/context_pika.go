@@ -334,6 +334,11 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 	if result == nil || strings.TrimSpace(result.BriefText) == "" {
 		return nil, fmt.Errorf("pika/archivist: empty brief from BuildPrompt")
 	}
+	// PIKA-V3: Progressive Disclosure — promote recommended tools (Block B2)
+	if c.adapter.al.cfg.ToolSelection.Enabled && agent != nil &&
+		len(result.RecommendedTools) > 0 {
+		agent.Tools.PromoteTools(result.RecommendedTools, 2)
+	}
 	// PIKA-V3: build content with brief + recommended tools/skills
 	content := "--- MEMORY BRIEF ---\n" + result.BriefText
 	if len(result.RecommendedTools) > 0 {

@@ -1,6 +1,10 @@
 // PIKA-V3: clarify.go — Go-native HITL clarify tool (D-NEW-2)
-// FTS5 pre-check → escalation to manager via Telegram.
+// FTS5 pre-check → escalation to manager via MessageBus.
 // 0 LLM tokens — pure Go fast-path.
+//
+// D1: chatID/channel come from ctx via toolshared.ToolChatID/ToolChannel, NOT hardcoded.
+// D2: WaitForReply reads from MessageBus.InboundChan() — safe because
+//     Execute() blocks the agent loop (no concurrent InboundChan consumer).
 
 package pika
 
@@ -14,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sipeed/picoclaw/pkg/bus"
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
 )
 
@@ -23,20 +28,6 @@ type ClarifyConfig struct {
 	TimeoutMin            int  `json:"timeout_min"`
 	MaxStreakBeforeBypass int  `json:"max_streak_before_bypass"`
 	PrecheckTimeoutMs     int  `json:"precheck_timeout_ms"`
-}
-
-// ClarifySender is the minimal interface for sending
-// messages and waiting for replies.
-// Implementation lives in main().
-type ClarifySender interface {
-	SendMessage(
-		chatID string, text string,
-	) (messageID string, err error)
-	WaitForReply(
-		ctx context.Context,
-		chatID string,
-		timeout time.Duration,
-	) (string, error)
 }
 
 // ClarifyInput holds the parsed tool arguments.
@@ -58,23 +49,32 @@ type clarifyState struct {
 	lastQuestions []string
 }
 
+// ClarifyBus is the minimal bus interface needed by ClarifyHandler.
+// Satisfied by both *bus.MessageBus and interfaces.MessageBus.
+type ClarifyBus interface {
+	PublishOutbound(ctx context.Context, msg bus.OutboundMessage) error
+	InboundChan() <-chan bus.InboundMessage
+}
+
 // ClarifyHandler is the HITL clarify tool.
 // NOT stateless: holds per-session state via sync.Map.
+// Uses MessageBus directly for sending questions and receiving replies.
+// chatID/channel come from ctx per-invocation (not hardcoded in struct).
 type ClarifyHandler struct {
 	cfg      *ClarifyConfig
 	bm       *BotMemory
-	sender   ClarifySender
-	chatID   string
+	mb       ClarifyBus       // send via PublishOutbound, receive via InboundChan
 	sessions sync.Map         // sessionID → *clarifyState
 	patterns []*regexp.Regexp // decision/confirmation
 }
 
 // NewClarifyHandler creates a new ClarifyHandler.
+// mb is used for both sending outbound questions and reading inbound replies.
+// chatID is NOT passed here — it comes from ctx at runtime (toolshared.ToolChatID).
 func NewClarifyHandler(
 	cfg *ClarifyConfig,
 	bm *BotMemory,
-	sender ClarifySender,
-	chatID string,
+	mb ClarifyBus,
 ) *ClarifyHandler {
 	patternStrings := []string{
 		`(?i)делать\s*\?`,
@@ -103,8 +103,7 @@ func NewClarifyHandler(
 	return &ClarifyHandler{
 		cfg:      cfg,
 		bm:       bm,
-		sender:   sender,
-		chatID:   chatID,
+		mb:       mb,
 		patterns: patterns,
 	}
 }
@@ -205,20 +204,33 @@ func (ch *ClarifyHandler) Execute(
 	)
 }
 
-// escalateToManager sends question via ClarifySender.
+// escalateToManager sends question via MessageBus and waits for reply.
+// chatID and channel are extracted from ctx (set by agent loop).
 func (ch *ClarifyHandler) escalateToManager(
 	ctx context.Context,
 	input ClarifyInput,
 	state *clarifyState,
 	includeHistory bool,
 ) *toolshared.ToolResult {
+	chatID := toolshared.ToolChatID(ctx)
+	channel := toolshared.ToolChannel(ctx)
+
+	if chatID == "" || channel == "" {
+		return toolshared.ErrorResult(
+			"pika/clarify: missing chatID or channel in context; " +
+				"ensure WithToolInboundContext is called before Execute",
+		)
+	}
+
 	msg := formatQuestionForManager(
 		input, state, includeHistory,
 	)
 
-	_, sendErr := ch.sender.SendMessage(
-		ch.chatID, msg,
-	)
+	sendErr := ch.mb.PublishOutbound(ctx, bus.OutboundMessage{
+		Channel: channel,
+		ChatID:  chatID,
+		Content: msg,
+	})
 	if sendErr != nil {
 		return toolshared.ErrorResult(
 			fmt.Sprintf(
@@ -233,8 +245,8 @@ func (ch *ClarifyHandler) escalateToManager(
 		ch.cfg.TimeoutMin,
 	) * time.Minute
 
-	reply, waitErr := ch.sender.WaitForReply(
-		ctx, ch.chatID, timeout,
+	reply, waitErr := ch.waitForReply(
+		ctx, chatID, timeout,
 	)
 	state.awaiting = false
 
@@ -263,8 +275,43 @@ func (ch *ClarifyHandler) escalateToManager(
 	return toolshared.SilentResult(string(out))
 }
 
+// waitForReply reads from MessageBus InboundChan until a message
+// from the target chatID arrives or timeout expires.
+//
+// Safety: during Execute() the agent loop is blocked waiting for
+// the tool to return, so no other goroutine consumes InboundChan.
+// In multi-chat deployments, messages from other chats are logged
+// and skipped (acceptable trade-off for MVP; a ReplyBroker with
+// fan-out can be added later if needed).
+func (ch *ClarifyHandler) waitForReply(
+	ctx context.Context,
+	chatID string,
+	timeout time.Duration,
+) (string, error) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	inbound := ch.mb.InboundChan()
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			return "", timeoutCtx.Err()
+		case msg := <-inbound:
+			if msg.ChatID == chatID {
+				return msg.Content, nil
+			}
+			// Wrong chat — log and skip (edge case for MVP).
+			log.Printf(
+				"WARN pika/clarify: skipped inbound from chat %s "+
+					"(waiting for %s)",
+				msg.ChatID, chatID,
+			)
+		}
+	}
+}
+
 // ResetStreak resets the clarify streak for a session.
-// Called by Router on any non-clarify tool call.
+// Called by the agent loop on any non-clarify tool call.
 func (ch *ClarifyHandler) ResetStreak(
 	sessionID string,
 ) {
@@ -405,7 +452,7 @@ func formatQuestionForManager(
 	includeHistory bool,
 ) string {
 	var sb strings.Builder
-	sb.WriteString("\U0001F914 Пика спрашивает:\n\n")
+	sb.WriteString("🤔 Пика спрашивает:\n\n")
 	sb.WriteString(input.Question)
 	if input.Context != "" {
 		sb.WriteString(
@@ -414,7 +461,7 @@ func formatQuestionForManager(
 	}
 	if includeHistory && len(state.lastQuestions) > 0 {
 		sb.WriteString(
-			"\n\n\U0001F4CB Предыдущие вопросы " +
+			"\n\n📋 Предыдущие вопросы " +
 				"без ответа:\n",
 		)
 		for _, q := range state.lastQuestions {

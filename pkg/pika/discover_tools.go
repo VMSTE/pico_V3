@@ -1,25 +1,27 @@
 package pika
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
+	"github.com/sipeed/picoclaw/pkg/tools"
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
 )
 
 // PIKA-V3: DiscoverTools — 🧠 BRAIN tool for dynamic tool discovery.
-// Returns a structured catalog of all registered tools (brain + base + skill).
-// Registered via toolRouter.RegisterBrain(dt).
+// Returns visible + hidden tools from upstream ToolRegistry.
+// Registered via toolsRegistry.Register() — IsCore=true, always in prompt.
 
 // DiscoverTools exposes the tool catalog to the LLM so it can
 // reason about available capabilities without hard-coding names.
 type DiscoverTools struct {
-	router *ToolRouter
+	registry *tools.ToolRegistry
 }
 
-// NewDiscoverTools creates a DiscoverTools tool backed by the given router.
-func NewDiscoverTools(router *ToolRouter) *DiscoverTools {
-	return &DiscoverTools{router: router}
+// NewDiscoverTools creates a DiscoverTools tool backed by the upstream ToolRegistry.
+func NewDiscoverTools(registry *tools.ToolRegistry) *DiscoverTools {
+	return &DiscoverTools{registry: registry}
 }
 
 // Name implements toolshared.Tool.
@@ -27,8 +29,8 @@ func (dt *DiscoverTools) Name() string { return "discover_tools" }
 
 // Description implements toolshared.Tool.
 func (dt *DiscoverTools) Description() string {
-	return "Returns the catalog of all registered tools " +
-		"grouped by category (brain/base/skill). " +
+	return "Returns the catalog of all registered tools. " +
+		"Visible tools are active now; hidden tools can be promoted on demand. " +
 		"Use this to discover what capabilities are available."
 }
 
@@ -37,13 +39,9 @@ func (dt *DiscoverTools) Parameters() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"category": map[string]any{
-				"type": "string",
-				"enum": []string{
-					"brain", "base", "skill",
-				},
-				"description": "Optional filter: " +
-					"return only tools of this category.",
+			"include_hidden": map[string]any{
+				"type":        "boolean",
+				"description": "If true, also return hidden (promotable) tools. Default false.",
 			},
 		},
 	}
@@ -53,63 +51,68 @@ func (dt *DiscoverTools) Parameters() map[string]any {
 type catalogEntry struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Category    string `json:"category"`
+	Status      string `json:"status"` // "visible" or "hidden"
 }
 
 // Execute implements toolshared.Tool.
 func (dt *DiscoverTools) Execute(
-	args map[string]any,
-) (toolshared.ToolResult, error) {
-	// Optional category filter.
-	var filterCat string
-	if v, ok := args["category"].(string); ok {
-		filterCat = v
+	_ context.Context, args map[string]any,
+) *toolshared.ToolResult {
+	includeHidden := false
+	if v, ok := args["include_hidden"].(bool); ok {
+		includeHidden = v
 	}
 
-	// Collect definitions: name -> description.
-	defs := dt.router.ToolDefinitions()
-	defMap := make(map[string]string, len(defs))
-	for _, d := range defs {
-		defMap[d.Function.Name] = d.Function.Description
-	}
-
-	// Collect category grouping: category -> []name.
-	catNames := dt.router.EnabledToolNames()
+	// Visible tools: IsCore=true or TTL>0.
+	allNames := dt.registry.List()
+	visible := dt.registry.GetSummaries()
 
 	var catalog []catalogEntry
-	for cat, names := range catNames {
-		catStr := cat.String()
-		if filterCat != "" && catStr != filterCat {
-			continue
-		}
-		for _, name := range names {
-			desc := defMap[name]
+
+	// Build visible entries from GetSummaries (formatted strings).
+	// More reliable: iterate all tools and check visibility via Get().
+	for _, name := range allNames {
+		if tool, ok := dt.registry.Get(name); ok {
 			catalog = append(catalog, catalogEntry{
-				Name:        name,
-				Description: desc,
-				Category:    catStr,
+				Name:        tool.Name(),
+				Description: tool.Description(),
+				Status:      "visible",
+			})
+		}
+	}
+
+	// Hidden tools (non-core, TTL<=0).
+	var hiddenCount int
+	if includeHidden {
+		snapshot := dt.registry.SnapshotHiddenTools()
+		hiddenCount = len(snapshot.Docs)
+		for _, doc := range snapshot.Docs {
+			catalog = append(catalog, catalogEntry{
+				Name:        doc.Name,
+				Description: doc.Description,
+				Status:      "hidden",
 			})
 		}
 	}
 
 	payload := map[string]any{
-		"total_tools": len(catalog),
-		"catalog":     catalog,
+		"visible_count": len(visible),
+		"hidden_count":  hiddenCount,
+		"total":         len(catalog),
+		"catalog":       catalog,
 	}
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return toolshared.ToolResult{
-			IsError: true,
-			ForLLM: fmt.Sprintf(
-				"pika/discover_tools: marshal: %v", err),
-		}, nil
+		return toolshared.ErrorResult(
+			fmt.Sprintf("pika/discover_tools: marshal: %v", err),
+		)
 	}
 
-	return toolshared.ToolResult{
+	return &toolshared.ToolResult{
 		ForLLM: string(data),
 		Silent: true,
-	}, nil
+	}
 }
 
 // PromptMetadata implements toolshared.PromptMetadataProvider.

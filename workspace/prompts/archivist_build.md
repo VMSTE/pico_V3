@@ -48,6 +48,8 @@ Go выполняет параллельный fan-out и возвращает:
 - knowledge: [{category, summary, polarity, confidence}]
 - messages: [{role, content, turn}] — последние сообщения сессии
 - reasoning_keywords: [...] — автоматический boost (если config.reasoning_guided_retrieval)
+- correlated_tools: [{tool_name, count}] — тулы, которые чаще всего вызывались после похожих атомов
+- tool_prefs: [{category, summary, polarity}] — пользовательские предпочтения по тулам
 
 polarity="negative" первым — ⛔ AVOID важнее ✅ PREFER.
 Ошибки прошлого = самая ценная память. Потеря → повторение.
@@ -86,6 +88,8 @@ polarity="negative" первым — ⛔ AVOID важнее ✅ PREFER.
 **recommended_tools** — из tool_catalog:
 - Сопоставь задачу (focus.task + focus.mode) с description каждого тула
 - Включи только те, что нужны для ТЕКУЩЕГО шага, не "на всякий случай"
+- Учитывай correlated_tools из search_context: если тул часто вызывался после похожих атомов — это сигнал
+- Учитывай tool_prefs: если пользователь явно предпочитает определённый тул — приоритизируй его
 - Лимит: ≤config.max_dynamic_tools
 - CORE tools (search_memory, registry_write, sandbox, files, clarify,
   discover_tools, search_context) Go добавляет автоматически — НЕ включай

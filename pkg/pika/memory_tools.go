@@ -66,7 +66,7 @@ const (
 )
 
 // MemorySearch is a stateless singleton implementing toolshared.Tool.
-// Registered via toolRouter.RegisterBrain(ms).
+// Registered via toolsRegistry.Register() in instance.go — IsCore=true.
 type MemorySearch struct {
 	bm *BotMemory
 }

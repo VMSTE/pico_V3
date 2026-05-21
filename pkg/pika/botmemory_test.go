@@ -566,3 +566,55 @@ func TestInsertRequestLog(t *testing.T) {
 		t.Errorf("cost = %f, want 0.002", cost)
 	}
 }
+
+func TestQueryCorrelatedTools(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+
+	// Insert a knowledge atom
+	err := bm.InsertAtom(ctx, KnowledgeAtomRow{
+		AtomID:        "CT-1",
+		ChatID:        "s1",
+		PikaSessionID: "1",
+		Category:      "pattern",
+		Summary:       "deploy pipeline needs docker compose",
+		Confidence:    0.9,
+		Polarity:      "positive",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert atom_usage records linking atom to tools
+	for i := 0; i < 3; i++ {
+		err = bm.InsertAtomUsage(ctx, "CT-1", "tr-1", "sess-1",
+			"BRIEF", nil, nil, "exec", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = bm.InsertAtomUsage(ctx, "CT-1", "tr-2", "sess-1",
+		"BRIEF", nil, nil, "compose", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Query correlated tools for "deploy"
+	results, err := bm.QueryCorrelatedTools(ctx, "deploy", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) < 1 {
+		t.Fatal("expected at least 1 correlated tool, got 0")
+	}
+	// exec should be first (3 hits vs 1)
+	if results[0].ToolName != "exec" {
+		t.Errorf("top tool = %q, want exec", results[0].ToolName)
+	}
+	if results[0].Count != 3 {
+		t.Errorf("top count = %d, want 3", results[0].Count)
+	}
+	if len(results) >= 2 && results[1].ToolName != "compose" {
+		t.Errorf("second tool = %q, want compose", results[1].ToolName)
+	}
+}

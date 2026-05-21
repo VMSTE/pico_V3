@@ -4,9 +4,10 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/tools"
 )
 
 // ===========================================================================
@@ -22,17 +23,6 @@ func (s *smokeTG) SendMessage(_ context.Context, text string) (string, error) {
 func (s *smokeTG) EditMessage(_ context.Context, _, _ string) error           { return nil }
 func (s *smokeTG) DeleteMessage(_ context.Context, _ string) error            { return nil }
 func (s *smokeTG) SendConfirmation(_ context.Context, _ string) (bool, error) { return true, nil }
-
-type smokeClarSender struct{ sent []string }
-
-func (s *smokeClarSender) SendMessage(_, text string) (string, error) {
-	s.sent = append(s.sent, text)
-	return "1", nil
-}
-
-func (s *smokeClarSender) WaitForReply(_ context.Context, _ string, _ time.Duration) (string, error) {
-	return "ok", nil
-}
 
 type smokeNotifier struct{}
 
@@ -113,13 +103,13 @@ func TestPikaIntegrationSmoke(t *testing.T) {
 		t.Error("step 4e: GetMeta returned different meta")
 	}
 
-	// Step 5: ToolRouter — classify unknown tool (no panic)
-	router := NewToolRouter(nil)
-	if router == nil {
-		t.Fatal("step 5: ToolRouter is nil")
+	// Step 5: DiscoverTools — construct with empty registry (no panic)
+	dt := NewDiscoverTools(tools.NewToolRegistry())
+	if dt == nil {
+		t.Fatal("step 5: DiscoverTools is nil")
 	}
-	cat := router.Classify("unknown_tool_xyz")
-	_ = cat // returned a ToolCategory, no panic = pass
+	result := dt.Execute(context.Background(), nil)
+	_ = result // returned a ToolResult, no panic = pass
 
 	// Step 6: ConfirmGate — factory with real config
 	gate := ConfirmGateFactory(cfg, tg, NewAlwaysHealthyProvider())
@@ -226,7 +216,7 @@ func TestPikaIntegrationSmoke_Pipelines(t *testing.T) {
 	}
 
 	// Step 3: Clarify
-	clarify := NewClarifyHandler(&ClarifyConfig{}, mem, &smokeClarSender{}, "test-chat")
+	clarify := NewClarifyHandler(&ClarifyConfig{}, mem, bus.NewMessageBus())
 	if clarify == nil {
 		t.Fatal("step 3: Clarify is nil")
 	}

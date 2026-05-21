@@ -63,6 +63,7 @@ func NewAgentInstance(
 	defaults *config.AgentDefaults,
 	cfg *config.Config,
 	provider providers.LLMProvider,
+	msgBus pika.ClarifyBus,
 ) *AgentInstance {
 	if cfg != nil {
 		// Keep the subprocess isolation runtime aligned with the latest loaded config
@@ -120,7 +121,22 @@ func NewAgentInstance(
 	// PIKA-V3 Phase B: use MemoryDBPath from config instead of hardcoded sessions/
 	memoryDBPath := cfg.Agents.Defaults.MemoryDBPath
 	migrateMemoryDB(workspace, memoryDBPath)
-	sessions := initSessionStore(memoryDBPath)
+	sessions, botMem := initSessionStore(memoryDBPath)
+
+	// PIKA-V3: 🧠 BRAIN tools — always-on, IsCore=true
+	toolsRegistry.Register(pika.NewMemorySearch(botMem))
+	toolsRegistry.Register(pika.NewDiscoverTools(toolsRegistry))
+
+	// PIKA-V3: clarify — HITL tool, uses MessageBus for user communication
+	if msgBus != nil && cfg.Clarify.Enabled {
+		clarifyCfg := &pika.ClarifyConfig{
+			Enabled:               cfg.Clarify.Enabled,
+			TimeoutMin:            cfg.Clarify.TimeoutMin,
+			MaxStreakBeforeBypass: cfg.Clarify.MaxStreakBeforeBypass,
+			PrecheckTimeoutMs:     cfg.Clarify.PrecheckTimeoutMs,
+		}
+		toolsRegistry.Register(pika.NewClarifyHandler(clarifyCfg, botMem, msgBus))
+	}
 
 	mcpDiscoveryActive := cfg.Tools.MCP.Enabled && cfg.Tools.MCP.Discovery.Enabled
 	contextBuilder := NewContextBuilder(workspace).
@@ -405,7 +421,7 @@ func migrateMemoryDB(workspace, newPath string) {
 // using PikaSessionStore backed by SQLite (bot_memory.db).
 // Falls back to in-memory SQLite if file-based init fails.
 // Panics only when in-memory fallback also fails (unrecoverable).
-func initSessionStore(dbPath string) session.SessionStore {
+func initSessionStore(dbPath string) (session.SessionStore, *pika.BotMemory) {
 	os.MkdirAll(filepath.Dir(dbPath), 0o755)
 
 	db, err := pika.Migrate(dbPath)
@@ -446,7 +462,7 @@ func initSessionStore(dbPath string) session.SessionStore {
 		}
 	}
 
-	return pika.NewPikaSessionStore(mem)
+	return pika.NewPikaSessionStore(mem), mem
 }
 
 func expandHome(path string) string {

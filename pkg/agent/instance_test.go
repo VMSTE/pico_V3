@@ -34,7 +34,7 @@ func TestNewAgentInstance_UsesDefaultsTemperatureAndMaxTokens(t *testing.T) {
 	cfg.Agents.Defaults.Temperature = &configuredTemp
 
 	provider := &mockProvider{}
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider)
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider, nil)
 
 	if agent.MaxTokens != 1234 {
 		t.Fatalf("MaxTokens = %d, want %d", agent.MaxTokens, 1234)
@@ -66,7 +66,7 @@ func TestNewAgentInstance_DefaultsTemperatureWhenZero(t *testing.T) {
 	cfg.Agents.Defaults.Temperature = &configuredTemp
 
 	provider := &mockProvider{}
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider)
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider, nil)
 
 	if agent.Temperature != 0.0 {
 		t.Fatalf("Temperature = %f, want %f", agent.Temperature, 0.0)
@@ -92,7 +92,7 @@ func TestNewAgentInstance_DefaultsTemperatureWhenUnset(t *testing.T) {
 	}
 
 	provider := &mockProvider{}
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider)
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider, nil)
 
 	if agent.Temperature != 0.7 {
 		t.Fatalf("Temperature = %f, want %f", agent.Temperature, 0.7)
@@ -162,7 +162,7 @@ func TestNewAgentInstance_ResolveCandidatesFromModelListAlias(t *testing.T) {
 			}
 
 			provider := &mockProvider{}
-			agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider)
+			agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, provider, nil)
 
 			if len(agent.Candidates) != 1 {
 				t.Fatalf("len(Candidates) = %d, want 1", len(agent.Candidates))
@@ -202,7 +202,7 @@ func TestNewAgentInstance_PreservesDistinctLimiterIdentityForSharedResolvedModel
 		},
 	}
 
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{}, nil)
 	if len(agent.Candidates) != 2 {
 		t.Fatalf("len(Candidates) = %d, want 2", len(agent.Candidates))
 	}
@@ -249,7 +249,7 @@ func TestNewAgentInstance_PreservesConfigIdentityForExplicitProviderModelRef(t *
 		},
 	}
 
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{}, nil)
 	if len(agent.Candidates) != 1 {
 		t.Fatalf("len(Candidates) = %d, want 1", len(agent.Candidates))
 	}
@@ -306,7 +306,7 @@ func TestNewAgentInstance_AllowsMediaTempDirForReadListAndExec(t *testing.T) {
 		},
 	}
 
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{}, nil)
 
 	readTool, ok := agent.Tools.Get("read_file")
 	if !ok {
@@ -505,7 +505,7 @@ func TestNewAgentInstance_CandidateProvidersPopulatedForCrossProviderFallbacks(t
 	}
 
 	primaryProvider := &mockProvider{}
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, primaryProvider)
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, primaryProvider, nil)
 
 	// Only fallback models need entries — the primary uses the injected provider directly.
 	wantKeys := []string{
@@ -561,7 +561,7 @@ func TestNewAgentInstance_ReadFileModeSelectsSchema(t *testing.T) {
 		},
 	}
 
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{}, nil)
 	readTool, ok := agent.Tools.Get("read_file")
 	if !ok {
 		t.Fatal("read_file tool not registered")
@@ -603,7 +603,7 @@ func TestNewAgentInstance_InvalidExecConfigDoesNotExit(t *testing.T) {
 		},
 	}
 
-	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{}, nil)
 	if agent == nil {
 		t.Fatal("expected agent instance, got nil")
 	}

@@ -1030,3 +1030,41 @@ func (bm *BotMemory) InsertAtomUsage(
 	}
 	return nil
 }
+
+// CorrelatedToolRow is a tool name + usage count from atom_usage.
+type CorrelatedToolRow struct {
+	ToolName string `json:"tool_name"`
+	Count    int    `json:"count"`
+}
+
+// QueryCorrelatedTools returns tools most often invoked after atoms
+// matching the given FTS query.
+func (bm *BotMemory) QueryCorrelatedTools(
+	ctx context.Context, query string, limit int,
+) ([]CorrelatedToolRow, error) {
+	rows, err := bm.db.QueryContext(ctx, `
+		SELECT au.invoked_tool_after AS tool_name, COUNT(*) AS cnt
+		FROM atom_usage au
+		JOIN knowledge_fts fts ON fts.rowid = (
+			SELECT ka.id FROM knowledge_atoms ka WHERE ka.atom_id = au.atom_id LIMIT 1
+		)
+		WHERE knowledge_fts MATCH ?
+		  AND au.invoked_tool_after IS NOT NULL
+		  AND au.invoked_tool_after != ''
+		GROUP BY au.invoked_tool_after
+		ORDER BY cnt DESC
+		LIMIT ?`, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("pika/botmemory: correlated tools: %w", err)
+	}
+	defer rows.Close()
+	var out []CorrelatedToolRow
+	for rows.Next() {
+		var r CorrelatedToolRow
+		if err := rows.Scan(&r.ToolName, &r.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

@@ -500,3 +500,12 @@ func (c *Config) ResolveAgentConfig(name string) ResolvedAgentConfig {
 type OnboardConfig struct {
 	PreserveUserPrompts bool `json:"preserve_user_prompts"`
 }
+
+// ToolSelectionConfig defines Progressive Disclosure settings.
+// When Enabled, the Archivist selects which non-core tools to include
+// in each LLM call via PromoteTools().
+type ToolSelectionConfig struct {
+	Enabled              bool `json:"enabled"`
+	MaxRecommendedTools  int  `json:"max_recommended_tools"`
+	MaxRecommendedSkills int  `json:"max_recommended_skills"`
+}
