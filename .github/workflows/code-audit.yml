@@ -1,0 +1,121 @@
+name: Code Audit
+
+on:
+  push:
+    branches:
+      - 'audit/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install deterministic audit tools
+        shell: bash
+        run: |
+          go install github.com/scip-code/scip-go/cmd/scip-go@v0.1.26
+          go install github.com/scip-code/scip/cmd/scip@latest
+          go install golang.org/x/tools/cmd/deadcode@v0.48.0
+          go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Generate audit reports
+        shell: bash
+        run: |
+          set +e
+          export GOFLAGS=-tags=goolm,stdjson
+
+          OUT="$RUNNER_TEMP/code-audit"
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+
+          printf '%s\n' "commit=$(git rev-parse HEAD)" > "$OUT/environment.txt"
+          printf '%s\n' "branch=main" >> "$OUT/environment.txt"
+          printf '%s\n' "generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$OUT/environment.txt"
+          go version >> "$OUT/environment.txt" 2>&1
+          go env >> "$OUT/environment.txt" 2>&1
+
+          run_text() {
+            name="$1"
+            shift
+            "$@" > "$OUT/${name}.txt" 2>&1
+            printf '%s\n' "$?" > "$OUT/${name}.exit"
+          }
+
+          run_json() {
+            name="$1"
+            shift
+            "$@" > "$OUT/${name}.json" 2> "$OUT/${name}.stderr.txt"
+            printf '%s\n' "$?" > "$OUT/${name}.exit"
+          }
+
+          run_text generate go generate ./...
+          run_text build go build ./...
+          run_text vet go vet ./...
+          run_json tests go test -json ./...
+          run_json dependencies go list -deps -json ./...
+          run_json deadcode deadcode -json ./...
+          run_json staticcheck staticcheck -f json ./...
+          run_json vulnerabilities govulncheck -json ./...
+
+          scip-go > "$OUT/scip-go.txt" 2>&1
+          SCIP_EXIT=$?
+          printf '%s\n' "$SCIP_EXIT" > "$OUT/scip-go.exit"
+          if [ "$SCIP_EXIT" -eq 0 ] && [ -f index.scip ]; then
+            scip print --json index.scip > "$OUT/scip-index.json" 2> "$OUT/scip-print.stderr.txt"
+            printf '%s\n' "$?" > "$OUT/scip-print.exit"
+            cp index.scip "$OUT/index.scip"
+          else
+            printf '%s\n' "SCIP index was not generated" > "$OUT/scip-print.stderr.txt"
+            printf '%s\n' "1" > "$OUT/scip-print.exit"
+          fi
+
+          {
+            echo "# Pika v3 - generated code audit"
+            echo
+            echo "Source commit: \`$(git rev-parse HEAD)\`"
+            echo
+            echo "## Exit codes"
+            echo
+            echo "\`0\` means the check completed successfully. A non-zero value requires investigation."
+            echo
+            for status in "$OUT"/*.exit; do
+              check="$(basename "$status" .exit)"
+              code="$(cat "$status")"
+              echo "- **${check}:** \`${code}\`"
+            done
+            echo
+            echo "## File sizes"
+            echo
+            echo '```'
+            ls -lh "$OUT"
+            echo '```'
+          } > "$OUT/README.md"
+
+          rm -f index.scip
+          exit 0
+
+      - name: Upload audit reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-audit-reports
+          path: ${{ runner.temp }}/code-audit
+          retention-days: 90
+          if-no-files-found: error
