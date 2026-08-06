@@ -1,0 +1,119 @@
+name: Code Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install deterministic audit tools
+        shell: bash
+        run: |
+          go install github.com/scip-code/scip-go/cmd/scip-go@v0.1.26
+          go install github.com/scip-code/scip/cmd/scip@latest
+          go install golang.org/x/tools/cmd/deadcode@v0.48.0
+          go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Generate audit reports
+        shell: bash
+        run: |
+          set +e
+          OUT="docs/code-audit/generated"
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+
+          printf '%s\n' "commit=$(git rev-parse HEAD)" > "$OUT/environment.txt"
+          printf '%s\n' "generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$OUT/environment.txt"
+          go version >> "$OUT/environment.txt" 2>&1
+          go env >> "$OUT/environment.txt" 2>&1
+
+          run_text() {
+            name="$1"
+            shift
+            "$@" > "$OUT/${name}.txt" 2>&1
+            printf '%s\n' "$?" > "$OUT/${name}.exit"
+          }
+
+          run_json() {
+            name="$1"
+            shift
+            "$@" > "$OUT/${name}.json" 2> "$OUT/${name}.stderr.txt"
+            printf '%s\n' "$?" > "$OUT/${name}.exit"
+          }
+
+          run_text build make build
+          run_text vet go vet ./...
+          run_json tests go test -json ./...
+          run_json dependencies go list -deps -json ./...
+          run_json deadcode deadcode -json ./...
+          run_json staticcheck staticcheck -f json ./...
+          run_json vulnerabilities govulncheck -json ./...
+
+          scip-go > "$OUT/scip-go.txt" 2>&1
+          SCIP_EXIT=$?
+          printf '%s\n' "$SCIP_EXIT" > "$OUT/scip-go.exit"
+          if [ "$SCIP_EXIT" -eq 0 ] && [ -f index.scip ]; then
+            scip print --json index.scip > "$OUT/scip-index.json" 2> "$OUT/scip-print.stderr.txt"
+            printf '%s\n' "$?" > "$OUT/scip-print.exit"
+          else
+            printf '%s\n' "SCIP index was not generated" > "$OUT/scip-print.stderr.txt"
+            printf '%s\n' "1" > "$OUT/scip-print.exit"
+          fi
+
+          {
+            echo "# Pika v3 — generated code audit"
+            echo
+            echo "Source commit: \`$(git rev-parse HEAD)\`"
+            echo
+            echo "## Exit codes"
+            echo
+            echo "\`0\` means the check completed successfully. A non-zero value requires investigation."
+            echo
+            for status in "$OUT"/*.exit; do
+              check="$(basename "$status" .exit)"
+              code="$(cat "$status")"
+              echo "- **${check}:** \`${code}\`"
+            done
+            echo
+            echo "## Reports"
+            echo
+            echo "- \`scip-index.json\` — definitions and exact symbol references"
+            echo "- \`deadcode.json\` — unreachable Go functions from real main entry points"
+            echo "- \`dependencies.json\` — package dependency graph"
+            echo "- \`tests.json\` — complete machine-readable test run"
+            echo "- \`staticcheck.json\` — static bug and correctness findings"
+            echo "- \`vulnerabilities.json\` — reachable known vulnerabilities"
+            echo "- \`build.txt\` and \`vet.txt\` — build and vet output"
+          } > "$OUT/README.md"
+
+          rm -f index.scip
+          exit 0
+
+      - name: Publish reports to audit branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B audit/code-intelligence
+          git add docs/code-audit/generated
+          git commit --allow-empty -m "chore(audit): refresh generated code intelligence reports"
+          git push --force origin audit/code-intelligence
