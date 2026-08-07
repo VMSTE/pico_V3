@@ -120,6 +120,10 @@ func NewAgentInstance(
 
 	// PIKA-V3 Phase B: use MemoryDBPath from config instead of hardcoded sessions/
 	memoryDBPath := cfg.Agents.Defaults.MemoryDBPath
+	// PIKA-V3: PIKA_DB_PATH имеет приоритет над agents.defaults.memory_db_path
+	if p := os.Getenv(config.EnvPikaDBPath); p != "" {
+		memoryDBPath = p
+	}
 	migrateMemoryDB(workspace, memoryDBPath)
 	sessions, botMem := initSessionStore(memoryDBPath)
 

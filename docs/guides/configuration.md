@@ -16,6 +16,9 @@ You can override default paths using environment variables. This is useful for p
 |-------------------|-----------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
 | `PICOCLAW_CONFIG` | Overrides the path to the configuration file. This directly tells picoclaw which `config.json` to load, ignoring all other locations. | `~/.picoclaw/config.json` |
 | `PICOCLAW_HOME`   | Overrides the root directory for picoclaw data. This changes the default location of the `workspace` and other data directories.          | `~/.picoclaw`             |
+| `PIKA_HOME`       | Pika-specific override of the data root directory. Takes priority over `PICOCLAW_HOME`. | `~/.picoclaw` |
+| `PIKA_CONFIG`     | Pika-specific override of the config file path. Takes priority over `PICOCLAW_CONFIG`. | `~/.picoclaw/config.json` |
+| `PIKA_DB_PATH`    | Overrides the path to the Pika memory database. Takes priority over `agents.defaults.memory_db_path` from config. | — |
 
 **Examples:**
 

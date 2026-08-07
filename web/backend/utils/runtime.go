@@ -21,6 +21,10 @@ func GetPicoclawHome() string {
 
 // GetDefaultConfigPath returns the default path to the picoclaw config file.
 func GetDefaultConfigPath() string {
+	// PIKA-V3: PIKA_CONFIG имеет приоритет над PICOCLAW_CONFIG
+	if p := os.Getenv(config.EnvPikaConfig); p != "" {
+		return p
+	}
 	if configPath := os.Getenv(config.EnvConfig); configPath != "" {
 		return configPath
 	}

@@ -55,3 +55,15 @@ func TestGetConfigPath_Windows(t *testing.T) {
 
 	require.True(t, strings.EqualFold(got, want), "GetConfigPath() = %q, want %q", got, want)
 }
+
+func TestGetConfigPath_WithPIKA_CONFIG(t *testing.T) {
+	t.Setenv(config.EnvPikaConfig, "/pika/pika.json")
+	t.Setenv("PICOCLAW_CONFIG", "/custom/config.json")
+	t.Setenv(config.EnvHome, "/custom/picoclaw")
+	t.Setenv("HOME", "/tmp/home")
+
+	got := GetConfigPath()
+	want := "/pika/pika.json"
+
+	assert.Equal(t, want, got)
+}
