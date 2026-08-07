@@ -482,3 +482,22 @@ Each entry maps to a single wave/phase and its merged PR.
   - PromoteTools TTL=2 — рекомендованные тулы живут текущий turn + 1 запасной.
   - correlated_tools: статистический сигнал из atom_usage (какие тулы вызывались после похожих атомов).
   - tool_prefs: пользовательские предпочтения из knowledge_atoms с category=tool_pref.
+
+---
+
+## Wave 14: Env Wiring
+
+### [2026-08-07] feat(pika): wire PIKA_CONFIG/PIKA_DB_PATH, drop dead PIKA_BINARY/PIKA_BUILTIN_SKILLS — wave 14
+
+- **ТЗ:** ТЗ-v2-14: Проводка PIKA_CONFIG и PIKA_DB_PATH, удаление PIKA_BINARY и PIKA_BUILTIN_SKILLS
+- **PR:** #59
+- **Files:**
+  - `pkg/config/envkeys.go` — MOD: удалены мёртвые константы `EnvPikaBinary`, `EnvPikaBuiltinSkills`; комментарии `EnvPikaConfig`/`EnvPikaDBPath` обновлены под приоритет
+  - `cmd/picoclaw/internal/helpers.go` — MOD: `GetConfigPath()` — `PIKA_CONFIG` приоритетнее `PICOCLAW_CONFIG`
+  - `web/backend/utils/runtime.go` — MOD: `GetDefaultConfigPath()` — тот же приоритет в лаунчере
+  - `pkg/agent/instance.go` — MOD: `PIKA_DB_PATH` перекрывает `agents.defaults.memory_db_path` в `NewAgentInstance`
+  - `cmd/picoclaw/internal/helpers_test.go` — MOD: новый тест `TestGetConfigPath_WithPIKA_CONFIG`
+  - `docs/guides/configuration.md` — MOD: таблица env — добавлены `PIKA_HOME`, `PIKA_CONFIG`, `PIKA_DB_PATH`
+  - `.gitignore` — MOD: игнор `index.scip` (артефакт анализаторов)
+- **Breaking:** None (upstream-переменные работают как раньше; PIKA_* только с приоритетом)
+- **Decisions:** D-AUDIT-47 (доказательство мёртвости: SCIP-граф + GitHub-поиск + grep), D-AUDIT-48 (решение wire/drop)

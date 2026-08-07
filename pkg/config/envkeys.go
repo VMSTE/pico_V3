@@ -49,15 +49,11 @@ const (
 	EnvPikaHome = "PIKA_HOME"
 
 	// EnvPikaConfig overrides the full path to the Pika config file.
+	// Takes priority over EnvConfig in GetConfigPath().
 	EnvPikaConfig = "PIKA_CONFIG"
 
-	// EnvPikaBuiltinSkills overrides the directory for Pika built-in skills.
-	EnvPikaBuiltinSkills = "PIKA_BUILTIN_SKILLS"
-
-	// EnvPikaBinary overrides the path to the Pika executable.
-	EnvPikaBinary = "PIKA_BINARY"
-
 	// EnvPikaDBPath overrides the path to the Pika memory database.
+	// Takes priority over agents.defaults.memory_db_path.
 	EnvPikaDBPath = "PIKA_DB_PATH"
 )
 
