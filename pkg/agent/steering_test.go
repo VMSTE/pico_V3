@@ -26,36 +26,36 @@ import (
 func TestSteeringQueue_PushDequeue_OneAtATime(t *testing.T) {
 	sq := newSteeringQueue(SteeringOneAtATime)
 
-	sq.push(providers.Message{Role: "user", Content: "msg1"})
-	sq.push(providers.Message{Role: "user", Content: "msg2"})
-	sq.push(providers.Message{Role: "user", Content: "msg3"})
+	sq.pushScope("test", providers.Message{Role: "user", Content: "msg1"})
+	sq.pushScope("test", providers.Message{Role: "user", Content: "msg2"})
+	sq.pushScope("test", providers.Message{Role: "user", Content: "msg3"})
 
-	if sq.len() != 3 {
-		t.Fatalf("expected 3 messages, got %d", sq.len())
+	if sq.lenScope("test") != 3 {
+		t.Fatalf("expected 3 messages, got %d", sq.lenScope("test"))
 	}
 
-	msgs := sq.dequeue()
+	msgs := sq.dequeueScope("test")
 	if len(msgs) != 1 {
 		t.Fatalf("expected 1 message in one-at-a-time mode, got %d", len(msgs))
 	}
 	if msgs[0].Content != "msg1" {
 		t.Fatalf("expected 'msg1', got %q", msgs[0].Content)
 	}
-	if sq.len() != 2 {
-		t.Fatalf("expected 2 remaining, got %d", sq.len())
+	if sq.lenScope("test") != 2 {
+		t.Fatalf("expected 2 remaining, got %d", sq.lenScope("test"))
 	}
 
-	msgs = sq.dequeue()
+	msgs = sq.dequeueScope("test")
 	if len(msgs) != 1 || msgs[0].Content != "msg2" {
 		t.Fatalf("expected 'msg2', got %v", msgs)
 	}
 
-	msgs = sq.dequeue()
+	msgs = sq.dequeueScope("test")
 	if len(msgs) != 1 || msgs[0].Content != "msg3" {
 		t.Fatalf("expected 'msg3', got %v", msgs)
 	}
 
-	msgs = sq.dequeue()
+	msgs = sq.dequeueScope("test")
 	if msgs != nil {
 		t.Fatalf("expected nil from empty queue, got %v", msgs)
 	}
@@ -64,11 +64,11 @@ func TestSteeringQueue_PushDequeue_OneAtATime(t *testing.T) {
 func TestSteeringQueue_PushDequeue_All(t *testing.T) {
 	sq := newSteeringQueue(SteeringAll)
 
-	sq.push(providers.Message{Role: "user", Content: "msg1"})
-	sq.push(providers.Message{Role: "user", Content: "msg2"})
-	sq.push(providers.Message{Role: "user", Content: "msg3"})
+	sq.pushScope("test", providers.Message{Role: "user", Content: "msg1"})
+	sq.pushScope("test", providers.Message{Role: "user", Content: "msg2"})
+	sq.pushScope("test", providers.Message{Role: "user", Content: "msg3"})
 
-	msgs := sq.dequeue()
+	msgs := sq.dequeueScope("test")
 	if len(msgs) != 3 {
 		t.Fatalf("expected 3 messages in all mode, got %d", len(msgs))
 	}
@@ -76,11 +76,11 @@ func TestSteeringQueue_PushDequeue_All(t *testing.T) {
 		t.Fatalf("unexpected messages: %v", msgs)
 	}
 
-	if sq.len() != 0 {
-		t.Fatalf("expected 0 remaining, got %d", sq.len())
+	if sq.lenScope("test") != 0 {
+		t.Fatalf("expected 0 remaining, got %d", sq.lenScope("test"))
 	}
 
-	msgs = sq.dequeue()
+	msgs = sq.dequeueScope("test")
 	if msgs != nil {
 		t.Fatalf("expected nil from empty queue, got %v", msgs)
 	}
@@ -88,7 +88,7 @@ func TestSteeringQueue_PushDequeue_All(t *testing.T) {
 
 func TestSteeringQueue_EmptyDequeue(t *testing.T) {
 	sq := newSteeringQueue(SteeringOneAtATime)
-	if msgs := sq.dequeue(); msgs != nil {
+	if msgs := sq.dequeueScope("test"); msgs != nil {
 		t.Fatalf("expected nil, got %v", msgs)
 	}
 }
@@ -105,10 +105,10 @@ func TestSteeringQueue_SetMode(t *testing.T) {
 	}
 
 	// Push two messages and verify all-mode drains them
-	sq.push(providers.Message{Role: "user", Content: "a"})
-	sq.push(providers.Message{Role: "user", Content: "b"})
+	sq.pushScope("test", providers.Message{Role: "user", Content: "a"})
+	sq.pushScope("test", providers.Message{Role: "user", Content: "b"})
 
-	msgs := sq.dequeue()
+	msgs := sq.dequeueScope("test")
 	if len(msgs) != 2 {
 		t.Fatalf("expected 2 messages after mode switch, got %d", len(msgs))
 	}
@@ -125,13 +125,13 @@ func TestSteeringQueue_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			sq.push(providers.Message{Role: "user", Content: fmt.Sprintf("msg%d", i)})
+			sq.pushScope("test", providers.Message{Role: "user", Content: fmt.Sprintf("msg%d", i)})
 		}(i)
 	}
 	wg.Wait()
 
-	if sq.len() != n {
-		t.Fatalf("expected %d messages, got %d", n, sq.len())
+	if sq.lenScope("test") != n {
+		t.Fatalf("expected %d messages, got %d", n, sq.lenScope("test"))
 	}
 
 	// Drain from multiple goroutines
@@ -141,7 +141,7 @@ func TestSteeringQueue_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if msgs := sq.dequeue(); len(msgs) > 0 {
+			if msgs := sq.dequeueScope("test"); len(msgs) > 0 {
 				mu.Lock()
 				drained += len(msgs)
 				mu.Unlock()
@@ -160,19 +160,19 @@ func TestSteeringQueue_Overflow(t *testing.T) {
 
 	// Fill the queue up to its maximum capacity
 	for i := 0; i < MaxQueueSize; i++ {
-		err := sq.push(providers.Message{Role: "user", Content: fmt.Sprintf("msg%d", i)})
+		err := sq.pushScope("test", providers.Message{Role: "user", Content: fmt.Sprintf("msg%d", i)})
 		if err != nil {
 			t.Fatalf("unexpected error pushing message %d: %v", i, err)
 		}
 	}
 
 	// Sanity check: ensure the queue is actually full
-	if sq.len() != MaxQueueSize {
-		t.Fatalf("expected queue length %d, got %d", MaxQueueSize, sq.len())
+	if sq.lenScope("test") != MaxQueueSize {
+		t.Fatalf("expected queue length %d, got %d", MaxQueueSize, sq.lenScope("test"))
 	}
 
 	// Attempt to push one more message, which MUST fail
-	err := sq.push(providers.Message{Role: "user", Content: "overflow_msg"})
+	err := sq.pushScope("test", providers.Message{Role: "user", Content: "overflow_msg"})
 
 	// Assert the error happened and is the exact one we expect
 	if err == nil {
@@ -223,11 +223,11 @@ func TestAgentLoop_Steer_Enqueues(t *testing.T) {
 
 	al.Steer(providers.Message{Role: "user", Content: "interrupt me"})
 
-	if al.steering.len() != 1 {
-		t.Fatalf("expected 1 steering message, got %d", al.steering.len())
+	if al.steering.lenScope("") != 1 {
+		t.Fatalf("expected 1 steering message, got %d", al.steering.lenScope(""))
 	}
 
-	msgs := al.dequeueSteeringMessages()
+	msgs := al.dequeueSteeringMessagesForScopeWithFallback("")
 	if len(msgs) != 1 || msgs[0].Content != "interrupt me" {
 		t.Fatalf("unexpected dequeued message: %v", msgs)
 	}
