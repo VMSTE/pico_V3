@@ -61,9 +61,8 @@ type ToolGuard struct {
 
 // ToolGuardFactory creates a new ToolGuard hook.
 // cfg is accepted for future config-driven tuning.
-// Registration: hookManager.Mount(agent.NamedHook(
-//
-//	"pika.toolguard", adapter)) in instance.go (ТЗ-4a).
+// Registration: config-driven, hooks.builtins.pika.toolguard.enabled
+// (Р-1, D-AUDIT-49); фабрику регистрирует registerPikaBuiltinHooks.
 func ToolGuardFactory(
 	_ *config.Config,
 	planGetter ActivePlanGetter,

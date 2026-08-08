@@ -78,10 +78,6 @@ func TestAgentLoop_ProcessDirectWithChannel_AutoMountsBuiltinHook(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("RegisterBuiltinHook failed: %v", err)
 	}
-	t.Cleanup(func() {
-		unregisterBuiltinHook(hookName)
-	})
-
 	rawCfg, err := json.Marshal(builtinAutoHookConfig{
 		Model:  "builtin-model",
 		Suffix: "|builtin",

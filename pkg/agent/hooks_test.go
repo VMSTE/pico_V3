@@ -259,7 +259,11 @@ func (h *llmToolRewriteHook) AfterLLM(
 
 func TestHookManager_BeforeLLMControlsSystemPromptMutation(t *testing.T) {
 	hm := NewHookManager(nil)
-	if err := hm.Mount(NamedHook("rewrite-system", &llmSystemRewriteHook{})); err != nil {
+	if err := hm.Mount(HookRegistration{
+		Name:   "rewrite-system",
+		Source: HookSourceInProcess,
+		Hook:   &llmSystemRewriteHook{},
+	}); err != nil {
 		t.Fatalf("Mount() error = %v", err)
 	}
 
@@ -294,7 +298,11 @@ func TestHookManager_BeforeLLMControlsSystemPromptMutation(t *testing.T) {
 
 func TestHookManager_BeforeLLMAllowsNonSystemMessageMutation(t *testing.T) {
 	hm := NewHookManager(nil)
-	if err := hm.Mount(NamedHook("append-user", &llmUserAppendHook{})); err != nil {
+	if err := hm.Mount(HookRegistration{
+		Name:   "append-user",
+		Source: HookSourceInProcess,
+		Hook:   &llmUserAppendHook{},
+	}); err != nil {
 		t.Fatalf("Mount() error = %v", err)
 	}
 
@@ -317,7 +325,11 @@ func TestHookManager_BeforeLLMAllowsNonSystemMessageMutation(t *testing.T) {
 
 func TestHookManager_BeforeLLMAllowsJSONRoundTripNonSystemMessageMutation(t *testing.T) {
 	hm := NewHookManager(nil)
-	if err := hm.Mount(NamedHook("json-append-user", &llmJSONRoundTripUserAppendHook{})); err != nil {
+	if err := hm.Mount(HookRegistration{
+		Name:   "json-append-user",
+		Source: HookSourceInProcess,
+		Hook:   &llmJSONRoundTripUserAppendHook{},
+	}); err != nil {
 		t.Fatalf("Mount() error = %v", err)
 	}
 
@@ -369,7 +381,11 @@ func TestHookManager_BeforeLLMAllowsJSONRoundTripNonSystemMessageMutation(t *tes
 
 func TestHookManager_BeforeLLMControlsToolDefinitionMutation(t *testing.T) {
 	hm := NewHookManager(nil)
-	if err := hm.Mount(NamedHook("rewrite-tool", &llmToolRewriteHook{})); err != nil {
+	if err := hm.Mount(HookRegistration{
+		Name:   "rewrite-tool",
+		Source: HookSourceInProcess,
+		Hook:   &llmToolRewriteHook{},
+	}); err != nil {
 		t.Fatalf("Mount() error = %v", err)
 	}
 
@@ -418,7 +434,11 @@ func TestAgentLoop_Hooks_ObserverAndLLMInterceptor(t *testing.T) {
 	defer cleanup()
 
 	hook := &llmObserverHook{eventCh: make(chan Event, 1)}
-	if err := al.MountHook(NamedHook("llm-observer", hook)); err != nil {
+	if err := al.MountHook(HookRegistration{
+		Name:   "llm-observer",
+		Source: HookSourceInProcess,
+		Hook:   hook,
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -505,7 +525,11 @@ func TestAgentLoop_BtwCommand_UsesLLMHooks(t *testing.T) {
 	useTestSideQuestionProvider(al, provider)
 
 	hook := &llmObserverHook{eventCh: make(chan Event, 1)}
-	if err := al.MountHook(NamedHook("llm-observer", hook)); err != nil {
+	if err := al.MountHook(HookRegistration{
+		Name:   "llm-observer",
+		Source: HookSourceInProcess,
+		Hook:   hook,
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -691,7 +715,11 @@ func TestAgentLoop_Hooks_ToolInterceptorCanRewrite(t *testing.T) {
 	defer cleanup()
 
 	al.RegisterTool(&echoTextTool{})
-	if err := al.MountHook(NamedHook("tool-rewrite", &toolRewriteHook{})); err != nil {
+	if err := al.MountHook(HookRegistration{
+		Name:   "tool-rewrite",
+		Source: HookSourceInProcess,
+		Hook:   &toolRewriteHook{},
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -746,7 +774,11 @@ func TestAgentLoop_Hooks_ToolFeedbackUsesRewrittenToolName(t *testing.T) {
 	al.cfg.Agents.Defaults.ToolFeedback.Enabled = true
 	al.RegisterTool(&echoTextTool{})
 	al.RegisterTool(&echoTextRewrittenTool{})
-	if err := al.MountHook(NamedHook("tool-rename", &toolRenameHook{})); err != nil {
+	if err := al.MountHook(HookRegistration{
+		Name:   "tool-rename",
+		Source: HookSourceInProcess,
+		Hook:   &toolRenameHook{},
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -796,7 +828,11 @@ func TestAgentLoop_Hooks_ToolApproverCanDeny(t *testing.T) {
 	defer cleanup()
 
 	al.RegisterTool(&echoTextTool{})
-	if err := al.MountHook(NamedHook("deny-approval", &denyApprovalHook{})); err != nil {
+	if err := al.MountHook(HookRegistration{
+		Name:   "deny-approval",
+		Source: HookSourceInProcess,
+		Hook:   &denyApprovalHook{},
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -870,9 +906,9 @@ func TestAgentLoop_Hooks_ToolRespondAction(t *testing.T) {
 	defer cleanup()
 
 	al.RegisterTool(&echoTextTool{})
-	if err := al.MountHook(NamedHook("respond-hook", &respondHook{
+	if err := al.MountHook(HookRegistration{Name: "respond-hook", Source: HookSourceInProcess, Hook: &respondHook{
 		respondTools: map[string]bool{"echo_text": true},
-	})); err != nil {
+	}}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -944,9 +980,9 @@ func TestAgentLoop_Hooks_ToolDenyAction(t *testing.T) {
 	defer cleanup()
 
 	al.RegisterTool(&echoTextTool{})
-	if err := al.MountHook(NamedHook("deny-hook", &denyToolHook{
+	if err := al.MountHook(HookRegistration{Name: "deny-hook", Source: HookSourceInProcess, Hook: &denyToolHook{
 		denyTools: map[string]bool{"echo_text": true},
-	})); err != nil {
+	}}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -976,7 +1012,7 @@ func TestHookManager_BeforeTool_RespondAction(t *testing.T) {
 	hook := &respondHook{
 		respondTools: map[string]bool{"test_tool": true},
 	}
-	if err := hm.Mount(NamedHook("respond-test", hook)); err != nil {
+	if err := hm.Mount(HookRegistration{Name: "respond-test", Source: HookSourceInProcess, Hook: hook}); err != nil {
 		t.Fatalf("mount hook: %v", err)
 	}
 
@@ -1056,7 +1092,7 @@ func TestAgentLoop_HookRespond_MediaError(t *testing.T) {
 		responseHandled: true,
 		forLLM:          "media sent successfully",
 	}
-	if err := al.MountHook(NamedHook("media-hook", hook)); err != nil {
+	if err := al.MountHook(HookRegistration{Name: "media-hook", Source: HookSourceInProcess, Hook: hook}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -1116,7 +1152,7 @@ func TestAgentLoop_HookRespond_BusFallback(t *testing.T) {
 		responseHandled: true,
 		forLLM:          "media queued",
 	}
-	if err := al.MountHook(NamedHook("media-hook", hook)); err != nil {
+	if err := al.MountHook(HookRegistration{Name: "media-hook", Source: HookSourceInProcess, Hook: hook}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -1171,7 +1207,7 @@ func TestAgentLoop_HookRespond_ResponseHandledMediaPreservesOutboundContext(t *t
 		responseHandled: true,
 		forLLM:          "media sent successfully",
 	}
-	if err := al.MountHook(NamedHook("media-hook", hook)); err != nil {
+	if err := al.MountHook(HookRegistration{Name: "media-hook", Source: HookSourceInProcess, Hook: hook}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -1278,7 +1314,11 @@ func TestAgentLoop_HookRespond_InterruptSkipsRemaining(t *testing.T) {
 	hook := &respondHook{
 		respondTools: map[string]bool{"tool_one": true},
 	}
-	if err := al.MountHook(NamedHook("respond-hook", hook)); err != nil {
+	if err := al.MountHook(HookRegistration{
+		Name:   "respond-hook",
+		Source: HookSourceInProcess,
+		Hook:   hook,
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -1358,7 +1398,11 @@ func TestAgentLoop_HookRespond_SteeringSkipsRemaining(t *testing.T) {
 	hook := &respondHook{
 		respondTools: map[string]bool{"tool_one": true},
 	}
-	if err := al.MountHook(NamedHook("respond-hook", hook)); err != nil {
+	if err := al.MountHook(HookRegistration{
+		Name:   "respond-hook",
+		Source: HookSourceInProcess,
+		Hook:   hook,
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 

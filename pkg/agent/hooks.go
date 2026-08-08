@@ -63,14 +63,6 @@ type HookRegistration struct {
 	Hook     any
 }
 
-func NamedHook(name string, hook any) HookRegistration {
-	return HookRegistration{
-		Name:   name,
-		Source: HookSourceInProcess,
-		Hook:   hook,
-	}
-}
-
 type EventObserver interface {
 	OnEvent(ctx context.Context, evt Event) error
 }

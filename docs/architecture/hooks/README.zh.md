@@ -345,7 +345,11 @@ hook := myhooks.NewExampleLoggerHook(myhooks.ExampleLoggerHookOptions{
     LogEvents: true,
 })
 
-if err := al.MountHook(agent.NamedHook("example-logger", hook)); err != nil {
+if err := al.MountHook(agent.HookRegistration{
+    Name:   "example-logger",
+    Source: agent.HookSourceInProcess,
+    Hook:   hook,
+}); err != nil {
     panic(err)
 }
 ```

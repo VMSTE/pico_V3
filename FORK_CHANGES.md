@@ -616,3 +616,20 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/agent/context_budget_test.go` — MOD: удалены 7 тестов удалённых функций + осиротевший комментарий; знание сохранено в git-истории, вернёмся в волне 4 (сессионная ротация)
 - **Breaking:** None
 - **Verified:** deadcode по context_budget пуст; в pkg/agent (без подпакета adapters) осталось 8 мёртвых функций (группа D + 2 хвоста группы A) — критерий ≤15 выполнен
+
+## Wave 24: Adapters package + hook helpers cleanup
+
+### [2026-08-08] chore(agent): delete dead adapters package + legacy hook helpers — wave 24
+- **Решение:** D-AUDIT-55 (OK founder'а 8 авг 2026, после глубокого разбора)
+- **PR:** pending
+- **Files:**
+  - `pkg/agent/adapters/channelmanager.go` + `messagebus.go` — DEL: пакет целиком (13 функций, чистая пересылка вызовов, 0 импортов; обёртки над интерфейсами запрещены манифестом D-136). НЕ интеграции каналов — те в pkg/channels/ и не тронуты
+  - `pkg/agent/hooks.go` — MOD: удалён NamedHook (после Р-1 регистрации собирает loadConfiguredHooks)
+  - `pkg/agent/hook_mount.go` — MOD: удалён unregisterBuiltinHook (тестовая гигиена, не нужна с sync.Once из Р-1)
+  - `pkg/agent/hooks_test.go` — MOD: 17 вызовов NamedHook → явный HookRegistration (1-в-1)
+  - `pkg/agent/agent_test.go` — MOD: 1 вызов NamedHook → HookRegistration
+  - `pkg/agent/hook_mount_test.go` — MOD: убран t.Cleanup с unregisterBuiltinHook (имя хука уникально)
+  - `docs/architecture/hooks/README.md` + `README.zh.md` — MOD: пример монтирования обновлён под HookRegistration
+  - `pkg/pika/toolguard.go` — MOD: устаревший комментарий про NamedHook → фактическая регистрация (Р-1)
+- **Breaking:** None для рантайма; публичный API пакета agent сужен (NamedHook удалён) — боевых вызывающих не было
+- **Verified:** deadcode по pkg/agent: 8 → 6 (только группа D, вне scope)
