@@ -1,3 +1,10 @@
+## Волна 26 — Миграция slack-go v0.17.3 → v0.23.1 (Р-9, GO-2026-5410) · 8 авг 2026
+
+- **go.mod / go.sum** — slack-go v0.17.3 → v0.23.1: фикс GO-2026-5410 (`NewSecretsVerifier` теперь отвергает пустой signing secret). Плюс транзитивные обновления через `go mod tidy`.
+- **pkg/channels/slack/slack.go** — единственная точка дрейфа API: переименование из v0.18.0 `UploadFileV2Context` → `UploadFileContext` и `UploadFileV2Parameters` → `UploadFileParameters` (Slack закрыл `files.upload` 12.11.2025, суффикс «V2» снят). Комментарий у вызова синхронизирован.
+- Остальные девять групп используемых API — без изменений: socketmode (New/RunContext/Events/Ack), slackevents (MessageEvent/AppMentionEvent), AuthTest, PostMessageContext + MsgOption*, AddReaction/RemoveReaction, slack.File, SlashCommand. Ломающие изменения v0.18–v0.23 (удаление IM struct, Info.Get*ByID, курсорная пагинация ListReactions) нас не касаются — мы их не используем.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN (все 16 пакетов каналов). govulncheck: 0 уязвимостей в коде, 0 в импортируемых пакетах, 1 в требуемых модулях (openpgp — не вызывается, решение по D-AUDIT-56).
+
 # FORK_CHANGES — pico_V3
 
 Tracker of all structural changes made in the Pika v3 fork vs upstream PicoClaw.
