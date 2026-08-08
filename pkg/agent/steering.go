@@ -62,11 +62,6 @@ func normalizeSteeringScope(scope string) string {
 	return scope
 }
 
-// push enqueues a steering message in the legacy fallback scope.
-func (sq *steeringQueue) push(msg providers.Message) error {
-	return sq.pushScope(manualSteeringScope, msg)
-}
-
 // pushScope enqueues a steering message for the provided scope.
 func (sq *steeringQueue) pushScope(scope string, msg providers.Message) error {
 	sq.mu.Lock()
@@ -79,12 +74,6 @@ func (sq *steeringQueue) pushScope(scope string, msg providers.Message) error {
 	}
 	sq.queues[scope] = append(queue, msg)
 	return nil
-}
-
-// dequeue removes and returns pending steering messages from the legacy
-// fallback scope according to the configured mode.
-func (sq *steeringQueue) dequeue() []providers.Message {
-	return sq.dequeueScope(manualSteeringScope)
 }
 
 // dequeueScope removes and returns pending steering messages for the provided
@@ -134,18 +123,6 @@ func (sq *steeringQueue) dequeueLocked(scope string) []providers.Message {
 		}
 		return []providers.Message{msg}
 	}
-}
-
-// len returns the number of queued messages across all scopes.
-func (sq *steeringQueue) len() int {
-	sq.mu.Lock()
-	defer sq.mu.Unlock()
-
-	total := 0
-	for _, queue := range sq.queues {
-		total += len(queue)
-	}
-	return total
 }
 
 // lenScope returns the number of queued messages for a specific scope.
@@ -257,15 +234,6 @@ func (al *AgentLoop) SetSteeringMode(mode SteeringMode) {
 		return
 	}
 	al.steering.setMode(mode)
-}
-
-// dequeueSteeringMessages is the internal method called by the agent loop
-// to poll for steering messages in the legacy fallback scope.
-func (al *AgentLoop) dequeueSteeringMessages() []providers.Message {
-	if al.steering == nil {
-		return nil
-	}
-	return al.steering.dequeue()
 }
 
 func (al *AgentLoop) dequeueSteeringMessagesForScope(scope string) []providers.Message {

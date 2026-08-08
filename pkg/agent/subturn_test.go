@@ -1096,8 +1096,8 @@ func TestInjectFollowUp(t *testing.T) {
 	}
 
 	// Verify message was enqueued
-	if al.steering.len() != 1 {
-		t.Errorf("Expected 1 message in queue, got %d", al.steering.len())
+	if al.steering.lenScope("") != 1 {
+		t.Errorf("Expected 1 message in queue, got %d", al.steering.lenScope(""))
 	}
 }
 
@@ -1135,8 +1135,8 @@ func TestAPIAliases(t *testing.T) {
 	}
 
 	// Verify both messages were enqueued
-	if al.steering.len() != 2 {
-		t.Errorf("Expected 2 messages in queue, got %d", al.steering.len())
+	if al.steering.lenScope("") != 2 {
+		t.Errorf("Expected 2 messages in queue, got %d", al.steering.lenScope(""))
 	}
 }
 

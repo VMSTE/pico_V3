@@ -591,3 +591,17 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/rad_config_test.go` — NEW: критерий 1 (фраза → 3 балла) + критерий 3 (ядовитые фразы без паники — QuoteMeta)
 - **Breaking:** None (пустые поля = дефолтные фразы; warn-режим на первый прогон — через security.rad.block_score: 4 в боевом конфиге, D-AUDIT-53)
 - **Verified:** deadcode больше не показывает rad.go:55 (DefaultRADConfig достижим)
+
+## Wave 22: Steering/SubTurn dead code cleanup (Р-4 branch 1)
+
+### [2026-08-08] chore(agent): remove legacy steering API + wire SubTurn result helper — wave 22
+- **Задача:** Р-4 (группа B) · **Решение:** D-AUDIT-54
+- **PR:** pending
+- **Files:**
+  - `pkg/agent/steering.go` — MOD: удалены легаси-обёртки `push`/`dequeue`/`len` + `dequeueSteeringMessages` (upstream-остатки до-scope API; живые scoped-варианты делают то же)
+  - `pkg/agent/subturn.go` — MOD: удалена публичная API-пара `SpawnSubTurn` + `AgentLoopFromContext` (прод идёт через SetSpawner-замыкание в agent_init.go; sync subturn.md → задача Р-7)
+  - `pkg/agent/turn_coord.go` — MOD: inline-поллинг pendingResults заменён на общий хелпер `dequeuePendingSubTurnResults` (одна точка правды, subturn.md); хелпер сливает ВСЕ готовые результаты за итерацию (было: один)
+  - `pkg/agent/steering_test.go`, `subturn_test.go` — MOD: тесты переписаны на scoped API (`pushScope`/`dequeueScope`/`lenScope`), покрытие сохранено
+- **Происхождение (проверено по ТЗ):** обе группы — upstream PicoClaw (sync до v0.2.6); D-136 явно отказался от зависимости на них
+- **Breaking:** None для рантайма; публичный API пакета agent сужен (SpawnSubTurn/AgentLoopFromContext удалены) — внутренних вызывающих не было
+- **Verified:** deadcode по steering/subturn пуст (было 7 функций); тесты pkg/agent зелёные

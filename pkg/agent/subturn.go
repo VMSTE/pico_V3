@@ -186,12 +186,6 @@ func WithAgentLoop(ctx context.Context, al *AgentLoop) context.Context {
 	return context.WithValue(ctx, agentLoopKey, al)
 }
 
-// AgentLoopFromContext retrieves AgentLoop from context
-func AgentLoopFromContext(ctx context.Context) *AgentLoop {
-	al, _ := ctx.Value(agentLoopKey).(*AgentLoop)
-	return al
-}
-
 // ====================== Helper Functions ======================
 
 func (al *AgentLoop) generateSubTurnID() string {
@@ -239,26 +233,6 @@ func (s *AgentLoopSpawner) SpawnSubTurn(
 // NewSubTurnSpawner creates a SubTurnSpawner for the given AgentLoop.
 func NewSubTurnSpawner(al *AgentLoop) *AgentLoopSpawner {
 	return &AgentLoopSpawner{al: al}
-}
-
-// SpawnSubTurn is the exported entry point for tools to spawn sub-turns.
-// It retrieves AgentLoop and parent turnState from context and delegates to spawnSubTurn.
-func SpawnSubTurn(ctx context.Context, cfg SubTurnConfig) (*tools.ToolResult, error) {
-	al := AgentLoopFromContext(ctx)
-	if al == nil {
-		return nil, errors.New(
-			"AgentLoop not found in context - ensure context is properly initialized",
-		)
-	}
-
-	parentTS := turnStateFromContext(ctx)
-	if parentTS == nil {
-		return nil, errors.New(
-			"parent turnState not found in context - cannot spawn sub-turn outside of a turn",
-		)
-	}
-
-	return spawnSubTurn(ctx, al, parentTS, cfg)
 }
 
 func spawnSubTurn(

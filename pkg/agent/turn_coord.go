@@ -113,17 +113,14 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 			})
 		}
 
-		// Poll for pending SubTurn results (from HEAD)
-		if ts.pendingResults != nil {
-			select {
-			case result, ok := <-ts.pendingResults:
-				if ok && result != nil && result.ForLLM != "" {
-					content := al.cfg.FilterSensitiveData(result.ForLLM)
-					msg := subTurnResultPromptMessage(content)
-					pendingMessages = append(pendingMessages, msg)
-				}
-			default:
-				// No results available
+		// Р-4 (D-AUDIT-54): результаты async SubTurn — через общий хелпер
+		// (одна точка правды, subturn.md), вместо inline-чтения канала.
+		// Хелпер сливает ВСЕ готовые результаты, не по одному за итерацию.
+		for _, result := range al.dequeuePendingSubTurnResults(ts.sessionKey) {
+			if result != nil && result.ForLLM != "" {
+				content := al.cfg.FilterSensitiveData(result.ForLLM)
+				msg := subTurnResultPromptMessage(content)
+				pendingMessages = append(pendingMessages, msg)
 			}
 		}
 
