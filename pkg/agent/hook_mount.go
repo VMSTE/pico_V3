@@ -75,15 +75,6 @@ func RegisterBuiltinHook(name string, factory BuiltinHookFactory) error {
 	return nil
 }
 
-func unregisterBuiltinHook(name string) {
-	if name == "" {
-		return
-	}
-	builtinHookRegistryMu.Lock()
-	delete(builtinHookRegistry, name)
-	builtinHookRegistryMu.Unlock()
-}
-
 func lookupBuiltinHook(name string) (BuiltinHookFactory, bool) {
 	builtinHookRegistryMu.RLock()
 	defer builtinHookRegistryMu.RUnlock()

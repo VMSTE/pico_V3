@@ -627,7 +627,11 @@ func TestProcessMessage_BtwCommandHookModelBypassesFallbackCandidates(t *testing
 	provider := &recordingProvider{}
 	al := NewAgentLoop(cfg, msgBus, provider)
 	useTestSideQuestionProvider(al, provider)
-	if err := al.MountHook(NamedHook("rewrite-model", modelRewriteHook{model: "hook-model"})); err != nil {
+	if err := al.MountHook(HookRegistration{
+		Name:   "rewrite-model",
+		Source: HookSourceInProcess,
+		Hook:   modelRewriteHook{model: "hook-model"},
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
