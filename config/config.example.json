@@ -477,6 +477,24 @@
       "observer_timeout_ms": 500,
       "interceptor_timeout_ms": 5000,
       "approval_timeout_ms": 60000
+    },
+    "builtins": {
+      "pika.output_gate": {
+        "enabled": true,
+        "priority": 10
+      },
+      "pika.toolguard": {
+        "enabled": true,
+        "priority": 20
+      },
+      "pika.confirm_gate": {
+        "enabled": false,
+        "priority": 30
+      },
+      "pika.progress": {
+        "enabled": false,
+        "priority": 40
+      }
     }
   },
   "gateway": {
