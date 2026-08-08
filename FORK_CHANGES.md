@@ -605,3 +605,14 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Происхождение (проверено по ТЗ):** обе группы — upstream PicoClaw (sync до v0.2.6); D-136 явно отказался от зависимости на них
 - **Breaking:** None для рантайма; публичный API пакета agent сужен (SpawnSubTurn/AgentLoopFromContext удалены) — внутренних вызывающих не было
 - **Verified:** deadcode по steering/subturn пуст (было 7 функций); тесты pkg/agent зелёные
+
+## Wave 23: Context budget dead code cleanup (Р-4 branch 2)
+
+### [2026-08-08] chore(agent): remove turn-boundary helpers (upstream #1316) — wave 23
+- **Задача:** Р-4 (группа C) · **Решение:** D-AUDIT-54
+- **PR:** pending
+- **Files:**
+  - `pkg/agent/context_budget.go` — MOD: удалены parseTurnBoundaries / isSafeBoundary / findSafeBoundary (upstream-код под компрессию #1316; потребитель снят нашей волной 2b Phase C; D-136 явно отказался от зависимости). Живое (EstimateMessageTokens/EstimateToolDefsTokens/isOverContextBudget) не тронуто
+  - `pkg/agent/context_budget_test.go` — MOD: удалены 7 тестов удалённых функций + осиротевший комментарий; знание сохранено в git-истории, вернёмся в волне 4 (сессионная ротация)
+- **Breaking:** None
+- **Verified:** deadcode по context_budget пуст; в pkg/agent (без подпакета adapters) осталось 8 мёртвых функций (группа D + 2 хвоста группы A) — критерий ≤15 выполнен
