@@ -633,3 +633,17 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/toolguard.go` — MOD: устаревший комментарий про NamedHook → фактическая регистрация (Р-1)
 - **Breaking:** None для рантайма; публичный API пакета agent сужен (NamedHook удалён) — боевых вызывающих не было
 - **Verified:** deadcode по pkg/agent: 8 → 6 (только группа D, вне scope)
+
+## Wave 25: Group D dead code cleanup — pkg/agent deadcode zero
+
+### [2026-08-08] chore(agent): delete last 6 dead functions — pkg/agent deadcode zero — wave 25
+- **Решение:** D-AUDIT-56 (OK founder'а 8 авг 2026 после глубокого разбора и подтверждения upstream-происхождения)
+- **PR:** pending
+- **Files:**
+  - `pkg/agent/agent_mcp.go` — MOD: удалён `mcpRuntime.hasManager` (никем не звался; соседи getManager/takeManager живы)
+  - `pkg/agent/agent_utils.go` — MOD: удалены `toolFeedbackExplanationFromResponse`/`FromToolCalls` (вытеснены живой `toolFeedbackExplanationForToolCall`) и `isNativeSearchProvider`/`filterClientWebSearch` (дубликат-заготовка; фича native search жива через PreferNative + useNativeSearch в pipeline_llm.go, покрыта TestPipeline_CallLLM_UsesNativeSearch…)
+  - `pkg/agent/turn_state.go` — MOD: удалён экспортированный `TurnStateFromContext` (инструменты идут через Spawner-интерфейс)
+  - `pkg/agent/agent_test.go` — MOD: вырезаны 6 тестов мёртвых функций + 2 использования hasManager переписаны на getManager(); восстановлен тип overflowProvider (побочка вырезателя, урок записан)
+  - `pkg/agent/agent_mcp_test.go` — MOD: 3 использования hasManager → getManager()
+- **Breaking:** None для рантайма
+- **Verified:** deadcode по pkg/agent = 0 (было 25 на снимке e7587d4); сборка/vet/тесты зелёные

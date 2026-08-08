@@ -1890,23 +1890,6 @@ func (m *toolFeedbackReasoningProvider) GetDefaultModel() string {
 	return "tool-feedback-reasoning-model"
 }
 
-func TestToolFeedbackExplanationFromResponse_UsesCurrentContentFirst(t *testing.T) {
-	response := &providers.LLMResponse{
-		Content:          "Read README.md first",
-		ReasoningContent: "current reasoning fallback",
-	}
-	messages := []providers.Message{
-		{Role: "user", Content: "check file"},
-		{Role: "assistant", Content: "Previous turn explanation"},
-		{Role: "tool", Content: "tool output", ToolCallID: "call_1"},
-	}
-
-	got := toolFeedbackExplanationFromResponse(response, messages)
-	if got != "Read README.md first" {
-		t.Fatalf("toolFeedbackExplanationFromResponse() = %q, want current content", got)
-	}
-}
-
 func TestSideQuestionResponseContent_FallsBackWhenContentIsWhitespace(t *testing.T) {
 	response := &providers.LLMResponse{
 		Content:          " \n\t ",
@@ -1926,28 +1909,6 @@ func TestResponseReasoningContent_FallsBackWhenReasoningIsWhitespace(t *testing.
 
 	if got := responseReasoningContent(response); got != "structured reasoning fallback" {
 		t.Fatalf("responseReasoningContent() = %q, want %q", got, "structured reasoning fallback")
-	}
-}
-
-func TestToolFeedbackExplanationFromResponse_UsesExplicitToolCallExtraContent(t *testing.T) {
-	response := &providers.LLMResponse{
-		ToolCalls: []providers.ToolCall{{
-			ID:   "call_1",
-			Name: "read_file",
-			ExtraContent: &providers.ExtraContent{
-				ToolFeedbackExplanation: "Read README.md first to confirm the current project structure.",
-			},
-		}},
-	}
-	messages := []providers.Message{
-		{Role: "user", Content: "check file"},
-		{Role: "assistant", Content: ""},
-		{Role: "tool", Content: "tool output", ToolCallID: "call_1"},
-	}
-
-	got := toolFeedbackExplanationFromResponse(response, messages)
-	if got != "Read README.md first to confirm the current project structure." {
-		t.Fatalf("toolFeedbackExplanationFromResponse() = %q, want explicit tool feedback explanation", got)
 	}
 }
 
@@ -2006,25 +1967,6 @@ func TestToolFeedbackExplanationForToolCall_DoesNotReuseAnotherToolCallExplanati
 	want := utils.ToolFeedbackContinuationHint + ": inspect the config and update the example"
 	if got != want {
 		t.Fatalf("toolFeedbackExplanationForToolCall() = %q, want %q", got, want)
-	}
-}
-
-func TestToolFeedbackExplanationFromResponse_DoesNotUseReasoningContent(t *testing.T) {
-	response := &providers.LLMResponse{
-		Content:          "",
-		ReasoningContent: "hidden reasoning should not be shown",
-	}
-	messages := []providers.Message{
-		{Role: "user", Content: "check file"},
-		{Role: "assistant", Content: "Previous turn explanation"},
-		{Role: "user", Content: "Inspect README.md and update the config example."},
-		{Role: "tool", Content: "tool output", ToolCallID: "call_1"},
-	}
-
-	got := toolFeedbackExplanationFromResponse(response, messages)
-	want := utils.ToolFeedbackContinuationHint + ": Inspect README.md and update the config example."
-	if got != want {
-		t.Fatalf("toolFeedbackExplanationFromResponse() = %q, want latest user content fallback", got)
 	}
 }
 
@@ -3582,7 +3524,7 @@ func TestProcessDirectWithChannel_TriggersMCPInitialization(t *testing.T) {
 	al := NewAgentLoop(cfg, msgBus, provider)
 	defer al.Close()
 
-	if al.mcp.hasManager() {
+	if al.mcp.getManager() != nil {
 		t.Fatal("expected MCP manager to be nil before first direct processing")
 	}
 
@@ -3598,7 +3540,7 @@ func TestProcessDirectWithChannel_TriggersMCPInitialization(t *testing.T) {
 	}
 
 	// Manager should not be initialized when no servers are configured
-	if al.mcp.hasManager() {
+	if al.mcp.getManager() != nil {
 		t.Fatal("expected MCP manager to be nil when no servers are configured")
 	}
 }
@@ -5174,59 +5116,6 @@ func (p *plainProvider) Chat(
 }
 
 func (p *plainProvider) GetDefaultModel() string { return "test-model" }
-
-func TestIsNativeSearchProvider_Supported(t *testing.T) {
-	if !isNativeSearchProvider(&nativeSearchProvider{supported: true}) {
-		t.Fatal("expected true for provider that supports native search")
-	}
-}
-
-func TestIsNativeSearchProvider_NotSupported(t *testing.T) {
-	if isNativeSearchProvider(&nativeSearchProvider{supported: false}) {
-		t.Fatal("expected false for provider that does not support native search")
-	}
-}
-
-func TestIsNativeSearchProvider_NoInterface(t *testing.T) {
-	if isNativeSearchProvider(&plainProvider{}) {
-		t.Fatal("expected false for provider that does not implement NativeSearchCapable")
-	}
-}
-
-func TestFilterClientWebSearch_RemovesWebSearch(t *testing.T) {
-	defs := []providers.ToolDefinition{
-		{Type: "function", Function: providers.ToolFunctionDefinition{Name: "web_search"}},
-		{Type: "function", Function: providers.ToolFunctionDefinition{Name: "read_file"}},
-		{Type: "function", Function: providers.ToolFunctionDefinition{Name: "exec"}},
-	}
-	result := filterClientWebSearch(defs)
-	if len(result) != 2 {
-		t.Fatalf("len(result) = %d, want 2", len(result))
-	}
-	for _, td := range result {
-		if td.Function.Name == "web_search" {
-			t.Fatal("web_search should be filtered out")
-		}
-	}
-}
-
-func TestFilterClientWebSearch_NoWebSearch(t *testing.T) {
-	defs := []providers.ToolDefinition{
-		{Type: "function", Function: providers.ToolFunctionDefinition{Name: "read_file"}},
-		{Type: "function", Function: providers.ToolFunctionDefinition{Name: "exec"}},
-	}
-	result := filterClientWebSearch(defs)
-	if len(result) != 2 {
-		t.Fatalf("len(result) = %d, want 2", len(result))
-	}
-}
-
-func TestFilterClientWebSearch_EmptyInput(t *testing.T) {
-	result := filterClientWebSearch(nil)
-	if len(result) != 0 {
-		t.Fatalf("len(result) = %d, want 0", len(result))
-	}
-}
 
 type overflowProvider struct {
 	calls        int

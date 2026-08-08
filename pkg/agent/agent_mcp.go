@@ -61,12 +61,6 @@ func (r *mcpRuntime) takeManager() *mcp.Manager {
 	return manager
 }
 
-func (r *mcpRuntime) hasManager() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.manager != nil
-}
-
 func (r *mcpRuntime) getManager() *mcp.Manager {
 	r.mu.Lock()
 	defer r.mu.Unlock()

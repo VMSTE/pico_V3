@@ -112,35 +112,6 @@ func latestUserContent(messages []providers.Message) string {
 	return ""
 }
 
-func toolFeedbackExplanationFromResponse(
-	response *providers.LLMResponse,
-	messages []providers.Message,
-) string {
-	if response == nil {
-		return ""
-	}
-	explanation := strings.TrimSpace(response.Content)
-	if explanation == "" {
-		explanation = toolFeedbackExplanationFromToolCalls(response.ToolCalls)
-	}
-	if explanation == "" {
-		explanation = toolFeedbackExplanationFromMessages(messages)
-	}
-	return explanation
-}
-
-func toolFeedbackExplanationFromToolCalls(toolCalls []providers.ToolCall) string {
-	for _, tc := range toolCalls {
-		if tc.ExtraContent == nil {
-			continue
-		}
-		if explanation := strings.TrimSpace(tc.ExtraContent.ToolFeedbackExplanation); explanation != "" {
-			return explanation
-		}
-	}
-	return ""
-}
-
 func toolFeedbackExplanationForToolCall(
 	response *providers.LLMResponse,
 	toolCall providers.ToolCall,
@@ -565,24 +536,6 @@ func mapCommandError(result commands.ExecuteResult) string {
 		return fmt.Sprintf("Failed to execute command: %v", result.Err)
 	}
 	return fmt.Sprintf("Failed to execute /%s: %v", result.Command, result.Err)
-}
-
-func isNativeSearchProvider(p providers.LLMProvider) bool {
-	if ns, ok := p.(providers.NativeSearchCapable); ok {
-		return ns.SupportsNativeSearch()
-	}
-	return false
-}
-
-func filterClientWebSearch(tools []providers.ToolDefinition) []providers.ToolDefinition {
-	result := make([]providers.ToolDefinition, 0, len(tools))
-	for _, t := range tools {
-		if strings.EqualFold(t.Function.Name, "web_search") {
-			continue
-		}
-		result = append(result, t)
-	}
-	return result
 }
 
 func extractProvider(registry *AgentRegistry) (providers.LLMProvider, bool) {
