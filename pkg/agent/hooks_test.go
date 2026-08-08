@@ -301,8 +301,8 @@ func TestHookManager_BeforeLLMAllowsNonSystemMessageMutation(t *testing.T) {
 	if err := hm.Mount(HookRegistration{
 		Name:   "append-user",
 		Source: HookSourceInProcess,
-		Hook:   &llmUserAppendHook{,
-	}}); err != nil {
+		Hook:   &llmUserAppendHook{},
+	}); err != nil {
 		t.Fatalf("Mount() error = %v", err)
 	}
 
@@ -328,8 +328,8 @@ func TestHookManager_BeforeLLMAllowsJSONRoundTripNonSystemMessageMutation(t *tes
 	if err := hm.Mount(HookRegistration{
 		Name:   "json-append-user",
 		Source: HookSourceInProcess,
-		Hook:   &llmJSONRoundTripUserAppendHook{,
-	}}); err != nil {
+		Hook:   &llmJSONRoundTripUserAppendHook{},
+	}); err != nil {
 		t.Fatalf("Mount() error = %v", err)
 	}
 
@@ -384,8 +384,8 @@ func TestHookManager_BeforeLLMControlsToolDefinitionMutation(t *testing.T) {
 	if err := hm.Mount(HookRegistration{
 		Name:   "rewrite-tool",
 		Source: HookSourceInProcess,
-		Hook:   &llmToolRewriteHook{,
-	}}); err != nil {
+		Hook:   &llmToolRewriteHook{},
+	}); err != nil {
 		t.Fatalf("Mount() error = %v", err)
 	}
 
@@ -718,8 +718,8 @@ func TestAgentLoop_Hooks_ToolInterceptorCanRewrite(t *testing.T) {
 	if err := al.MountHook(HookRegistration{
 		Name:   "tool-rewrite",
 		Source: HookSourceInProcess,
-		Hook:   &toolRewriteHook{,
-	}}); err != nil {
+		Hook:   &toolRewriteHook{},
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -777,8 +777,8 @@ func TestAgentLoop_Hooks_ToolFeedbackUsesRewrittenToolName(t *testing.T) {
 	if err := al.MountHook(HookRegistration{
 		Name:   "tool-rename",
 		Source: HookSourceInProcess,
-		Hook:   &toolRenameHook{,
-	}}); err != nil {
+		Hook:   &toolRenameHook{},
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
@@ -831,8 +831,8 @@ func TestAgentLoop_Hooks_ToolApproverCanDeny(t *testing.T) {
 	if err := al.MountHook(HookRegistration{
 		Name:   "deny-approval",
 		Source: HookSourceInProcess,
-		Hook:   &denyApprovalHook{,
-	}}); err != nil {
+		Hook:   &denyApprovalHook{},
+	}); err != nil {
 		t.Fatalf("MountHook failed: %v", err)
 	}
 
