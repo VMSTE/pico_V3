@@ -501,3 +501,15 @@ Each entry maps to a single wave/phase and its merged PR.
   - `.gitignore` — MOD: игнор `index.scip` (артефакт анализаторов)
 - **Breaking:** None (upstream-переменные работают как раньше; PIKA_* только с приоритетом)
 - **Decisions:** D-AUDIT-47 (доказательство мёртвости: SCIP-граф + GitHub-поиск + grep), D-AUDIT-48 (решение wire/drop)
+
+## Wave 15: Pika builtin hooks wiring (Р-1)
+
+### [2026-08-08] feat(pika): register Pika builtin hooks via RegisterBuiltinHook — wave 15
+- **Задача:** Р-1 · **Решение:** D-AUDIT-49
+- **PR:** pending
+- **Files:**
+  - `pkg/agent/hook_pika.go` — MODIFIED: registerPikaBuiltinHooks (4 фабрики: pika.output_gate, pika.toolguard, pika.confirm_gate, pika.progress) + nil-guard в progressAdapter.OnEvent
+  - `pkg/agent/agent_init.go` — MODIFIED: вызов registerPikaBuiltinHooks в NewAgentLoop после resolveContextManager
+  - `pkg/agent/hook_pika_mount_test.go` — NEW: 4 теста (флаги включают/выключают монтирование, глобальный off, двойная регистрация)
+  - `config/config.example.json` — MODIFIED: секция hooks.builtins с 4 флагами (output_gate/toolguard on, confirm_gate/progress off до Р-3)
+- **Breaking:** None — confirm_gate инертен при пустой dangerous_ops, progress монтируется как no-op до появления отправителя (Р-3)

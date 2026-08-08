@@ -11,6 +11,8 @@ package agent
 import (
 	"context"
 
+	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/pika"
 )
 
@@ -124,6 +126,12 @@ func (a *progressAdapter) OnEvent(
 	ctx context.Context,
 	evt Event,
 ) error {
+	// PIKA-V3 (Р-1): без отправителя адаптер монтируется как no-op.
+	// Nil-guard обязателен: наблюдатель вызывается из горутины
+	// HookManager.dispatchEvents, паника там уронит процесс.
+	if a.observer == nil {
+		return nil
+	}
 	var pikaEvt pika.ProgressEvent
 	switch evt.Kind {
 	case EventKindToolExecStart:
@@ -186,3 +194,98 @@ var (
 	_ EventObserver  = (*progressAdapter)(nil)
 	_ EventObserver  = (*autoEventAdapter)(nil)
 )
+
+// --- Builtin hook registration (Р-1, D-AUDIT-49) ---
+
+// Имена builtin-хуков Пики — ключи в hooks.builtins конфига.
+const (
+	hookNameOutputGate  = "pika.output_gate"
+	hookNameToolGuard   = "pika.toolguard"
+	hookNameConfirmGate = "pika.confirm_gate"
+	hookNameProgress    = "pika.progress"
+)
+
+// registerPikaBuiltinHooks регистрирует фабрики хуков Пики в глобальном
+// реестре builtin-хуков. Вызывается из NewAgentLoop после
+// resolveContextManager. Монтирование — лениво, в loadConfiguredHooks
+// при старте Run(), по флагам hooks.builtins.<имя>.enabled.
+//
+// Почему реестр, а не прямой Mount (D-AUDIT-49): loadConfiguredHooks
+// падает на включённом, но незарегистрированном builtin и обрывает
+// Run() — а hooks.enabled: true уже стоит в config.example.json.
+func registerPikaBuiltinHooks(al *AgentLoop, cfg *config.Config) {
+	if al == nil || cfg == nil {
+		return
+	}
+
+	registerBuiltinOnce(hookNameOutputGate, func(
+		_ context.Context, _ config.BuiltinHookConfig,
+	) (any, error) {
+		return &outputGateAdapter{gate: pika.OutputGateFactory(cfg)}, nil
+	})
+
+	registerBuiltinOnce(hookNameToolGuard, func(
+		_ context.Context, _ config.BuiltinHookConfig,
+	) (any, error) {
+		return &toolGuardAdapter{
+			guard: pika.ToolGuardFactory(cfg, pikaPlanGetter(al)),
+		}, nil
+	})
+
+	registerBuiltinOnce(hookNameConfirmGate, func(
+		_ context.Context, _ config.BuiltinHookConfig,
+	) (any, error) {
+		var health pika.SystemStateProvider
+		if al.telemetry != nil {
+			health = al.telemetry
+		}
+		// sender=nil: гейт инертен, пока таблица dangerous_ops пуста
+		// (дефолт), и fail-closed после её заполнения. Живой
+		// отправитель — задача Р-3.
+		return &confirmGateAdapter{
+			gate: pika.ConfirmGateFactory(cfg, nil, health),
+		}, nil
+	})
+
+	registerBuiltinOnce(hookNameProgress, func(
+		_ context.Context, _ config.BuiltinHookConfig,
+	) (any, error) {
+		// Отправителя в проде пока нет (задача Р-3): монтируем no-op
+		// адаптер, чтобы флаг работал без риска паники в горутине
+		// наблюдателя.
+		logger.WarnCF(
+			"hooks",
+			"pika.progress: no sender configured, mounting as no-op",
+			nil,
+		)
+		return &progressAdapter{}, nil
+	})
+}
+
+// registerBuiltinOnce регистрирует фабрику, если имя ещё не занято.
+// Реестр глобальный, а NewAgentLoop вызывается повторно (тесты).
+func registerBuiltinOnce(name string, factory BuiltinHookFactory) {
+	if _, ok := lookupBuiltinHook(name); ok {
+		return
+	}
+	if err := RegisterBuiltinHook(name, factory); err != nil {
+		logger.ErrorCF(
+			"hooks",
+			"failed to register builtin hook",
+			map[string]any{"hook": name, "error": err.Error()},
+		)
+	}
+}
+
+// pikaPlanGetter возвращает ActivePlanGetter из PikaContextManager,
+// если активен именно он; иначе nil (ToolGuard тогда всегда continue).
+func pikaPlanGetter(al *AgentLoop) pika.ActivePlanGetter {
+	if al == nil {
+		return nil
+	}
+	adapter, ok := al.contextManager.(*pikaContextManagerAdapter)
+	if !ok || adapter == nil || adapter.cm == nil {
+		return nil
+	}
+	return adapter.cm.GetPlanStore()
+}
