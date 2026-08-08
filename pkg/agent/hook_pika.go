@@ -239,11 +239,13 @@ func registerPikaBuiltinHooks(al *AgentLoop, cfg *config.Config) {
 		if al.telemetry != nil {
 			health = al.telemetry
 		}
-		// sender=nil: гейт инертен, пока таблица dangerous_ops пуста
-		// (дефолт), и fail-closed после её заполнения. Живой
-		// отправитель — задача Р-3.
+		// Р-5: живой отправитель менеджера (health.reporting.manager_*).
+		// Без адреса sender=nil: гейт разоружён при пустой таблице
+		// dangerous_ops (дефолт) и fail-closed после её заполнения.
 		return &confirmGateAdapter{
-			gate: pika.ConfirmGateFactory(cfg, nil, health),
+			gate: pika.ConfirmGateFactory(
+				cfg, pika.NewManagerSender(al.bus, cfg), health,
+			),
 		}, nil
 	})
 
