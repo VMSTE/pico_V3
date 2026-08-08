@@ -4,6 +4,8 @@
 package agent
 
 import (
+	"path/filepath"
+
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/pika"
 )
@@ -99,5 +101,47 @@ func mapTelemetryConfig(health config.HealthConfig, budget config.BudgetConfig) 
 		WindowSize:           health.WindowSize,
 		ToolFailThresholdPct: health.ToolFailThresholdPct,
 		LatencyThresholdMs:   int64(health.LatencyThresholdMs),
+	}
+}
+
+// mapMCPServerPolicies строит политику по умолчанию для каждого включённого
+// MCP-сервера из конфига (Р-3, D-AUDIT-50). Per-server ACL (AllowedTools,
+// TrustLevel) — этап 5: пока каждый сервер получает deny-by-default политику
+// с общими дефолтами из security.mcp.
+func mapMCPServerPolicies(cfg *config.Config) []pika.MCPServerPolicy {
+	if cfg == nil {
+		return nil
+	}
+	servers := cfg.Tools.MCP.Servers
+	if len(servers) == 0 {
+		return nil
+	}
+	mcpCfg := cfg.Security.MCP
+	policies := make([]pika.MCPServerPolicy, 0, len(servers))
+	for name, srv := range servers {
+		if !srv.Enabled {
+			continue
+		}
+		policies = append(policies, pika.MCPServerPolicy{
+			Name:           name,
+			TrustLevel:     "external",
+			Capabilities:   mcpCfg.DefaultCapabilities,
+			AllowPrompts:   mcpCfg.DefaultAllowPrompts,
+			AllowResources: mcpCfg.DefaultAllowResources,
+			RPM:            mcpCfg.PerServerRPM,
+		})
+	}
+	return policies
+}
+
+// pikaPromptPaths — карта компонент → файл промта в workspace (Р-3).
+// Ключи обязаны совпадать с validCRComponents в pkg/pika/diagnostics.go.
+func pikaPromptPaths(workspace string) map[string]string {
+	dir := filepath.Join(workspace, "prompts")
+	return map[string]string{
+		"archivist": filepath.Join(dir, "archivist_build.md"),
+		"atomizer":  filepath.Join(dir, "atomizer.md"),
+		"reflexor":  filepath.Join(dir, "reflexor.md"),
+		"mcp_guard": filepath.Join(dir, "mcp_guard.md"),
 	}
 }

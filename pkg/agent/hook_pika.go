@@ -250,15 +250,21 @@ func registerPikaBuiltinHooks(al *AgentLoop, cfg *config.Config) {
 	registerBuiltinOnce(hookNameProgress, func(
 		_ context.Context, _ config.BuiltinHookConfig,
 	) (any, error) {
-		// Отправителя в проде пока нет (задача Р-3): монтируем no-op
-		// адаптер, чтобы флаг работал без риска паники в горутине
-		// наблюдателя.
-		logger.WarnCF(
-			"hooks",
-			"pika.progress: no sender configured, mounting as no-op",
-			nil,
-		)
-		return &progressAdapter{}, nil
+		// Р-3: живой отправитель, если настроен адрес менеджера
+		// (health.reporting.manager_*). Без адреса — no-op адаптер:
+		// nil-guard в OnEvent защищает горутину наблюдателя от паники.
+		sender := pika.NewManagerSender(al.bus, cfg)
+		if sender == nil {
+			logger.WarnCF(
+				"hooks",
+				"pika.progress: no sender configured, mounting as no-op",
+				nil,
+			)
+			return &progressAdapter{}, nil
+		}
+		return &progressAdapter{
+			observer: pika.ProgressObserverFactory(cfg, sender),
+		}, nil
 	})
 }
 
