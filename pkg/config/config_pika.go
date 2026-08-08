@@ -114,6 +114,11 @@ type HealthReportingConfig struct {
 	TypingIndicatorEnabled    bool `json:"typing_indicator_enabled"`
 	AlertDedupPerSession      bool `json:"alert_dedup_per_session"`
 	DailyHealthSummaryEnabled bool `json:"daily_health_summary_enabled"`
+
+	// PIKA-V3 (Р-3): куда слать системные отчёты (диагностика, аналитика, прогресс).
+	// Пусто = отчёты отключены.
+	ManagerChannel string `json:"manager_channel"`
+	ManagerChatID  string `json:"manager_chat_id"`
 }
 
 // ProgressConfig defines progress notification settings.

@@ -350,7 +350,11 @@ func setupAndStartServices(
 	// PIKA-V3: Create analytics engine before setupCronTool so it can be used in SetOnJob dispatcher.
 	var analyticsEngine *pika.AnalyticsEngine
 	if botmem := agentLoop.GetBotMemory(); botmem != nil {
-		sender := &pika.BusSender{MB: msgBus}
+		sender := pika.NewManagerSender(msgBus, cfg)
+		if sender == nil {
+			// PIKA-V3 (Р-3): адрес менеджера не настроен — поведение как раньше.
+			sender = &pika.BusSender{MB: msgBus}
+		}
 		aCfg := cfg.Analytics
 		analyticsEngine = pika.NewAnalyticsEngine(aCfg, botmem, sender, sender, aCfg.QueriesDir)
 	}
@@ -616,7 +620,11 @@ func restartServices(
 	// PIKA-V3: Create analytics engine before setupCronTool so it can be used in SetOnJob dispatcher.
 	var analyticsEngine *pika.AnalyticsEngine
 	if botmem := al.GetBotMemory(); botmem != nil {
-		sender := &pika.BusSender{MB: msgBus}
+		sender := pika.NewManagerSender(msgBus, cfg)
+		if sender == nil {
+			// PIKA-V3 (Р-3): адрес менеджера не настроен — поведение как раньше.
+			sender = &pika.BusSender{MB: msgBus}
+		}
 		aCfg := cfg.Analytics
 		analyticsEngine = pika.NewAnalyticsEngine(aCfg, botmem, sender, sender, aCfg.QueriesDir)
 	}

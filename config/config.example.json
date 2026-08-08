@@ -497,6 +497,12 @@
       }
     }
   },
+  "health": {
+    "reporting": {
+      "manager_channel": "",
+      "manager_chat_id": ""
+    }
+  },
   "gateway": {
     "_comment": "Default log level is set to 'fatal'. Other available options are 'debug', 'info', 'warn' and 'error'.",
     "host": "localhost",

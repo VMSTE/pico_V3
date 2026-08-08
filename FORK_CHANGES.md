@@ -513,3 +513,21 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/agent/hook_pika_mount_test.go` — NEW: 4 теста (флаги включают/выключают монтирование, глобальный off, двойная регистрация)
   - `config/config.example.json` — MODIFIED: секция hooks.builtins с 4 флагами (output_gate/toolguard on, confirm_gate/progress off до Р-3)
 - **Breaking:** None — confirm_gate инертен при пустой dangerous_ops, progress монтируется как no-op до появления отправителя (Р-3)
+
+## Wave 16: Diagnostics/MCP wiring — manager sender + prompt paths + policies (Р-3)
+
+### [2026-08-08] feat(pika): wire manager sender, prompt paths, MCP policies — wave 16
+- **Задача:** Р-3 · **Решение:** D-AUDIT-50
+- **PR:** pending
+- **Files:**
+  - `pkg/config/config_pika.go` — MOD: HealthReportingConfig += `manager_channel`, `manager_chat_id` (пусто = отчёты отключены)
+  - `pkg/pika/bus_sender.go` — MOD: BusSender.MB расширен до интерфейса OutboundPublisher (покрывает *bus.MessageBus и interfaces.MessageBus); NEW конструктор NewManagerSender (nil, если адрес не настроен)
+  - `pkg/pika/manager_sender_test.go` — NEW: 2 теста NewManagerSender
+  - `pkg/agent/config_mappers.go` — MOD: NEW mapMCPServerPolicies (политика на каждый включённый сервер из tools.mcp.servers × дефолты security.mcp; deny-by-default) + NEW pikaPromptPaths (4 промт-файла)
+  - `pkg/agent/config_mappers_r3_test.go` — NEW: 3 теста (политики + покрытие validCRComponents)
+  - `pkg/agent/context_pika.go` — MOD: NewDiagnosticsEngine получает живого отправителя + promptPaths (инъекция correction rules оживает во всех 4 субагентах); NewMCPSecurityPipeline получает политики вместо nil
+  - `pkg/agent/hook_pika.go` — MOD: фабрика pika.progress — живой ProgressObserver при настроенном адресе, иначе no-op (как в PR #61)
+  - `pkg/gateway/gateway.go` — MOD: отправитель аналитики — менеджерский адрес в 2 местах (cold start + restart); без адреса — поведение как раньше
+  - `config/config.example.json` — MOD: секция health.reporting с manager_channel/manager_chat_id
+- **Breaking:** None — без manager_channel/manager_chat_id всё работает как раньше; потребитель MCP-политик в проде пока отсутствует (оживёт в Р-5, deny-by-default)
+- **Verified without code change:** Reflector.SetDiagnostics(al.diag) уже вызывался в context_pika.go — пункт 3 задачи Р-3 закрыт фактом

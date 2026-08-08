@@ -65,7 +65,12 @@ func pikaContextManagerFactory(
 		archProvider := resolveArchivistProvider(al.cfg)
 		if archProvider != nil {
 			// PIKA-V3: Create DiagnosticsEngine (TZ-v2-9b).
-			al.diag = pika.NewDiagnosticsEngine(botmem, nil, map[string]string{})
+			// PIKA-V3 (Р-3, D-AUDIT-50): живой отправитель + пути промтов.
+			al.diag = pika.NewDiagnosticsEngine(
+				botmem,
+				pika.NewManagerSender(al.bus, al.cfg),
+				pikaPromptPaths(agent.Workspace),
+			)
 
 			// PIKA-V3: Create Archivist with diagnostics (TZ-v2-9b).
 			realArch := pika.NewArchivist(
@@ -95,7 +100,7 @@ func pikaContextManagerFactory(
 
 			// PIKA-V3: Create MCPSecurity pipeline (TZ-v2-9b).
 			al.mcpSecurity = pika.NewMCPSecurityPipeline(
-				mapMCPGuardConfig(al.cfg.ResolveAgentConfig("mcp_guard")), nil, al.telemetry,
+				mapMCPGuardConfig(al.cfg.ResolveAgentConfig("mcp_guard")), mapMCPServerPolicies(al.cfg), al.telemetry,
 			)
 			al.mcpSecurity.SetDiagnostics(al.diag)
 			logger.InfoCF("pika", "MCPSecurity wired (TZ-v2-9b)", nil)
