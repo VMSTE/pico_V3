@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/pika"
 )
 
 func TestMapMCPServerPolicies_NilAndEmpty(t *testing.T) {
@@ -61,5 +62,63 @@ func TestPikaPromptPaths_CoversAllCRComponents(t *testing.T) {
 		if !ok || p == "" {
 			t.Errorf("missing prompt path for %q", c)
 		}
+	}
+}
+
+// Р-5 шаг 5: per-server ACL переопределяет дефолты, пустое наследует.
+func TestMapMCPServerPolicies_PerServerACL(t *testing.T) {
+	allow := false
+	cfg := &config.Config{}
+	cfg.Tools.MCP.Servers = map[string]config.MCPServerConfig{
+		"github":   {Enabled: true, Type: "stdio", Command: "npx"},
+		"internal": {Enabled: true, Type: "http", URL: "http://localhost/mcp"},
+		"off":      {Enabled: false},
+	}
+	cfg.Security.MCP.PerServerRPM = 60
+	cfg.Security.MCP.DefaultAllowResources = true
+	cfg.Security.MCP.Servers = map[string]config.MCPServerACLConfig{
+		"github": {
+			TrustLevel:     "external",
+			AllowedTools:   []string{"get_issue", "list_issues"},
+			AllowResources: &allow,
+			RPM:            10,
+		},
+		"internal": {
+			TrustLevel: "internal",
+		},
+	}
+
+	policies := mapMCPServerPolicies(cfg)
+	if len(policies) != 2 {
+		t.Fatalf("expected 2 policies (disabled skipped), got %d", len(policies))
+	}
+	byName := map[string]pika.MCPServerPolicy{}
+	for _, p := range policies {
+		byName[p.Name] = p
+	}
+
+	gh := byName["github"]
+	if gh.TrustLevel != "external" || gh.RPM != 10 {
+		t.Errorf("github overrides not applied: %+v", gh)
+	}
+	if len(gh.AllowedTools) != 2 {
+		t.Errorf("github allowed_tools: %v", gh.AllowedTools)
+	}
+	if gh.AllowResources {
+		t.Error("github allow_resources must be overridden to false")
+	}
+	if gh.AllowPrompts {
+		t.Error("github allow_prompts must inherit default false")
+	}
+
+	in := byName["internal"]
+	if in.TrustLevel != "internal" {
+		t.Errorf("internal trust_level: %q", in.TrustLevel)
+	}
+	if !in.AllowResources {
+		t.Error("internal must inherit default_allow_resources=true")
+	}
+	if in.RPM != 60 {
+		t.Errorf("internal must inherit per_server_rpm=60, got %d", in.RPM)
 	}
 }

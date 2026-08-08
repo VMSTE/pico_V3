@@ -89,6 +89,24 @@ type MCPSecurityConfig struct {
 	DefaultCapabilities   map[string]bool `json:"default_capabilities"`
 	DefaultAllowPrompts   bool            `json:"default_allow_prompts"`
 	DefaultAllowResources bool            `json:"default_allow_resources"`
+	// PIKA-V3 (Р-5 шаг 5): per-server ACL. Ключ — имя сервера из
+	// tools.mcp.servers. Пустые поля = наследование дефолтов выше.
+	Servers map[string]MCPServerACLConfig `json:"servers"`
+}
+
+// MCPServerACLConfig — per-server ACL (Р-5 шаг 5).
+// TrustLevel: "internal" | "external" (пусто = external).
+// AllowedTools: пусто + internal = все инструменты сервера;
+// пусто + external = ни одного (deny-by-default).
+// AllowPrompts/AllowResources — указатели: nil = наследовать дефолт.
+type MCPServerACLConfig struct {
+	TrustLevel     string   `json:"trust_level"`
+	AllowedTools   []string `json:"allowed_tools"`
+	AllowPrompts   *bool    `json:"allow_prompts"`
+	AllowResources *bool    `json:"allow_resources"`
+	MaxOutputBytes int      `json:"max_output_bytes"`
+	TaintPolicy    string   `json:"taint_policy"`
+	RPM            int      `json:"rpm"` // 0 → per_server_rpm
 }
 
 // HealthConfig defines system health monitoring settings. PIKA-V3.

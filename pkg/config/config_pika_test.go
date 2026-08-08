@@ -385,3 +385,42 @@ func TestConfig_IsBaseToolEnabled(t *testing.T) {
 		t.Error("exec should be enabled via Config method")
 	}
 }
+
+// Р-5 шаг 5: per-server ACL парсится из security.mcp.servers.
+func TestMCPServerACLConfig_JSON(t *testing.T) {
+	input := `{
+		"taint_reset_policy": "explicit_only",
+		"per_server_rpm": 60,
+		"default_allow_prompts": false,
+		"default_allow_resources": true,
+		"servers": {
+			"github": {
+				"trust_level": "external",
+				"allowed_tools": ["get_issue"],
+				"allow_prompts": true,
+				"max_output_bytes": 32768,
+				"rpm": 10
+			}
+		}
+	}`
+	var m MCPSecurityConfig
+	if err := json.Unmarshal([]byte(input), &m); err != nil {
+		t.Fatal(err)
+	}
+	srv, ok := m.Servers["github"]
+	if !ok {
+		t.Fatal("servers.github not parsed")
+	}
+	if srv.TrustLevel != "external" || len(srv.AllowedTools) != 1 {
+		t.Errorf("parsed: %+v", srv)
+	}
+	if srv.AllowPrompts == nil || !*srv.AllowPrompts {
+		t.Error("allow_prompts override must parse as *bool true")
+	}
+	if srv.AllowResources != nil {
+		t.Error("allow_resources unset must stay nil (inherit)")
+	}
+	if srv.RPM != 10 {
+		t.Errorf("rpm = %d, want 10", srv.RPM)
+	}
+}

@@ -563,3 +563,16 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/confirm_gate.go` — MOD: isInCriticalPath переписан — filepath.Clean (обходы через ./ и ../ закрыты), рекурсивный ** (любое число сегментов), относительные пути проверяются и с ведущим /. Одиночная * по-прежнему не пересекает разделители — старые шаблоны работают как раньше.
   - `pkg/pika/confirm_gate_paths_test.go` — NEW: 4 теста (критерий 2 Р-5: пути с точками; **; одиночная *; относительные пути)
 - **Breaking:** None (шаблоны без ** сохраняют семантику filepath.Match)
+
+## Wave 20: Per-server ACL в схему MCP (Р-5 step 5)
+
+### [2026-08-08] feat(config+pika): per-server ACL for MCP servers — wave 20
+- **Задача:** Р-5 шаг 5 (финальный)
+- **PR:** pending
+- **Files:**
+  - `pkg/config/config_pika.go` — MOD: MCPSecurityConfig += `servers` (map[string]MCPServerACLConfig); NEW тип MCPServerACLConfig (trust_level, allowed_tools, allow_prompts/allow_resources как *bool для отличия «не задано» от false, max_output_bytes, taint_policy, rpm)
+  - `pkg/agent/config_mappers.go` — MOD: mapMCPServerPolicies читает per-server ACL; пустые поля наследуют дефолты security.mcp
+  - `config/config.example.json` — MOD: пример security.mcp.servers
+  - `pkg/config/config_pika_test.go` — MOD: TestMCPServerACLConfig_JSON (парсинг, *bool-семантика)
+  - `pkg/agent/config_mappers_r3_test.go` — MOD: TestMapMCPServerPolicies_PerServerACL (переопределения и наследование)
+- **Breaking:** None — пустой servers = поведение Р-3 (deny-by-default с дефолтами). Потребитель политик в проде появится отдельно; пока схема + маппер + тесты.
