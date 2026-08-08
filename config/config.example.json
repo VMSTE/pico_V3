@@ -497,6 +497,43 @@
       }
     }
   },
+  "security": {
+    "dangerous_ops": {
+      "confirm_timeout_min": 30,
+      "critical_paths": [
+        "**/workspace/prompts/**",
+        "**/config.json"
+      ],
+      "ops": {
+        "compose.up": { "level": "medium", "confirm": "if_healthy" },
+        "compose.restart": { "level": "medium", "confirm": "if_healthy" },
+        "service.restart": { "level": "medium", "confirm": "if_healthy" },
+        "compose.down": { "level": "critical", "confirm": "always" },
+        "data.exfil": { "level": "critical", "confirm": "always" },
+        "git.push": { "level": "medium", "confirm": "always" },
+        "files.write": { "level": "high", "confirm": "if_critical_path" }
+      }
+    },
+    "rad": {
+      "enabled": true,
+      "drift_threshold": 0.2,
+      "block_score": 3,
+      "warn_score": 2
+    },
+    "mcp": {
+      "taint_reset_policy": "explicit_only",
+      "stdio_user": "mcp-sandbox",
+      "stdio_isolation": "user",
+      "per_server_rpm": 60,
+      "default_capabilities": {
+        "sampling": false,
+        "roots": false,
+        "elicitation": false
+      },
+      "default_allow_prompts": false,
+      "default_allow_resources": true
+    }
+  },
   "health": {
     "reporting": {
       "manager_channel": "",
