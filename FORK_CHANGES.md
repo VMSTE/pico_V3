@@ -553,3 +553,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/confirm_gate_effect_test.go` — NEW: 14 тестов детектора + 4 теста диалога на реальной шине
   - `pkg/agent/hook_pika.go` — MOD: фабрика confirm_gate получает NewManagerSender (health.reporting.manager_*)
 - **Breaking:** None по умолчанию: гейт разоружён при пустой ops-таблице, флаг pika.confirm_gate в примере выключен, без адреса менеджера — fail-closed. Активация = таблица + адрес + флаг.
+
+## Wave 19: Critical paths hardening (Р-5 step 3)
+
+### [2026-08-08] feat(pika): harden critical path matching — Clean + ** — wave 19
+- **Задача:** Р-5 шаг 3
+- **PR:** pending
+- **Files:**
+  - `pkg/pika/confirm_gate.go` — MOD: isInCriticalPath переписан — filepath.Clean (обходы через ./ и ../ закрыты), рекурсивный ** (любое число сегментов), относительные пути проверяются и с ведущим /. Одиночная * по-прежнему не пересекает разделители — старые шаблоны работают как раньше.
+  - `pkg/pika/confirm_gate_paths_test.go` — NEW: 4 теста (критерий 2 Р-5: пути с точками; **; одиночная *; относительные пути)
+- **Breaking:** None (шаблоны без ** сохраняют семантику filepath.Match)
