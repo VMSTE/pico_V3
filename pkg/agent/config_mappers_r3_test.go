@@ -122,3 +122,32 @@ func TestMapMCPServerPolicies_PerServerACL(t *testing.T) {
 		t.Errorf("internal must inherit per_server_rpm=60, got %d", in.RPM)
 	}
 }
+
+// Р-2: mapRADConfig — дефолтные фразы доезжают, переопределения работают.
+func TestMapRADConfig_DefaultsCarryPhrases(t *testing.T) {
+	cfg := mapRADConfig(config.RADConfig{Enabled: true})
+	if len(cfg.PatternKeywordsRU) == 0 || len(cfg.PatternKeywordsEN) == 0 {
+		t.Error("default phrases must reach the detector (was the Р-2 bug)")
+	}
+	if cfg.DriftThreshold != 0.2 || cfg.BlockScore != 3 || cfg.WarnScore != 2 {
+		t.Errorf("default thresholds: %+v", cfg)
+	}
+}
+
+func TestMapRADConfig_Overrides(t *testing.T) {
+	cfg := mapRADConfig(config.RADConfig{
+		Enabled:           true,
+		BlockScore:        4, // warn-режим на первый прогон (D-AUDIT-53)
+		PatternKeywordsRU: []string{"кастомная фраза"},
+	})
+	if cfg.BlockScore != 4 {
+		t.Errorf("block_score override: %d", cfg.BlockScore)
+	}
+	if len(cfg.PatternKeywordsRU) != 1 ||
+		cfg.PatternKeywordsRU[0] != "кастомная фраза" {
+		t.Errorf("custom RU phrases: %v", cfg.PatternKeywordsRU)
+	}
+	if len(cfg.PatternKeywordsEN) == 0 {
+		t.Error("EN phrases must fall back to defaults")
+	}
+}

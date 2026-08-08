@@ -78,6 +78,11 @@ type RADConfig struct {
 	DriftThreshold float64 `json:"drift_threshold"`
 	BlockScore     int     `json:"block_score"`
 	WarnScore      int     `json:"warn_score"`
+
+	// PIKA-V3 (Р-2): фразы Pattern Detector. Пусто = дефолтные
+	// списки из pika.DefaultRADConfig() (8 RU + 8 EN, §3 Фактуры).
+	PatternKeywordsRU []string `json:"pattern_keywords_ru"`
+	PatternKeywordsEN []string `json:"pattern_keywords_en"`
 }
 
 // MCPSecurityConfig defines MCP protocol security settings.

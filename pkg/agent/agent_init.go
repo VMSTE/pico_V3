@@ -78,12 +78,8 @@ func NewAgentLoop(
 
 	// PIKA-V3: RAD pre-action security gate (D-136a, D-SEC-v2, TZ-v2-8i).
 	if cfg.Security.RAD.Enabled {
-		al.rad = pika.NewRAD(pika.RADConfig{
-			Enabled:        cfg.Security.RAD.Enabled,
-			DriftThreshold: cfg.Security.RAD.DriftThreshold,
-			BlockScore:     cfg.Security.RAD.BlockScore,
-			WarnScore:      cfg.Security.RAD.WarnScore,
-		})
+		// Р-2: фразы Pattern Detector доезжают до детектора (D-AUDIT-53).
+		al.rad = pika.NewRAD(mapRADConfig(cfg.Security.RAD))
 	}
 
 	// Register shared tools to all agents (now that al is created)

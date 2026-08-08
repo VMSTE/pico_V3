@@ -168,3 +168,28 @@ func pikaPromptPaths(workspace string) map[string]string {
 		"mcp_guard": filepath.Join(dir, "mcp_guard.md"),
 	}
 }
+
+// mapRADConfig строит pika.RADConfig из конфига (Р-2, D-AUDIT-53).
+// База — pika.DefaultRADConfig() (фразы Pattern Detector из §3 Фактуры);
+// числа и списки фраз переопределяются при наличии в конфиге.
+// Пустой список в конфиге = дефолтные фразы.
+func mapRADConfig(radCfg config.RADConfig) pika.RADConfig {
+	cfg := pika.DefaultRADConfig()
+	cfg.Enabled = radCfg.Enabled
+	if radCfg.DriftThreshold > 0 {
+		cfg.DriftThreshold = radCfg.DriftThreshold
+	}
+	if radCfg.BlockScore > 0 {
+		cfg.BlockScore = radCfg.BlockScore
+	}
+	if radCfg.WarnScore > 0 {
+		cfg.WarnScore = radCfg.WarnScore
+	}
+	if len(radCfg.PatternKeywordsRU) > 0 {
+		cfg.PatternKeywordsRU = radCfg.PatternKeywordsRU
+	}
+	if len(radCfg.PatternKeywordsEN) > 0 {
+		cfg.PatternKeywordsEN = radCfg.PatternKeywordsEN
+	}
+	return cfg
+}

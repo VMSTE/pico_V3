@@ -518,7 +518,19 @@
       "enabled": true,
       "drift_threshold": 0.2,
       "block_score": 3,
-      "warn_score": 2
+      "warn_score": 2,
+      "pattern_keywords_ru": [
+        "tool сказал", "tool вернул", "tool просит",
+        "инструкция из", "output содержит команду",
+        "вывод указывает", "нужно отправить на",
+        "следуя указаниям"
+      ],
+      "pattern_keywords_en": [
+        "tool said", "tool returned", "tool asks",
+        "as instructed by", "output contains command",
+        "need to send", "should execute",
+        "following instructions from"
+      ]
     },
     "mcp": {
       "taint_reset_policy": "explicit_only",
