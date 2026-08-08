@@ -751,19 +751,61 @@ func isExited(args map[string]any) bool {
 	return false
 }
 
-// isInCriticalPath checks whether target matches any critical_paths glob.
-// NOTE (Р-5): поверхностное сравнение — укрепление (filepath.Clean +
-// рекурсивные **) это шаг 3, отдельной веткой.
+// isInCriticalPath проверяет путь по шаблонам critical_paths.
+// Р-5 шаг 3: нормализация через filepath.Clean (обходы через ./ и ../
+// закрыты) и поддержка рекурсивного ** (любое число сегментов).
+// Относительные пути проверяются и с ведущим разделителем.
 func isInCriticalPath(target string, criticalPaths []string) bool {
 	if target == "" || len(criticalPaths) == 0 {
 		return false
 	}
+	cleaned := filepath.Clean(target)
+	candidates := []string{cleaned}
+	if !filepath.IsAbs(cleaned) {
+		candidates = append(candidates, "/"+cleaned)
+	}
 	for _, pattern := range criticalPaths {
-		if matched, err := filepath.Match(pattern, target); err == nil && matched {
-			return true
+		for _, cand := range candidates {
+			if globMatchPath(pattern, cand) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// globMatchPath сопоставляет путь с шаблоном: * и ? работают внутри
+// сегмента (как filepath.Match), ** — любое число сегментов, включая ноль.
+func globMatchPath(pattern, path string) bool {
+	patSegs := strings.Split(filepath.Clean(pattern), string(filepath.Separator))
+	pathSegs := strings.Split(filepath.Clean(path), string(filepath.Separator))
+	return matchPathSegments(patSegs, pathSegs)
+}
+
+// matchPathSegments — рекурсивное сопоставление сегментов пути.
+func matchPathSegments(pat, path []string) bool {
+	for len(pat) > 0 {
+		if pat[0] == "**" {
+			if len(pat) == 1 {
+				return true // ** в конце поглощает всё оставшееся
+			}
+			for i := 0; i <= len(path); i++ {
+				if matchPathSegments(pat[1:], path[i:]) {
+					return true
+				}
+			}
+			return false
+		}
+		if len(path) == 0 {
+			return false
+		}
+		if ok, err := filepath.Match(pat[0], path[0]); err != nil || !ok {
+			return false
+		}
+		pat = pat[1:]
+		path = path[1:]
+	}
+	return len(path) == 0
 }
 
 // extractPath extracts a file path from tool arguments.
