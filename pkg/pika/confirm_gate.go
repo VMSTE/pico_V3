@@ -308,8 +308,9 @@ func deriveEffects(tool string, args map[string]any) []opEffect {
 // каждый. Сцепленные команды (; && || |) не проскакивают мимо —
 // критерий готовности Р-5.
 func classifyCommand(cmd string) []opEffect {
-	var effects []opEffect
-	for _, seg := range splitShellChain(cmd) {
+	segments := splitShellChain(cmd)
+	effects := make([]opEffect, 0, len(segments))
+	for _, seg := range segments {
 		effects = append(effects, classifySegment(seg)...)
 	}
 	return dedupEffects(effects)

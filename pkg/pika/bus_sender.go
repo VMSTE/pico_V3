@@ -8,19 +8,13 @@ import (
 	"github.com/sipeed/picoclaw/pkg/config"
 )
 
-// OutboundPublisher — минимум, который BusSender требует от шины сообщений.
-// Р-5: добавлен InboundChan для живого SendConfirmation.
-// Удовлетворяют и *bus.MessageBus, и interfaces.MessageBus (паттерн
-// ClarifyBus, волна 3b).
-type OutboundPublisher interface {
-	PublishOutbound(ctx context.Context, msg bus.OutboundMessage) error
-	InboundChan() <-chan bus.InboundMessage
-}
-
 // BusSender adapts MessageBus to TelegramSender interface.
 // PIKA-V3: Universal sender — works with any connected messenger (TZ-v2-8i).
+// MB имеет тип ClarifyBus (clarify.go) — минимальный интерфейс шины
+// (PublishOutbound + InboundChan), общий с clarify: отдельный
+// идентичный интерфейс запрещён линтером (iface).
 type BusSender struct {
-	MB      OutboundPublisher
+	MB      ClarifyBus
 	Channel string // target channel name (e.g. "telegram", "discord")
 	ChatID  string // target chat/conversation ID
 }
@@ -94,7 +88,7 @@ func normalizeAnswer(text string) confirmAnswer {
 // Адрес — поля конфига health.reporting.manager_channel / manager_chat_id.
 // Адрес не настроен или шина отсутствует → nil (отчёты молча отключены,
 // все потребители TelegramSender nil-safe).
-func NewManagerSender(mb OutboundPublisher, cfg *config.Config) TelegramSender {
+func NewManagerSender(mb ClarifyBus, cfg *config.Config) TelegramSender {
 	if mb == nil || cfg == nil {
 		return nil
 	}
