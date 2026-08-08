@@ -259,7 +259,11 @@ func (h *llmToolRewriteHook) AfterLLM(
 
 func TestHookManager_BeforeLLMControlsSystemPromptMutation(t *testing.T) {
 	hm := NewHookManager(nil)
-	if err := hm.Mount(HookRegistration{Name: "rewrite-system", Source: HookSourceInProcess, Hook: &llmSystemRewriteHook{}}); err != nil {
+	if err := hm.Mount(HookRegistration{
+		Name:   "rewrite-system",
+		Source: HookSourceInProcess,
+		Hook:   &llmSystemRewriteHook{},
+	}); err != nil {
 		t.Fatalf("Mount() error = %v", err)
 	}
 
