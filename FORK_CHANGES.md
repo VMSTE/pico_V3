@@ -531,3 +531,25 @@ Each entry maps to a single wave/phase and its merged PR.
   - `config/config.example.json` — MOD: секция health.reporting с manager_channel/manager_chat_id
 - **Breaking:** None — без manager_channel/manager_chat_id всё работает как раньше; потребитель MCP-политик в проде пока отсутствует (оживёт в Р-5, deny-by-default)
 - **Verified without code change:** Reflector.SetDiagnostics(al.diag) уже вызывался в context_pika.go — пункт 3 задачи Р-3 закрыт фактом
+
+## Wave 17: Security config block (Р-5 step 1)
+
+### [2026-08-08] feat(config): real security block in example config — wave 17
+- **Задача:** Р-5 шаг 1 · **Решения:** D-AUDIT-51, D-AUDIT-52
+- **PR:** #63
+- **Files:**
+  - `config/config.example.json` — MOD: секция security (dangerous_ops с классами эффектов по D-AUDIT-52, critical_paths, rad, mcp — значения = проверенные дефолты)
+- **Breaking:** None (только пример конфига)
+
+## Wave 18: Confirm gate by effect + live SendConfirmation (Р-5 step 2)
+
+### [2026-08-08] feat(pika): confirm gate by effect + live SendConfirmation — wave 18
+- **Задача:** Р-5 шаг 2 · **Решения:** D-AUDIT-51, D-AUDIT-52
+- **PR:** pending
+- **Files:**
+  - `pkg/pika/confirm_gate.go` — MOD: гейт по эффекту. deriveEffects: exec-команда режется на сегменты (; && || | &, кавычки, env-префиксы, флаги со значениями), классификация compose/systemctl/git/curl/scp/редиректов; файловые инструменты → files.write. Вооружённый гейт (непустая таблица) + нераспознанный эффект → спрашиваем (deny-by-default к операциям). if_healthy + деградация → allow + уведомление менеджеру. Legacy tool.operation и рефлекс exited сохранены.
+  - `pkg/pika/bus_sender.go` — MOD: живой SendConfirmation (вопрос менеджеру → ожидание да/нет из его чата с таймаутом, паттерн clarify.go). OutboundPublisher += InboundChan.
+  - `pkg/pika/bus_sender_test.go` — MOD: старый тест под живую семантику (таймаут → отказ)
+  - `pkg/pika/confirm_gate_effect_test.go` — NEW: 14 тестов детектора + 4 теста диалога на реальной шине
+  - `pkg/agent/hook_pika.go` — MOD: фабрика confirm_gate получает NewManagerSender (health.reporting.manager_*)
+- **Breaking:** None по умолчанию: гейт разоружён при пустой ops-таблице, флаг pika.confirm_gate в примере выключен, без адреса менеджера — fail-closed. Активация = таблица + адрес + флаг.
