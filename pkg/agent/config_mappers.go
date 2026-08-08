@@ -104,10 +104,10 @@ func mapTelemetryConfig(health config.HealthConfig, budget config.BudgetConfig) 
 	}
 }
 
-// mapMCPServerPolicies строит политику по умолчанию для каждого включённого
-// MCP-сервера из конфига (Р-3, D-AUDIT-50). Per-server ACL (AllowedTools,
-// TrustLevel) — этап 5: пока каждый сервер получает deny-by-default политику
-// с общими дефолтами из security.mcp.
+// mapMCPServerPolicies строит политику для каждого включённого MCP-сервера
+// из конфига. База — дефолты security.mcp (Р-3, D-AUDIT-50, deny-by-default).
+// Р-5 шаг 5: per-server ACL из security.mcp.servers.<имя> переопределяет
+// дефолты; пустые поля ACL = наследование.
 func mapMCPServerPolicies(cfg *config.Config) []pika.MCPServerPolicy {
 	if cfg == nil {
 		return nil
@@ -117,19 +117,42 @@ func mapMCPServerPolicies(cfg *config.Config) []pika.MCPServerPolicy {
 		return nil
 	}
 	mcpCfg := cfg.Security.MCP
+	acl := mcpCfg.Servers
 	policies := make([]pika.MCPServerPolicy, 0, len(servers))
 	for name, srv := range servers {
 		if !srv.Enabled {
 			continue
 		}
-		policies = append(policies, pika.MCPServerPolicy{
+		pol := pika.MCPServerPolicy{
 			Name:           name,
 			TrustLevel:     "external",
 			Capabilities:   mcpCfg.DefaultCapabilities,
 			AllowPrompts:   mcpCfg.DefaultAllowPrompts,
 			AllowResources: mcpCfg.DefaultAllowResources,
 			RPM:            mcpCfg.PerServerRPM,
-		})
+		}
+		if o, ok := acl[name]; ok {
+			if o.TrustLevel != "" {
+				pol.TrustLevel = o.TrustLevel
+			}
+			pol.AllowedTools = o.AllowedTools
+			if o.AllowPrompts != nil {
+				pol.AllowPrompts = *o.AllowPrompts
+			}
+			if o.AllowResources != nil {
+				pol.AllowResources = *o.AllowResources
+			}
+			if o.MaxOutputBytes > 0 {
+				pol.MaxOutputBytes = o.MaxOutputBytes
+			}
+			if o.TaintPolicy != "" {
+				pol.TaintPolicy = o.TaintPolicy
+			}
+			if o.RPM > 0 {
+				pol.RPM = o.RPM
+			}
+		}
+		policies = append(policies, pol)
 	}
 	return policies
 }

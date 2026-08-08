@@ -531,7 +531,15 @@
         "elicitation": false
       },
       "default_allow_prompts": false,
-      "default_allow_resources": true
+      "default_allow_resources": true,
+      "servers": {
+        "github": {
+          "trust_level": "external",
+          "allowed_tools": ["get_issue", "list_issues"],
+          "allow_prompts": false,
+          "allow_resources": false
+        }
+      }
     }
   },
   "health": {
