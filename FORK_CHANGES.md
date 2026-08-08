@@ -576,3 +576,18 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/config/config_pika_test.go` — MOD: TestMCPServerACLConfig_JSON (парсинг, *bool-семантика)
   - `pkg/agent/config_mappers_r3_test.go` — MOD: TestMapMCPServerPolicies_PerServerACL (переопределения и наследование)
 - **Breaking:** None — пустой servers = поведение Р-3 (deny-by-default с дефолтами). Потребитель политик в проде появится отдельно; пока схема + маппер + тесты.
+
+## Wave 21: RAD keywords wiring (Р-2)
+
+### [2026-08-08] feat(pika): wire RAD pattern keywords to detector — wave 21
+- **Задача:** Р-2 · **Решение:** D-AUDIT-53
+- **PR:** pending
+- **Files:**
+  - `pkg/config/config_pika.go` — MOD: RADConfig += `pattern_keywords_ru`, `pattern_keywords_en` ([]string; пусто = дефолтные списки)
+  - `pkg/agent/config_mappers.go` — MOD: NEW mapRADConfig — база pika.DefaultRADConfig() (16 фраз), переопределения из конфига
+  - `pkg/agent/agent_init.go` — MOD: NewRAD получает mapRADConfig(cfg.Security.RAD) — фразы доезжают до детектора
+  - `config/config.example.json` — MOD: фразы видимы в security.rad
+  - `pkg/agent/config_mappers_r3_test.go` — MOD: 2 теста mapRADConfig (дефолты + переопределения)
+  - `pkg/pika/rad_config_test.go` — NEW: критерий 1 (фраза → 3 балла) + критерий 3 (ядовитые фразы без паники — QuoteMeta)
+- **Breaking:** None (пустые поля = дефолтные фразы; warn-режим на первый прогон — через security.rad.block_score: 4 в боевом конфиге, D-AUDIT-53)
+- **Verified:** deadcode больше не показывает rad.go:55 (DefaultRADConfig достижим)
