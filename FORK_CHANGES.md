@@ -1,3 +1,11 @@
+## Волна 34 — Деградация: живые уведомления менеджеру + честный блок в промпте (D-AUDIT-65) · 9 авг 2026
+
+- Обе цепочки были заглушены в фабрике: модель всегда «здорова» (AlwaysHealthyProvider), менеджер не узнаёт никогда (progress=nil). Таблица перенаправлений (degradationInstruction) и ProgressObserver с троттлингом уже существовали — не хватало проводов.
+- **pkg/agent/context_pika.go** — Telemetry получает живой ProgressNotifier (ProgressObserver поверх ManagerSender, адрес из health.reporting.manager_*); PikaContextManager получает telemetry как SystemStateProvider вместо заглушки.
+- Эффект: деградация компонента → менеджеру уведомление (D-HRL) + в промпте основной модели блок DEGRADATION с инструкцией (archivist → search_memory и т.д., D-92, ТЗ-v2-2b). Восстановление → NotifyRecovery + блок исчезает.
+- **Тест** TestDegradationBlock_FromTelemetry (NEW файл): пусто при здоровье → блок с search_memory при деградации archivist → пусто после recovery.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 33 — request_log пишет полные данные хода (D-AUDIT-64) · 9 авг 2026
 
 - RecordLLMCall писал только сессию/модель/токены/цену/задержку — аналитика tools/tasks была пуста по построению (tool_calls_requested>0 никогда).

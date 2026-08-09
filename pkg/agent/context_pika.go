@@ -48,7 +48,8 @@ func pikaContextManagerFactory(
 
 	trail := pika.NewTrail()
 	meta := pika.NewMeta()
-	sp := pika.NewAlwaysHealthyProvider()
+	// D-AUDIT-65: интерфейс — ниже заменяется на живую телеметрию
+	var sp pika.SystemStateProvider = pika.NewAlwaysHealthyProvider()
 	planStore := pika.NewActivePlanStore()
 
 	// PIKA-V3 wave 4: Get BotMemory from PikaSessionStore
@@ -110,10 +111,16 @@ func pikaContextManagerFactory(
 		al.botmem = botmem
 
 		// PIKA-V3: Create and wire Telemetry (budget, health, cost) (TZ-v2-9a).
+		// PIKA-V3 (D-AUDIT-65, D-HRL): живой отправитель уведомлений
+		// менеджеру о деградации/восстановлении компонентов (было nil).
+		var progressNotifier pika.ProgressNotifier
+		if ms := pika.NewManagerSender(al.bus, al.cfg); ms != nil {
+			progressNotifier = pika.ProgressObserverFactory(al.cfg, ms)
+		}
 		al.telemetry = pika.NewTelemetry(
 			mapTelemetryConfig(al.cfg.Health, al.cfg.ResolveAgentConfig("main").Budget),
 			botmem,
-			nil,
+			progressNotifier,
 		)
 
 		// PIKA-V3: Mount AutoEvent EventObserver hook (D-136a, TZ-v2-8i, F14).
@@ -147,6 +154,12 @@ func pikaContextManagerFactory(
 		)
 	}
 
+	// PIKA-V3 (D-AUDIT-65, D-92, ТЗ-v2-2b): реальное состояние системы
+	// вместо AlwaysHealthy-заглушки — блок DEGRADATION с таблицей
+	// перенаправлений появляется при реальной деградации.
+	if al.telemetry != nil {
+		sp = al.telemetry
+	}
 	cm := pika.NewPikaContextManager(
 		agent.Workspace, trail, meta, sp, arch,
 	)
