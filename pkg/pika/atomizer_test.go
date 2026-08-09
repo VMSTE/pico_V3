@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
@@ -570,5 +571,47 @@ func TestDefaultAtomizerConfig(t *testing.T) {
 	}
 	if cfg.Model != "background" {
 		t.Errorf("Model = %q, want background", cfg.Model)
+	}
+}
+
+// D-AUDIT-62: метрики считает Go из данных чанка, только свои ходы.
+func TestComputeTrajectoryMetrics(t *testing.T) {
+	msgs := []MessageRow{
+		{PikaSessionID: "1", Tokens: 100, Ts: time.UnixMilli(0)},
+		{PikaSessionID: "1", Tokens: 50, Ts: time.UnixMilli(1000)},
+		{PikaSessionID: "2", Tokens: 999, Ts: time.UnixMilli(2000)},
+	}
+	events := []EventRow{
+		{
+			PikaSessionID: "1", Outcome: "success", Ts: time.UnixMilli(500),
+			Tags: json.RawMessage(`["tool:exec","op:restart"]`),
+		},
+		{
+			PikaSessionID: "1", Outcome: "failure", Ts: time.UnixMilli(700),
+			Tags: json.RawMessage(`["tool:compose"]`),
+		},
+		{
+			PikaSessionID: "2", Outcome: "success", Ts: time.UnixMilli(1500),
+			Tags: json.RawMessage(`["tool:exec"]`),
+		},
+	}
+	tm := computeTrajectoryMetrics(msgs, events, []string{"1"})
+	if tm.TokensUsed != 150 {
+		t.Errorf("tokens = %d, want 150", tm.TokensUsed)
+	}
+	if tm.ActualCalls != 2 || tm.FailedCalls != 1 {
+		t.Errorf("calls = %d/%d, want 2/1", tm.ActualCalls, tm.FailedCalls)
+	}
+	if tm.DurationMs != 1000 {
+		t.Errorf("duration = %d, want 1000", tm.DurationMs)
+	}
+	if len(tm.ToolSequence) != 2 ||
+		tm.ToolSequence[0] != "exec" || tm.ToolSequence[1] != "compose" {
+		t.Errorf("sequence = %v", tm.ToolSequence)
+	}
+	// Ход без событий инструментов — нулевые вызовы, без паники
+	tm2 := computeTrajectoryMetrics(msgs, events, []string{"2"})
+	if tm2.ActualCalls != 1 || tm2.TokensUsed != 999 {
+		t.Errorf("turn2 = %d calls/%d tokens", tm2.ActualCalls, tm2.TokensUsed)
 	}
 }

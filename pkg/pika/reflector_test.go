@@ -654,3 +654,30 @@ func TestHandleReflectorJob(t *testing.T) {
 		t.Error("should not handle non-reflector job")
 	}
 }
+
+// D-AUDIT-62: метрики из history атома доезжают до входа LLM.
+func TestTrajectoryMetricsFromHistory(t *testing.T) {
+	hist := json.RawMessage(
+		`[{"v":1,"by":"atomizer","trajectory_metrics":{"actual_calls":2,"failed_calls":1,"tokens_used":150,"duration_ms":1000,"tool_sequence":["exec","compose"]}}]`,
+	)
+	tm := trajectoryMetricsFromHistory(hist)
+	if tm == nil {
+		t.Fatal("expected metrics")
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(tm, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	if parsed["tokens_used"].(float64) != 150 {
+		t.Errorf("tokens_used = %v", parsed["tokens_used"])
+	}
+	if trajectoryMetricsFromHistory(nil) != nil {
+		t.Error("nil history should give nil")
+	}
+	if trajectoryMetricsFromHistory(json.RawMessage(`[{"v":1]`)) != nil {
+		t.Error("history without metrics should give nil")
+	}
+	if trajectoryMetricsFromHistory(json.RawMessage(`not-json`)) != nil {
+		t.Error("broken history should give nil")
+	}
+}

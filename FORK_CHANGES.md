@@ -1,3 +1,12 @@
+## Волна 30 — Trajectory-метрики задач: пишет Go, читает Рефлексор (D-AUDIT-62) · 9 авг 2026
+
+- Блок EFFICIENCY в reflexor.md был мёртв дважды: метрики никто не писал (D-112 открыт), вход Рефлексора их не передавал. Решение: петля замкнута через Go, 0 участия модели в записи.
+- **pkg/pika/atomizer.go** — NEW TrajectoryMetrics + computeTrajectoryMetrics + toolNameFromEventTags: при вставке атома Go досчитывает метрики по source_turns из уже загруженного чанка (tokens_used из messages.tokens; actual_calls/failed_calls/tool_sequence из событий по тегу tool:<name>; duration_ms из ts) и пишет в history JSON атома. 0 изменений DDL, 0 новых запросов.
+- **pkg/pika/reflector.go** — reflectorAtomForLLM += trajectory_metrics; buildUserContent прикрепляет метрики из history (trajectoryMetricsFromHistory). Имена полей совпадают с промптом — reflexor.md не менялся, блок EFFICIENCY ожил.
+- **Тесты**: TestComputeTrajectoryMetrics (считалка, изоляция по ходам), TestTrajectoryMetricsFromHistory (доставка + битые входы).
+- D-146 частично отменён: анализ эффективности возвращён Рефлексору на Go-посчитанных данных; analytics.go (отчёты пользователю) не тронут.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 29 — Журнал событий починен целиком (D-AUDIT-59) · 9 авг 2026
 
 - Цепочка автособытий (D-54, D-SEC-MCP слой 5) была оборвана в трёх местах: адаптер передавал пустые операцию/сессию/ход (ключи никогда не совпадали, записано 0 событий за всю жизнь), обработчик собирался с пустыми таблицами, MCP-маппинги не вызывал никто.
