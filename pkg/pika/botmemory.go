@@ -1092,3 +1092,71 @@ func (bm *BotMemory) MarkAtomUsageToolAfter(
 	}
 	return nil
 }
+
+// MarkFeedbackSignal записывает сигнал фидбека в metadata последнего
+// user-сообщения сессии (D-85, D-AUDIT-67).
+func (bm *BotMemory) MarkFeedbackSignal(
+	ctx context.Context, chatID, signal string,
+) error {
+	_, err := bm.db.ExecContext(ctx,
+		`UPDATE messages
+		SET metadata = json_set(COALESCE(metadata,'{}'),'$.feedback_signal',?)
+		WHERE id = (
+			SELECT MAX(id) FROM messages WHERE chat_id=? AND role='user'
+		)`,
+		signal, chatID)
+	if err != nil {
+		return fmt.Errorf("pika/botmemory: mark feedback: %w", err)
+	}
+	return nil
+}
+
+// GetRecentFailEvents — fail-события за последние hours часов
+// (chatID "" = все сессии). Для режима investigate Рефлексора.
+func (bm *BotMemory) GetRecentFailEvents(
+	ctx context.Context, chatID string, hours, limit int,
+) ([]EventRow, error) {
+	if hours <= 0 {
+		hours = 24
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	q := `SELECT id,ts,type,summary,outcome,tags,data,chat_id,pika_session_id
+		FROM events WHERE outcome='fail' AND ts > datetime('now', ?)`
+	args := []any{fmt.Sprintf("-%d hours", hours)}
+	if chatID != "" {
+		q += ` AND chat_id=?`
+		args = append(args, chatID)
+	}
+	q += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := bm.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("pika/botmemory: fail events: %w", err)
+	}
+	defer rows.Close()
+	var out []EventRow
+	for rows.Next() {
+		var e EventRow
+		var ts string
+		var outcome, tags, data sql.NullString
+		if err := rows.Scan(
+			&e.ID, &ts, &e.Type, &e.Summary, &outcome,
+			&tags, &data, &e.ChatID, &e.PikaSessionID,
+		); err != nil {
+			continue
+		}
+		e.Ts = parseSQLiteTime(ts)
+		e.Outcome = outcome.String
+		if tags.Valid {
+			e.Tags = json.RawMessage(tags.String)
+		}
+		if data.Valid {
+			e.Data = json.RawMessage(data.String)
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}

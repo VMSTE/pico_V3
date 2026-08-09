@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -709,5 +710,74 @@ func TestMarkAtomUsageToolAfter(t *testing.T) {
 	).Scan(&cnt)
 	if cnt != 1 {
 		t.Errorf("turn 2 row should stay unmarked, got %d", cnt)
+	}
+}
+
+// D-AUDIT-67: сигнал фидбека пишется в metadata последнего user-сообщения.
+func TestMarkFeedbackSignal(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+	if _, err := bm.SaveMessage(ctx, MessageRow{
+		ChatID: "s1", PikaSessionID: "1", Role: "user", Content: "привет",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := bm.MarkFeedbackSignal(ctx, "s1", "wrong"); err != nil {
+		t.Fatal(err)
+	}
+	var meta string
+	if err := bm.db.QueryRow(
+		`SELECT COALESCE(metadata,'') FROM messages WHERE chat_id='s1'`,
+	).Scan(&meta); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(meta, `"feedback_signal":"wrong"`) {
+		t.Errorf("metadata = %q, want feedback_signal=wrong", meta)
+	}
+	// Другая сессия не затронута
+	if _, err := bm.SaveMessage(ctx, MessageRow{
+		ChatID: "s2", PikaSessionID: "1", Role: "user", Content: "ок",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := bm.MarkFeedbackSignal(ctx, "s2", "rephrase"); err != nil {
+		t.Fatal(err)
+	}
+	var meta1 string
+	bm.db.QueryRow(
+		`SELECT COALESCE(metadata,'') FROM messages WHERE chat_id='s1'`,
+	).Scan(&meta1)
+	if !strings.Contains(meta1, `"feedback_signal":"wrong"`) {
+		t.Error("s1 metadata changed by s2 mark")
+	}
+}
+
+// D-AUDIT-67: fail-события выбираются за окно времени.
+func TestGetRecentFailEvents(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+	if _, err := bm.SaveEvent(ctx, EventRow{
+		ChatID: "s1", PikaSessionID: "1", Type: "tool_exec",
+		Summary: "exec failed", Outcome: "fail",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bm.SaveEvent(ctx, EventRow{
+		ChatID: "s1", PikaSessionID: "1", Type: "tool_exec",
+		Summary: "exec ok", Outcome: "success",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	events, err := bm.GetRecentFailEvents(ctx, "s1", 24, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Summary != "exec failed" {
+		t.Errorf("got %+v, want 1 fail event", events)
+	}
+	// Все сессии
+	all, err := bm.GetRecentFailEvents(ctx, "", 24, 10)
+	if err != nil || len(all) != 1 {
+		t.Errorf("all-sessions: got %d, want 1", len(all))
 	}
 }
