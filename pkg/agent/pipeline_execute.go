@@ -617,6 +617,21 @@ toolLoop:
 			})
 		}
 
+		// PIKA-V3: связь «атомы подсказки → первый инструмент» (D-AUDIT-61).
+		// Пишет Go, детерминированно; ошибка записи не роняет ход.
+		if al.botmem != nil && toolResult != nil {
+			toolOutcome := "success"
+			if toolResult.IsError {
+				toolOutcome = "failure"
+			}
+			if aErr := al.botmem.MarkAtomUsageToolAfter(
+				ctx, ts.scope.turnID, toolName, toolOutcome,
+			); aErr != nil {
+				logger.WarnCF("agent", "atom_usage tool-after mark failed",
+					map[string]any{"tool": toolName, "error": aErr.Error()})
+			}
+		}
+
 		// PIKA-V3: TRAIL feed + loop detection safety net (D-136a, D-AUDIT-58).
 		// Прямой вызов, не хук: safety net нельзя отключить конфигом.
 		// Петля = тот же инструмент + те же аргументы + тот же результат
