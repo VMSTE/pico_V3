@@ -184,7 +184,12 @@ func (a *autoEventAdapter) OnEvent(ctx context.Context, evt Event) error {
 	if !ok {
 		return nil
 	}
-	return a.handler.HandleToolResult(ctx, p.Tool, "", p.IsError, "", "")
+	// D-AUDIT-59: настоящие операция/сессия/ход — до этого ключи
+	// никогда не совпадали с таблицей, журнал писал ноль строк.
+	return a.handler.HandleToolResult(
+		ctx, p.Tool, p.Operation, p.IsError,
+		evt.Meta.SessionKey, evt.Meta.TurnID,
+	)
 }
 
 var (

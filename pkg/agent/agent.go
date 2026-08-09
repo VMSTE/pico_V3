@@ -34,6 +34,7 @@ import (
 type AgentLoop struct {
 	rad         *pika.RAD                 // PIKA-V3: RAD (D-SEC-v2, TZ-v2-8i)
 	botmem      *pika.BotMemory           // PIKA-V3: BotMemory ref for RAD (TZ-v2-8i)
+	autoEvent   *pika.AutoEventHandler    // PIKA-V3: журнал событий (D-AUDIT-59)
 	telemetry   *pika.Telemetry           // PIKA-V3: Telemetry (budget+health+cost) (TZ-v2-9a)
 	diag        *pika.DiagnosticsEngine   // PIKA-V3: Diagnostics engine (TZ-v2-9b)
 	atomizer    *pika.Atomizer            // PIKA-V3: Atomizer pipeline (TZ-v2-9b)

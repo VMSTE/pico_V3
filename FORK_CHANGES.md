@@ -1,3 +1,16 @@
+## Волна 29 — Журнал событий починен целиком (D-AUDIT-59) · 9 авг 2026
+
+- Цепочка автособытий (D-54, D-SEC-MCP слой 5) была оборвана в трёх местах: адаптер передавал пустые операцию/сессию/ход (ключи никогда не совпадали, записано 0 событий за всю жизнь), обработчик собирался с пустыми таблицами, MCP-маппинги не вызывал никто.
+- **pkg/agent/events.go** — ToolExecEndPayload += Operation.
+- **pkg/agent/hook_pika.go** — адаптер передаёт настоящие операцию/сессию/ход (из payload + меты события).
+- **pkg/agent/agent.go** — поле autoEvent на AgentLoop.
+- **pkg/agent/context_pika.go** — обработчик собирается с живыми таблицами (BuildAutoEventConfig по включённым серверам), ValidateStartup при старте, handler в al.autoEvent.
+- **pkg/pika/autoevent.go** — NEW BuildAutoEventConfig: MCP-маппинги + классы + BRAIN-классы; без серверов mcp-классы не сиротеют.
+- **pkg/agent/pipeline_execute.go** — MCP-события mcp.<сервер>.call/call_fail/blocked прямым вызовом (сервер из имени <сервер>__<инструмент>); Operation заполняется в обоих emit-точках; помощники toolOperationArg/mcpServerFromToolName.
+- **pkg/agent/rad_gate.go** — rad.blocked/warning → rad_anomaly/rad_warning в журнале.
+- **pkg/pika/autoevent_test.go** — 2 сквозных теста: сборка без предупреждений + запись mcp_call/mcp_blocked/rad_anomaly в базу; табличный стиль (govet shadow чист).
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues, deadcode: MCPAutoEvent* достижимы.
+
 ## Волна 28 — Защита от зацикливания подключена (D-AUDIT-58) · 9 авг 2026
 
 - **pkg/agent/pipeline_execute.go** — после каждого выполнения инструмента: запись в TRAIL (имя + операция/превью аргументов + результат ≤100 симв. + OK + длительность) и прямой вызов `pika.CheckLoopDetection` — НЕ хук, safety net невыключаем (D-136a). Срабатывание → стоп хода (ToolControlBreak), сообщение в чат «Обнаружено зацикливание… loop_detected», уведомление менеджеру при настроенном health.reporting.manager_*. Критический факт из SCIP: Trail.Add до этого вызывался только из тестов — журнал создавался, но не кормился.

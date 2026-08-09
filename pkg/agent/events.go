@@ -194,6 +194,9 @@ type ToolExecStartPayload struct {
 
 // ToolExecEndPayload describes the outcome of a tool execution.
 type ToolExecEndPayload struct {
+	// PIKA-V3 (D-AUDIT-59): операция для журнала автособытий
+	// (args["operation"]; у базовых инструментов пусто).
+	Operation  string
 	Tool       string
 	Duration   time.Duration
 	ForLLMLen  int

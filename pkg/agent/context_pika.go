@@ -117,7 +117,22 @@ func pikaContextManagerFactory(
 		)
 
 		// PIKA-V3: Mount AutoEvent EventObserver hook (D-136a, TZ-v2-8i, F14).
-		autoHandler := pika.NewAutoEventHandler(botmem, nil, nil, pika.EventClasses{})
+		// D-AUDIT-59: живые таблицы — MCP-секция по включённым серверам
+		// + классы событий. До этого журнал работал с пустым блокнотом.
+		var autoServerNames []string
+		if al.cfg != nil {
+			for name, srv := range al.cfg.Tools.MCP.Servers {
+				if srv.Enabled {
+					autoServerNames = append(autoServerNames, name)
+				}
+			}
+		}
+		autoTM, autoTG, autoClasses := pika.BuildAutoEventConfig(autoServerNames)
+		autoHandler := pika.NewAutoEventHandler(botmem, autoTM, autoTG, autoClasses)
+		for _, w := range autoHandler.ValidateStartup() {
+			logger.WarnCF("pika", "autoevent startup validation: "+w, nil)
+		}
+		al.autoEvent = autoHandler
 		_ = al.MountHook(HookRegistration{
 			Name: "autoevent",
 			Hook: &autoEventAdapter{handler: autoHandler},

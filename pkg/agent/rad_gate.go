@@ -38,11 +38,23 @@ func radPreActionGate(
 		logger.WarnCF("rad", "RAD BLOCK", map[string]any{
 			"score": result.Score, "detectors": fmt.Sprint(result.Detectors), "reason": result.Reason,
 		})
+		// D-AUDIT-59: событие в журнал (rad.blocked → rad_anomaly, критичное).
+		if al.autoEvent != nil {
+			_ = al.autoEvent.HandleToolResult(
+				ctx, "rad", "blocked", true, sessionKey, "",
+			)
+		}
 		return true, result.Reason
 	case pika.RADWarning:
 		logger.WarnCF("rad", "RAD WARN", map[string]any{
 			"score": result.Score, "detectors": fmt.Sprint(result.Detectors), "reason": result.Reason,
 		})
+		// D-AUDIT-59: событие в журнал (rad.warning → rad_warning).
+		if al.autoEvent != nil {
+			_ = al.autoEvent.HandleToolResult(
+				ctx, "rad", "warning", false, sessionKey, "",
+			)
+		}
 	}
 	return false, ""
 }
