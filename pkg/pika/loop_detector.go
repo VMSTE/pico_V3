@@ -8,10 +8,16 @@ package pika
 // CheckLoopDetection checks the last N entries in TRAIL.
 // If N consecutive entries have identical tool call hashes
 // then a loop is detected.
-// threshold is typically cfg.LoopDetectionThreshold (default 3).
+// threshold — см. DefaultLoopDetectionThreshold.
 //
 // This is a safety net (D-136a) — always active, not disableable.
 // Called directly from pipeline after recording tool result.
+
+// DefaultLoopDetectionThreshold — сколько подряд одинаковых вызовов
+// (имя+операция+результат) считаются петлёй. Константа, не конфиг:
+// safety net нельзя отключить (D-136a, D-AUDIT-58).
+const DefaultLoopDetectionThreshold = 3
+
 func CheckLoopDetection(trail *Trail, threshold int) bool {
 	if trail == nil || threshold <= 0 {
 		return false
