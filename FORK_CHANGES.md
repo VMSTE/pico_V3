@@ -1,3 +1,14 @@
+## Волна 35 — Классификатор фидбека + режим «расследователь» Рефлексора (D-AUDIT-67) · 9 авг 2026
+
+- **pkg/pika/feedback.go** — NEW: ClassifyFeedback — детерминированный Go-классификатор негативного фидбека (таксономия Don-Yehiya et al. 2024): correction / wrong / clarification / rephrase (пересечение слов ≥0.6). 0 LLM.
+- **pkg/pika/botmemory.go** — NEW MarkFeedbackSignal (сигнал в messages.metadata последнего user-сообщения — закрывает D-85) + GetRecentFailEvents (fail-события за окно, все сессии или по сессии).
+- **pkg/pika/reflector.go** — NEW режим reflectorInvestigate: выборка свежих атомов + блок fail-событий за 24ч (buildInvestigateContext); TriggerInvestigation — event-driven фоновый запуск с троттлингом 10 мин/сессия (НЕ горячий путь — F9-5). Investigate на пустой базе — тихий выход.
+- **pkg/agent/pipeline_setup.go** — классификатор на персисте входящего сообщения: сигнал → metadata; wrong/correction/rephrase → TriggerInvestigation.
+- **pkg/agent/pipeline_execute.go** — ошибка инструмента → TriggerInvestigation.
+- **Тесты**: TestClassifyFeedback (8 кейсов), TestMarkFeedbackSignal (запись + изоляция сессий), TestGetRecentFailEvents, TestRunInvestigate_Empty, TestTriggerInvestigation_Throttle.
+- Петля correction rules (Diagnose/IncrementVerified/ReviewCRs + error-статусы спанов) — следующим PR.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 34 — Деградация: живые уведомления менеджеру + честный блок в промпте (D-AUDIT-65) · 9 авг 2026
 
 - Обе цепочки были заглушены в фабрике: модель всегда «здорова» (AlwaysHealthyProvider), менеджер не узнаёт никогда (progress=nil). Таблица перенаправлений (degradationInstruction) и ProgressObserver с троттлингом уже существовали — не хватало проводов.

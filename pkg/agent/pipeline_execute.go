@@ -632,6 +632,14 @@ toolLoop:
 			}
 		}
 
+		// PIKA-V3 (D-AUDIT-67): ошибка инструмента — триггер фонового
+		// расследования Рефлексора (event-driven, троттлинг внутри).
+		if toolResult.IsError && al.reflector != nil {
+			al.reflector.TriggerInvestigation(
+				ts.sessionKey, "tool_error:"+toolName,
+			)
+		}
+
 		// PIKA-V3: TRAIL feed + loop detection safety net (D-136a, D-AUDIT-58).
 		// Прямой вызов, не хук: safety net нельзя отключить конфигом.
 		// Петля = тот же инструмент + те же аргументы + тот же результат

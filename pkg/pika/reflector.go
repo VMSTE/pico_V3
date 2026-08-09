@@ -13,6 +13,8 @@ import (
 	"log"
 	"math"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/providers"
@@ -24,6 +26,8 @@ const (
 	ReflectorDaily   = "daily"
 	ReflectorWeekly  = "weekly"
 	ReflectorMonthly = "monthly"
+	// D-AUDIT-67: event-driven расследование (фон, НЕ горячий путь — F9-5)
+	reflectorInvestigate = "investigate"
 )
 
 // --- Configuration ---
@@ -122,6 +126,10 @@ type ReflectorPipeline struct {
 	telemetry *Telemetry
 	cfg       ReflectorConfig
 	diag      *DiagnosticsEngine
+
+	// D-AUDIT-67: троттлинг event-driven расследований по сессиям
+	investMu        sync.Mutex
+	lastInvestigate map[string]time.Time
 }
 
 // NewReflectorPipeline creates a new ReflectorPipeline.
@@ -139,11 +147,12 @@ func NewReflectorPipeline(
 		cfg.Model = "background"
 	}
 	return &ReflectorPipeline{
-		mem:       mem,
-		atomGen:   atomGen,
-		provider:  provider,
-		telemetry: telemetry,
-		cfg:       cfg,
+		mem:             mem,
+		atomGen:         atomGen,
+		provider:        provider,
+		telemetry:       telemetry,
+		cfg:             cfg,
+		lastInvestigate: make(map[string]time.Time),
 	}
 }
 
@@ -180,8 +189,16 @@ func (r *ReflectorPipeline) Run(
 		)
 	}
 	if len(atoms) == 0 {
-		// Empty knowledge_atoms → skip LLM call (normal)
-		return nil
+		if mode != reflectorInvestigate {
+			// Empty knowledge_atoms → skip LLM call (normal)
+			return nil
+		}
+		// D-AUDIT-67: investigate без новых атомов и без fail-событий
+		// — нечего расследовать
+		fe, feErr := r.mem.GetRecentFailEvents(ctx, "", 24, 10)
+		if feErr != nil || len(fe) == 0 {
+			return nil
+		}
 	}
 
 	// Step 2: Load prompt (hot-reload, 0 restart)
@@ -195,6 +212,9 @@ func (r *ReflectorPipeline) Run(
 
 	// Step 3: Build user content
 	userContent := r.buildUserContent(atoms, mode)
+	if mode == reflectorInvestigate {
+		userContent += r.buildInvestigateContext(ctx)
+	}
 
 	// Step 4: LLM call with retry on invalid JSON
 	output, err := r.callWithRetry(
@@ -257,6 +277,17 @@ func (r *ReflectorPipeline) fetchAtoms(
 			created_at, updated_at
 			FROM knowledge_atoms
 			WHERE created_at > datetime('now', '-7 days')
+			ORDER BY id ASC`
+	case reflectorInvestigate:
+		// D-AUDIT-67: свежие атомы (сутки) + fail-события добавляются
+		// к контексту в Run через buildInvestigateContext
+		query = `SELECT id, atom_id, chat_id, pika_session_id,
+			source_event_id, source_message_id, category,
+			summary, detail, confidence, polarity, verified,
+			tags, source_turns, history,
+			created_at, updated_at
+			FROM knowledge_atoms
+			WHERE created_at > datetime('now', '-1 day')
 			ORDER BY id ASC`
 	case ReflectorMonthly:
 		query = `SELECT id, atom_id, chat_id, pika_session_id,
@@ -975,4 +1006,53 @@ func trajectoryMetricsFromHistory(history json.RawMessage) json.RawMessage {
 		}
 	}
 	return nil
+}
+
+// TriggerInvestigation — event-driven запуск режима investigate
+// (D-AUDIT-67). Фоновая goroutine, троттлинг: не чаще 1 раза в 10 минут
+// на сессию. Не на горячем пути (F9-5).
+func (r *ReflectorPipeline) TriggerInvestigation(sessionKey, reason string) {
+	if !r.cfg.Enabled {
+		return
+	}
+	r.investMu.Lock()
+	last, ok := r.lastInvestigate[sessionKey]
+	if ok && time.Since(last) < 10*time.Minute {
+		r.investMu.Unlock()
+		return
+	}
+	r.lastInvestigate[sessionKey] = time.Now()
+	r.investMu.Unlock()
+	log.Printf("[reflector] investigate trigger: %s (%s)", sessionKey, reason)
+	go func() {
+		ctx, cancel := context.WithTimeout(
+			context.Background(), 3*time.Minute,
+		)
+		defer cancel()
+		if err := r.Run(ctx, reflectorInvestigate); err != nil {
+			log.Printf("[reflector] investigate run: %v", err)
+		}
+	}()
+}
+
+// buildInvestigateContext — fail-события за 24ч для режима investigate.
+func (r *ReflectorPipeline) buildInvestigateContext(
+	ctx context.Context,
+) string {
+	events, err := r.mem.GetRecentFailEvents(ctx, "", 24, 50)
+	if err != nil || len(events) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("\n\n## Режим INVESTIGATE (D-AUDIT-67)\n")
+	sb.WriteString(
+		"Фокус: причины сбоев и анти-паттерны. " +
+			"Fail-события за последние 24ч:\n",
+	)
+	for _, e := range events {
+		fmt.Fprintf(&sb, "- [%s] %s: %s (outcome=%s)\n",
+			e.Ts.Format("15:04"), e.Type,
+			truncateStr(e.Summary, 200), e.Outcome)
+	}
+	return sb.String()
 }

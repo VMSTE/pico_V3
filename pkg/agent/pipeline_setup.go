@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
@@ -147,6 +148,28 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 		}
 		ts.recordPersistedMessage(rootMsg)
 		ts.ingestMessage(ctx, p.al, rootMsg)
+
+		// PIKA-V3 (D-AUDIT-67, D-85): классификатор фидбека (Go, 0 LLM).
+		// Сигнал → messages.metadata; недовольство → фоновое расследование.
+		var prevUser string
+		if resp != nil {
+			for i := len(resp.History) - 1; i >= 0; i-- {
+				if resp.History[i].Role == "user" {
+					prevUser = resp.History[i].Content
+					break
+				}
+			}
+		}
+		if signal := pika.ClassifyFeedback(prevUser, ts.userMessage); signal != "" {
+			if p.al.botmem != nil {
+				_ = p.al.botmem.MarkFeedbackSignal(ctx, ts.sessionKey, signal)
+			}
+			if p.al.reflector != nil && signal != pika.FeedbackClarification {
+				p.al.reflector.TriggerInvestigation(
+					ts.sessionKey, "feedback:"+signal,
+				)
+			}
+		}
 	}
 
 	activeCandidates, activeModel, usedLight := p.al.selectCandidates(

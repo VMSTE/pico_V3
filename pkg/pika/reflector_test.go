@@ -681,3 +681,41 @@ func TestTrajectoryMetricsFromHistory(t *testing.T) {
 		t.Error("broken history should give nil")
 	}
 }
+
+// D-AUDIT-67: investigate на пустой базе — тихий выход, без LLM.
+func TestRunInvestigate_Empty(t *testing.T) {
+	bm := setupTestDB(t)
+	r := NewReflectorPipeline(
+		bm, nil, nil, nil, ReflectorConfig{Enabled: true},
+	)
+	if err := r.Run(context.Background(), reflectorInvestigate); err != nil {
+		t.Fatalf("investigate on empty db: %v", err)
+	}
+}
+
+// D-AUDIT-67: троттлинг триггера — 1 запуск на сессию за окно.
+func TestTriggerInvestigation_Throttle(t *testing.T) {
+	bm := setupTestDB(t)
+	r := NewReflectorPipeline(
+		bm, nil, nil, nil, ReflectorConfig{Enabled: true},
+	)
+	r.TriggerInvestigation("s1", "tool_error:exec")
+	r.TriggerInvestigation("s1", "tool_error:exec")
+	r.investMu.Lock()
+	n := len(r.lastInvestigate)
+	r.investMu.Unlock()
+	if n != 1 {
+		t.Errorf("throttle: %d entries, want 1", n)
+	}
+	// Отключённый рефлектор — не запускается
+	r2 := NewReflectorPipeline(
+		bm, nil, nil, nil, ReflectorConfig{Enabled: false},
+	)
+	r2.TriggerInvestigation("s1", "x")
+	r2.investMu.Lock()
+	n2 := len(r2.lastInvestigate)
+	r2.investMu.Unlock()
+	if n2 != 0 {
+		t.Error("disabled reflector should not trigger")
+	}
+}
