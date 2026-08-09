@@ -1,3 +1,12 @@
+## Волна 33 — request_log пишет полные данные хода (D-AUDIT-64) · 9 авг 2026
+
+- RecordLLMCall писал только сессию/модель/токены/цену/задержку — аналитика tools/tasks была пуста по построению (tool_calls_requested>0 никогда).
+- **pkg/pika/telemetry.go** — RecordLLMParams += ToolCallsRequested/ToolNames/ReasoningTokens; маппинг в RequestLogRow (tool_names — JSON-массив).
+- **pkg/agent/pipeline_llm.go** — конвейер передаёт счётчик и имена инструментов из exec.response.ToolCalls + reasoning-токены (оценка ~4 символа/токен, как в reasoning_log).
+- Скоуп честно урезан при реализации: task_tag/chain_id НЕ имеют производителя в коде (отдельная задача), tool_calls_success/failed считаются после выполнения (отдельный шаг).
+- **Тест** TestRecordLLMCall_FullFields: поля доезжают до request_log.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 32 — Писатель связей атом→инструмент (D-AUDIT-61) · 9 авг 2026
 
 - atom_usage.invoked_tool_after/invoked_tool_result никогда не писались в проде → QueryCorrelatedTools всегда пуст, эффективность атомов в отчётах = 0%. До PR #77 записи ещё и отклонялись по FK (чинено D-AUDIT-63).

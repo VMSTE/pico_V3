@@ -379,14 +379,23 @@ func (p *Pipeline) CallLLM(
 			tokIn = exec.response.Usage.PromptTokens
 			tokOut = exec.response.Usage.CompletionTokens
 		}
+		// PIKA-V3 (D-AUDIT-64): счётчик + имена инструментов и
+		// reasoning-токены (оценка ~4 символа/токен, как в reasoning_log).
+		var reqToolNames []string
+		for _, tc := range exec.response.ToolCalls {
+			reqToolNames = append(reqToolNames, tc.Name)
+		}
 		al.telemetry.RecordLLMCall(turnCtx, pika.RecordLLMParams{
-			ChatID:    ts.sessionKey,
-			Model:     exec.llmModel,
-			Direction: "chat",
-			Component: "main",
-			TokensIn:  tokIn,
-			TokensOut: tokOut,
-			Status:    "ok",
+			ChatID:             ts.sessionKey,
+			Model:              exec.llmModel,
+			Direction:          "chat",
+			Component:          "main",
+			TokensIn:           tokIn,
+			TokensOut:          tokOut,
+			Status:             "ok",
+			ToolCallsRequested: len(exec.response.ToolCalls),
+			ToolNames:          reqToolNames,
+			ReasoningTokens:    len(reasoningContent) / 4,
 		})
 	}
 	// PIKA-V3: Record reasoning -> reasoning_log (TZ-v2-9a)
