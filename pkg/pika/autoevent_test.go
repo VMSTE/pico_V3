@@ -391,3 +391,65 @@ func TestAutoEvent_BrainTools(t *testing.T) {
 		)
 	}
 }
+
+// D-AUDIT-59: полная сборка конфигурации + сквозная запись в базу.
+func TestBuildAutoEventConfig_EndToEnd(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := Migrate(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	bm, err := NewBotMemory(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bm.Close()
+
+	tm, tg, classes := BuildAutoEventConfig([]string{"srv"})
+	h := NewAutoEventHandler(bm, tm, tg, classes)
+
+	// Собранная конфигурация не должна давать предупреждений при старте.
+	if warns := h.ValidateStartup(); len(warns) != 0 {
+		t.Fatalf("unexpected startup warnings: %v", warns)
+	}
+
+	ctx := context.Background()
+	for _, tc := range []struct {
+		tool, op string
+		isErr    bool
+	}{
+		{"mcp.srv", "call", false},
+		{"mcp.srv", "blocked", true},
+		{"rad", "blocked", true},
+		{"unknown", "op", false}, // неизвестный ключ — тишина, не пишется
+	} {
+		if herr := h.HandleToolResult(ctx, tc.tool, tc.op, tc.isErr, "s1", "1"); herr != nil {
+			t.Fatal(herr)
+		}
+	}
+
+	evts, err := bm.GetEventsByTurns(ctx, "s1", []string{"1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evts) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(evts))
+	}
+	wantTypes := []string{"mcp_call", "mcp_blocked", "rad_anomaly"}
+	for i, w := range wantTypes {
+		if evts[i].Type != w {
+			t.Errorf("event %d type = %q, want %q", i, evts[i].Type, w)
+		}
+	}
+}
+
+// D-AUDIT-59: без MCP-серверов mcp-классы не висят сиротами.
+func TestBuildAutoEventConfig_NoServers(t *testing.T) {
+	tm, tg, classes := BuildAutoEventConfig(nil)
+	h := NewAutoEventHandler(nil, tm, tg, classes)
+	if warns := h.ValidateStartup(); len(warns) != 0 {
+		t.Fatalf("unexpected startup warnings: %v", warns)
+	}
+	_ = tg
+}

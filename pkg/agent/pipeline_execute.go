@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
@@ -204,6 +205,7 @@ toolLoop:
 							Tool:       toolName,
 							Duration:   toolDuration,
 							ForLLMLen:  len(contentForLLM),
+							Operation:  toolOperationArg(toolArgs),
 							ForUserLen: len(hookResult.ForUser),
 							IsError:    hookResult.IsError,
 							Async:      hookResult.Async,
@@ -457,13 +459,33 @@ toolLoop:
 			return ToolControlBreak
 		}
 
+		// PIKA-V3: журнал событий для MCP-вызовов (D-SEC-MCP слой 5,
+		// D-AUDIT-59). Ключи mcp.<сервер>.call/call_fail/blocked. Пишет Go.
+		mcpEventBlocked := false
+		mcpEventServer, isMCPTool := mcpServerFromToolName(toolName)
+
 		// PIKA-V3: MCP Security — sanitize MCP tool output (TZ-v2-9b).
 		if al.mcpSecurity != nil && toolResult != nil && !toolResult.IsError {
 			output, blocked := al.mcpSecurity.ProcessToolOutput(toolName, toolResult.ForLLM)
 			toolResult.ForLLM = output
 			if blocked {
 				toolResult.IsError = true
+				mcpEventBlocked = true
 			}
+		}
+
+		if isMCPTool && al.autoEvent != nil {
+			op := "call"
+			if toolResult.IsError {
+				op = "call_fail"
+			}
+			if mcpEventBlocked {
+				op = "blocked"
+			}
+			_ = al.autoEvent.HandleToolResult(
+				ctx, "mcp."+mcpEventServer, op, toolResult.IsError,
+				ts.sessionKey, ts.scope.turnID,
+			)
 		}
 		if al.hooks != nil {
 			toolResp, decision := al.hooks.AfterTool(turnCtx, &ToolResultHookResponse{
@@ -641,6 +663,7 @@ toolLoop:
 			ts.eventMeta("runTurn", "turn.tool.end"),
 			ToolExecEndPayload{
 				Tool:       toolName,
+				Operation:  toolOperationArg(toolArgs),
 				Duration:   toolDuration,
 				ForLLMLen:  len(contentForLLM),
 				ForUserLen: len(toolResult.ForUser),
@@ -794,4 +817,21 @@ toolLoop:
 		"agent_id": ts.agent.ID, "iteration": iteration,
 	})
 	return ToolControlContinue
+}
+
+// toolOperationArg возвращает args["operation"], если оно строковое.
+// Базовые инструменты такого аргумента не имеют — вернёт "".
+func toolOperationArg(args map[string]any) string {
+	op, _ := args["operation"].(string)
+	return op
+}
+
+// mcpServerFromToolName выделяет имя MCP-сервера из имени инструмента
+// вида "<сервер>__<инструмент>" (та же конвенция, что ProcessToolOutput).
+func mcpServerFromToolName(toolName string) (string, bool) {
+	parts := strings.SplitN(toolName, "__", 2)
+	if len(parts) != 2 || parts[0] == "" {
+		return "", false
+	}
+	return parts[0], true
 }

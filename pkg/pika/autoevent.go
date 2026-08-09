@@ -361,3 +361,29 @@ func (h *AutoEventHandler) insertEvent(
 	}
 	return nil
 }
+
+// BuildAutoEventConfig собирает полные таблицы автособытий: MCP-секция по
+// включённым серверам (D-SEC-MCP слой 5) + классы для BRAIN-событий.
+// До D-AUDIT-59 обработчик создавался с пустыми таблицами и писал ноль.
+func BuildAutoEventConfig(
+	serverNames []string,
+) (map[string]string, map[string][]string, EventClasses) {
+	tm, tg := MCPAutoEventMappings(serverNames)
+	classes := MCPAutoEventClasses()
+	// BRAIN-события (brainAutoEventMap): чтение — диагностика,
+	// неудачная запись — критично.
+	classes.Diagnostic["memory_search"] = true
+	classes.Diagnostic["registry_write"] = true
+	classes.Diagnostic["clarify_ask"] = true
+	classes.Diagnostic["clarify_ask_manager"] = true
+	classes.Critical["registry_write_fail"] = true
+	if len(serverNames) == 0 {
+		// Без MCP-серверов mcp-классы висят сиротами — убираем,
+		// ValidateStartup при старте должен молчать.
+		delete(classes.Critical, "mcp_blocked")
+		delete(classes.Critical, "mcp_sanitized")
+		delete(classes.Diagnostic, "mcp_call")
+		delete(classes.Diagnostic, "mcp_call_fail")
+	}
+	return tm, tg, classes
+}
