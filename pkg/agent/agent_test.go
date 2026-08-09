@@ -3837,7 +3837,9 @@ func TestProcessMessage_PublishesReasoningContentToReasoningChannel(t *testing.T
 		if outbound.Content != "thinking trace" {
 			t.Fatalf("reasoning content = %q, want %q", outbound.Content, "thinking trace")
 		}
-	case <-time.After(3 * time.Second):
+		// Worst-case budget only: the select wakes as soon as the async
+		// reasoning publish lands; 3s proved flaky on loaded CI runners.
+	case <-time.After(15 * time.Second):
 		t.Fatal("expected reasoning content to be published to reasoning channel")
 	}
 }
