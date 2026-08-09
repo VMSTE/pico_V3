@@ -594,6 +594,48 @@ toolLoop:
 				Timestamp: time.Now(),
 			})
 		}
+
+		// PIKA-V3: TRAIL feed + loop detection safety net (D-136a, D-AUDIT-58).
+		// Прямой вызов, не хук: safety net нельзя отключить конфигом.
+		// Петля = тот же инструмент + те же аргументы + тот же результат
+		// N раз подряд (урок Gemini CLI: та же команда с ДРУГИМ
+		// результатом — прогресс, не петля; Result входит в сравнение).
+		if adapter, ok := al.contextManager.(*pikaContextManagerAdapter); ok &&
+			adapter != nil && adapter.cm != nil {
+			if trail := adapter.cm.GetTrail(); trail != nil {
+				operation, _ := toolArgs["operation"].(string)
+				if operation == "" {
+					operation = utils.Truncate(string(argsJSON), 40)
+				}
+				trail.Add(pika.TrailEntry{
+					ToolName:   toolName,
+					Operation:  operation,
+					Result:     utils.Truncate(toolResult.ForLLM, 100),
+					OK:         !toolResult.IsError,
+					DurationMs: int(toolDuration.Milliseconds()),
+					Timestamp:  time.Now(),
+				})
+				if pika.CheckLoopDetection(trail, pika.DefaultLoopDetectionThreshold) {
+					logger.WarnCF("pipeline", "Loop detected, stopping turn",
+						map[string]any{
+							"agent_id":  ts.agent.ID,
+							"tool":      toolName,
+							"threshold": pika.DefaultLoopDetectionThreshold,
+						})
+					notice := fmt.Sprintf(
+						"⚠️ Обнаружено зацикливание: %s вызван %d раза подряд "+
+							"с одинаковым результатом. Ход остановлен (loop_detected).",
+						toolName, pika.DefaultLoopDetectionThreshold,
+					)
+					_ = al.bus.PublishOutbound(ctx, outboundMessageForTurn(ts, notice))
+					if sender := pika.NewManagerSender(al.bus, al.cfg); sender != nil {
+						_, _ = sender.SendMessage(ctx, notice)
+					}
+					exec.allResponsesHandled = true
+					return ToolControlBreak
+				}
+			}
+		}
 		al.emitEvent(
 			EventKindToolExecEnd,
 			ts.eventMeta("runTurn", "turn.tool.end"),

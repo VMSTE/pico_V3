@@ -96,6 +96,43 @@ func TestTrailLoopDetection(t *testing.T) {
 	}
 }
 
+// D-AUDIT-58: петля требует совпадения и результата тоже.
+func TestTrailLoopDetection_ResultAware(t *testing.T) {
+	// Та же команда, но разный результат — прогресс, не петля
+	// (урок Gemini CLI #11002).
+	tr := NewTrail()
+	for _, res := range []string{"fail 1", "fail 2", "fail 3"} {
+		tr.Add(TrailEntry{
+			ToolName: "exec", Operation: "run tests",
+			Result: res, OK: false,
+		})
+	}
+	if tr.HasLoopDetection(3) {
+		t.Error("different results must NOT be a loop")
+	}
+
+	// Полностью одинаковые (имя+операция+результат+статус) — петля.
+	tr2 := NewTrail()
+	for i := 0; i < 3; i++ {
+		tr2.Add(TrailEntry{
+			ToolName: "exec", Operation: "run tests",
+			Result: "timeout", OK: false,
+		})
+	}
+	if !tr2.HasLoopDetection(3) {
+		t.Error("identical name+op+result+ok must be a loop")
+	}
+
+	// Одинаковые имя+операция+результат, но разный OK — не петля.
+	tr3 := NewTrail()
+	tr3.Add(TrailEntry{ToolName: "exec", Operation: "op", Result: "r", OK: false})
+	tr3.Add(TrailEntry{ToolName: "exec", Operation: "op", Result: "r", OK: true})
+	tr3.Add(TrailEntry{ToolName: "exec", Operation: "op", Result: "r", OK: false})
+	if tr3.HasLoopDetection(3) {
+		t.Error("mixed OK status must NOT be a loop")
+	}
+}
+
 func TestTrailLoopDetectionEdgeCases(t *testing.T) {
 	tr := NewTrail()
 

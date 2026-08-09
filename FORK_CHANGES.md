@@ -1,3 +1,11 @@
+## Волна 28 — Защита от зацикливания подключена (D-AUDIT-58) · 9 авг 2026
+
+- **pkg/agent/pipeline_execute.go** — после каждого выполнения инструмента: запись в TRAIL (имя + операция/превью аргументов + результат ≤100 симв. + OK + длительность) и прямой вызов `pika.CheckLoopDetection` — НЕ хук, safety net невыключаем (D-136a). Срабатывание → стоп хода (ToolControlBreak), сообщение в чат «Обнаружено зацикливание… loop_detected», уведомление менеджеру при настроенном health.reporting.manager_*. Критический факт из SCIP: Trail.Add до этого вызывался только из тестов — журнал создавался, но не кормился.
+- **pkg/pika/trail_meta.go** — HasLoopDetection теперь сравнивает и Result+OK, не только имя+операцию (урок Gemini CLI #11002: та же команда с ДРУГИМ результатом = прогресс, не петля).
+- **pkg/pika/loop_detector.go** — новая константа DefaultLoopDetectionThreshold = 3 (конфига нет by design: нельзя отключить).
+- **pkg/pika/trail_meta_test.go** — новый тест TestTrailLoopDetection_ResultAware (разный результат → не петля; полное совпадение → петля; разный OK → не петля).
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN (pkg/pika + pkg/agent), golangci-lint 0 issues, deadcode: loop_detector.go больше не в списке (CheckLoopDetection достижим).
+
 ## Волна 27 — Закалка флаки-теста reasoning channel · 9 авг 2026
 
 - **pkg/agent/agent_test.go** — `TestProcessMessage_PublishesReasoningContentToReasoningChannel`: страховочный бюджет ожидания асинхронной публикации reasoning поднят с 3с до 15с (+ комментарий, что это worst-case, не фиксированный сон). Причина флака: select по каналу просыпается мгновенно при приходе сообщения, но 3с не хватило нагруженному CI-раннеру (падение на 3.10с, PR #71, подтверждено флаком рестартом). Других фиксированных ожиданий на шине в тестах нет — проверено поиском.

@@ -78,8 +78,10 @@ func (t *Trail) Entries() []TrailEntry {
 	return result
 }
 
-// HasLoopDetection checks the last `threshold` entries:
-// if all have the same ToolName+Operation → returns true.
+// HasLoopDetection checks the last `threshold` entries: all must share
+// ToolName+Operation+Result+OK.
+// D-AUDIT-58 (урок Gemini CLI #11002): та же команда с ДРУГИМ
+// результатом — прогресс, не петля. Поэтому Result и OK в сравнении.
 func (t *Trail) HasLoopDetection(threshold int) bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -100,6 +102,8 @@ func (t *Trail) HasLoopDetection(threshold int) bool {
 	newestIdx := (t.count - 1) % TrailSize
 	refName := t.entries[newestIdx].ToolName
 	refOp := t.entries[newestIdx].Operation
+	refResult := t.entries[newestIdx].Result
+	refOK := t.entries[newestIdx].OK
 
 	// Check last `threshold` entries from newest backwards
 	for i := 0; i < threshold; i++ {
@@ -108,7 +112,8 @@ func (t *Trail) HasLoopDetection(threshold int) bool {
 			idx += TrailSize
 		}
 		e := t.entries[idx]
-		if e.ToolName != refName || e.Operation != refOp {
+		if e.ToolName != refName || e.Operation != refOp ||
+			e.Result != refResult || e.OK != refOK {
 			return false
 		}
 	}
