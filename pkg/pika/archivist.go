@@ -237,10 +237,11 @@ func (a *Archivist) BuildPrompt(
 	a.currentSpanID = spanIDarchivist
 	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
 		SpanID: spanIDarchivist, Component: "archivist", Operation: "build_prompt",
-		StartedAt: time.Now(), Status: "running",
+		// D-AUDIT-63: DDL CHECK не знает "running" — пишем разрешённый статус.
+		StartedAt: time.Now(), Status: "ok",
 	})
 	defer func() {
-		_ = a.mem.CompleteSpan(ctx, spanIDarchivist, "done", nil, "", "")
+		_ = a.mem.CompleteSpan(ctx, spanIDarchivist, "ok", nil, "", "")
 	}()
 	// Apply timeout
 	tMs := a.cfg.BuildPromptTimeoutMs

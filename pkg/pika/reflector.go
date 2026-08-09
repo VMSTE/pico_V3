@@ -165,10 +165,11 @@ func (r *ReflectorPipeline) Run(
 	spanIDreflector := fmt.Sprintf("span_reflector_%d", time.Now().UnixNano())
 	_ = r.mem.InsertSpan(ctx, TraceSpanRow{
 		SpanID: spanIDreflector, Component: "reflector", Operation: "run",
-		StartedAt: time.Now(), Status: "running",
+		// D-AUDIT-63: DDL CHECK не знает "running" — пишем разрешённый статус.
+		StartedAt: time.Now(), Status: "ok",
 	})
 	defer func() {
-		_ = r.mem.CompleteSpan(ctx, spanIDreflector, "done", nil, "", "")
+		_ = r.mem.CompleteSpan(ctx, spanIDreflector, "ok", nil, "", "")
 	}()
 	// Step 1: Data prep — fetch knowledge_atoms by scope
 	atoms, err := r.fetchAtoms(ctx, mode)
