@@ -145,10 +145,11 @@ func (a *Atomizer) Run(
 	spanIDatomizer := fmt.Sprintf("span_atomizer_%d", time.Now().UnixNano())
 	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
 		SpanID: spanIDatomizer, Component: "atomizer", Operation: "run",
-		StartedAt: time.Now(), Status: "running",
+		// D-AUDIT-63: DDL CHECK не знает "running" — пишем разрешённый статус.
+		StartedAt: time.Now(), Status: "ok",
 	})
 	defer func() {
-		_ = a.mem.CompleteSpan(ctx, spanIDatomizer, "done", nil, "", "")
+		_ = a.mem.CompleteSpan(ctx, spanIDatomizer, "ok", nil, "", "")
 	}()
 	// Step 1: Select chunk (oldest turns <= budget)
 	turnIDs, err := a.mem.GetOldestPikaSessionIDs(

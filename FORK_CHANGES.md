@@ -1,3 +1,10 @@
+## Волна 31 — Корневой фикс пустых trace_spans и atom_usage (D-AUDIT-63) · 9 авг 2026
+
+- DDL trace_spans разрешает status IN (ok,error,timeout,cancelled), а писатели слали "running"/"done" → SQLite молча отклонял INSERT (fire-and-forget). Каскад по FK: atom_usage.archivarius_span_id → atom_usage тоже отклонялся. В бою обе таблицы были пусты.
+- **archivist.go / atomizer.go / reflector.go** — статусы приведены к разрешённым: старт "ok", завершение "ok" (захват "error" при сбоях — отдельным шагом).
+- **botmemory_test.go** — регрессионный TestSpanStatusRegression: запись, error-статус легален, duration_ms вычисляется.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 30 — Trajectory-метрики задач: пишет Go, читает Рефлексор (D-AUDIT-62) · 9 авг 2026
 
 - Блок EFFICIENCY в reflexor.md был мёртв дважды: метрики никто не писал (D-112 открыт), вход Рефлексора их не передавал. Решение: петля замкнута через Go, 0 участия модели в записи.

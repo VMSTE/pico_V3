@@ -618,3 +618,36 @@ func TestQueryCorrelatedTools(t *testing.T) {
 		t.Errorf("second tool = %q, want compose", results[1].ToolName)
 	}
 }
+
+// D-AUDIT-63: регрессия — прод-писатели используют только разрешённые статусы.
+func TestSpanStatusRegression(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+	if err := bm.InsertSpan(ctx, TraceSpanRow{
+		SpanID: "sp-err", TraceID: "t1", Component: "reflexor",
+		Operation: "run", StartedAt: parseSQLiteTime("2025-06-01 12:00:00"),
+		Status: "ok",
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := bm.CompleteSpan(ctx, "sp-err", "error", nil, "timeout", "boom"); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	var status, errType string
+	var duration int64
+	if err := bm.db.QueryRow(
+		`SELECT status, COALESCE(error_type,''), COALESCE(duration_ms,-1)
+		FROM trace_spans WHERE span_id='sp-err'`,
+	).Scan(&status, &errType, &duration); err != nil {
+		t.Fatal(err)
+	}
+	if status != "error" {
+		t.Errorf("status = %q, want error", status)
+	}
+	if errType != "timeout" {
+		t.Errorf("error_type = %q, want timeout", errType)
+	}
+	if duration < 0 {
+		t.Error("duration_ms should be computed after completion")
+	}
+}
