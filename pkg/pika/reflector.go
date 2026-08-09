@@ -107,6 +107,8 @@ type reflectorAtomForLLM struct {
 	Polarity   string   `json:"polarity"`
 	Confidence float64  `json:"confidence"`
 	CreatedAt  string   `json:"created_at"`
+	// PIKA-V3 (D-AUDIT-62): метрики задачи, пишет Атомизатор (Go-only)
+	TrajectoryMetrics json.RawMessage `json:"trajectory_metrics,omitempty"`
 }
 
 // --- Reflector Pipeline ---
@@ -339,6 +341,10 @@ func (r *ReflectorPipeline) buildUserContent(
 			Polarity:   a.Polarity,
 			Confidence: a.Confidence,
 			CreatedAt:  a.CreatedAt.Format(time.RFC3339),
+		}
+		// PIKA-V3 (D-AUDIT-62): прикрепляем trajectory-метрики из history
+		if tm := trajectoryMetricsFromHistory(a.History); tm != nil {
+			item.TrajectoryMetrics = tm
 		}
 		if a.Tags != nil {
 			var tags []string
@@ -951,3 +957,21 @@ For every finding, verify evidence is sufficient.
 - Runbooks: only when 3+ negative atoms share tags.
 </rules>
 `
+
+// trajectoryMetricsFromHistory достаёт trajectory_metrics из history
+// JSON атома (первый элемент с этим полем). D-AUDIT-62.
+func trajectoryMetricsFromHistory(history json.RawMessage) json.RawMessage {
+	if len(history) == 0 {
+		return nil
+	}
+	var entries []map[string]json.RawMessage
+	if err := json.Unmarshal(history, &entries); err != nil {
+		return nil
+	}
+	for _, e := range entries {
+		if tm, ok := e["trajectory_metrics"]; ok {
+			return tm
+		}
+	}
+	return nil
+}

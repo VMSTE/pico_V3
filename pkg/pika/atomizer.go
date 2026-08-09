@@ -215,7 +215,7 @@ func (a *Atomizer) Run(
 	// Step 7: INSERT atoms
 	for _, atom := range output.Atoms {
 		if insErr := a.insertAtom(
-			ctx, sessionID, atom, tagsByTurn,
+			ctx, sessionID, atom, tagsByTurn, msgs, events,
 		); insErr != nil {
 			a.reportFailure()
 			return fmt.Errorf(
@@ -377,6 +377,8 @@ func (a *Atomizer) insertAtom(
 	sessionID string,
 	atom AtomLLMOutput,
 	tagsByTurn map[string][]string,
+	msgs []MessageRow,
+	events []EventRow,
 ) error {
 	atomID, err := a.atomGen.Next(ctx, atom.Category)
 	if err != nil {
@@ -394,6 +396,17 @@ func (a *Atomizer) insertAtom(
 
 	stJSON, _ := json.Marshal(atom.SourceTurns)
 
+	// PIKA-V3 (D-AUDIT-62): trajectory-метрики задачи считает Go
+	// из уже загруженного чанка. Модель не участвует, 0 запросов к базе.
+	tm := computeTrajectoryMetrics(msgs, events, atom.SourceTurns)
+	histJSON, _ := json.Marshal([]map[string]any{{
+		"v":                  1,
+		"confidence":         atom.Confidence,
+		"by":                 "atomizer",
+		"at":                 time.Now().UTC().Format(time.RFC3339),
+		"trajectory_metrics": tm,
+	}})
+
 	row := KnowledgeAtomRow{
 		AtomID:        atomID,
 		ChatID:        sessionID,
@@ -405,6 +418,7 @@ func (a *Atomizer) insertAtom(
 		Polarity:      atom.Polarity,
 		Tags:          tagsJSON,
 		SourceTurns:   stJSON,
+		History:       histJSON,
 	}
 	return a.mem.InsertAtom(ctx, row)
 }
@@ -682,3 +696,78 @@ Return a single JSON object (no surrounding text):
   ]
 }
 `
+
+// TrajectoryMetrics — метрики выполнения задачи (D-AUDIT-62).
+// Имена полей совпадают с промптом Рефлексора (reflexor.md, EFFICIENCY).
+type TrajectoryMetrics struct {
+	ActualCalls  int      `json:"actual_calls"`
+	FailedCalls  int      `json:"failed_calls"`
+	TokensUsed   int      `json:"tokens_used"`
+	DurationMs   int64    `json:"duration_ms"`
+	ToolSequence []string `json:"tool_sequence,omitempty"`
+}
+
+// computeTrajectoryMetrics считает метрики по source_turns атома
+// из уже загруженного чанка: токены из messages, вызовы инструментов
+// из событий (тег tool:<name> пишет autoEvent), длительность из ts.
+func computeTrajectoryMetrics(
+	msgs []MessageRow, events []EventRow, turns []string,
+) TrajectoryMetrics {
+	turnSet := make(map[string]bool, len(turns))
+	for _, t := range turns {
+		turnSet[t] = true
+	}
+	var tm TrajectoryMetrics
+	var minTs, maxTs time.Time
+	trackTs := func(ts time.Time) {
+		if minTs.IsZero() || ts.Before(minTs) {
+			minTs = ts
+		}
+		if ts.After(maxTs) {
+			maxTs = ts
+		}
+	}
+	for _, m := range msgs {
+		if !turnSet[m.PikaSessionID] {
+			continue
+		}
+		tm.TokensUsed += m.Tokens
+		trackTs(m.Ts)
+	}
+	for _, e := range events {
+		if !turnSet[e.PikaSessionID] {
+			continue
+		}
+		trackTs(e.Ts)
+		name := toolNameFromEventTags(e.Tags)
+		if name == "" {
+			continue
+		}
+		tm.ActualCalls++
+		tm.ToolSequence = append(tm.ToolSequence, name)
+		if e.Outcome == "failure" || e.Outcome == "error" {
+			tm.FailedCalls++
+		}
+	}
+	if !minTs.IsZero() {
+		tm.DurationMs = maxTs.Sub(minTs).Milliseconds()
+	}
+	return tm
+}
+
+// toolNameFromEventTags достаёт имя инструмента из тега "tool:<name>".
+func toolNameFromEventTags(tags json.RawMessage) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	var list []string
+	if err := json.Unmarshal(tags, &list); err != nil {
+		return ""
+	}
+	for _, t := range list {
+		if strings.HasPrefix(t, "tool:") {
+			return strings.TrimPrefix(t, "tool:")
+		}
+	}
+	return ""
+}
