@@ -651,3 +651,63 @@ func TestSpanStatusRegression(t *testing.T) {
 		t.Error("duration_ms should be computed after completion")
 	}
 }
+
+// D-AUDIT-61: конвейер дописывает invoked_tool_after/result.
+func TestMarkAtomUsageToolAfter(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+	bm.InsertAtom(ctx, KnowledgeAtomRow{
+		AtomID: "P-1", ChatID: "s1", PikaSessionID: "1",
+		Category: "pattern", Summary: "test",
+		Confidence: 0.8, Polarity: "positive",
+	})
+	// Атом попал в бриф хода 1 (как пишет Архивариус — tool-поля пустые)
+	if err := bm.InsertAtomUsage(ctx,
+		"P-1", "trace-1", "1", "BRIEF", nil, nil, "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	// Конвейер: после брифа вызвали exec успешно
+	if err := bm.MarkAtomUsageToolAfter(ctx, "1", "exec", "success"); err != nil {
+		t.Fatal(err)
+	}
+	var tool, result string
+	if err := bm.db.QueryRow(
+		`SELECT invoked_tool_after, invoked_tool_result
+		FROM atom_usage WHERE atom_id='P-1'`,
+	).Scan(&tool, &result); err != nil {
+		t.Fatal(err)
+	}
+	if tool != "exec" || result != "success" {
+		t.Errorf("got %q/%q, want exec/success", tool, result)
+	}
+	// Первая запись побеждает: второй инструмент не перезаписывает
+	if err := bm.MarkAtomUsageToolAfter(ctx, "1", "compose", "failure"); err != nil {
+		t.Fatal(err)
+	}
+	if err := bm.db.QueryRow(
+		`SELECT invoked_tool_after FROM atom_usage WHERE atom_id='P-1'`,
+	).Scan(&tool); err != nil {
+		t.Fatal(err)
+	}
+	if tool != "exec" {
+		t.Errorf("first-write-wins violated: got %q", tool)
+	}
+	// Другой ход не затрагивается
+	bm.InsertAtom(ctx, KnowledgeAtomRow{
+		AtomID: "P-2", ChatID: "s1", PikaSessionID: "2",
+		Category: "pattern", Summary: "test2",
+		Confidence: 0.7, Polarity: "neutral",
+	})
+	if err := bm.InsertAtomUsage(ctx,
+		"P-2", "trace-2", "2", "BRIEF", nil, nil, "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	var cnt int
+	bm.db.QueryRow(
+		`SELECT COUNT(*) FROM atom_usage
+		WHERE pika_session_id='2' AND invoked_tool_after IS NULL`,
+	).Scan(&cnt)
+	if cnt != 1 {
+		t.Errorf("turn 2 row should stay unmarked, got %d", cnt)
+	}
+}

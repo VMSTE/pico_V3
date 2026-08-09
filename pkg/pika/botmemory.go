@@ -1068,3 +1068,27 @@ func (bm *BotMemory) QueryCorrelatedTools(
 	}
 	return out, rows.Err()
 }
+
+// MarkAtomUsageToolAfter связывает атомы подсказки текущего хода с первым
+// инструментом, вызванным после них (D-AUDIT-61). Первая запись побеждает:
+// уже размеченные строки не трогаем (invoked_tool_after IS NULL).
+// scope: последний бриф этого хода (последний trace_id для pika_session_id).
+func (bm *BotMemory) MarkAtomUsageToolAfter(
+	ctx context.Context, turnID, toolName, result string,
+) error {
+	_, err := bm.db.ExecContext(ctx,
+		`UPDATE atom_usage
+		SET invoked_tool_after=?, invoked_tool_result=?
+		WHERE invoked_tool_after IS NULL
+		AND pika_session_id=?
+		AND trace_id = (
+			SELECT trace_id FROM atom_usage
+			WHERE pika_session_id=?
+			ORDER BY created_at DESC, usage_id DESC LIMIT 1
+		)`,
+		toolName, result, turnID, turnID)
+	if err != nil {
+		return fmt.Errorf("pika/botmemory: mark tool after: %w", err)
+	}
+	return nil
+}

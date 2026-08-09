@@ -1,3 +1,11 @@
+## Волна 32 — Писатель связей атом→инструмент (D-AUDIT-61) · 9 авг 2026
+
+- atom_usage.invoked_tool_after/invoked_tool_result никогда не писались в проде → QueryCorrelatedTools всегда пуст, эффективность атомов в отчётах = 0%. До PR #77 записи ещё и отклонялись по FK (чинено D-AUDIT-63).
+- **pkg/pika/botmemory.go** — NEW MarkAtomUsageToolAfter: UPDATE atom_usage текущего хода (последний trace_id для pika_session_id), первая запись побеждает (IS NULL).
+- **pkg/agent/pipeline_execute.go** — вызов после каждого выполнения инструмента, рядом со скользящим окном здоровья. Пишет Go; ошибка записи логируется, ход не роняется.
+- **Тест** TestMarkAtomUsageToolAfter: запись, first-write-wins, изоляция по ходам.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 31 — Корневой фикс пустых trace_spans и atom_usage (D-AUDIT-63) · 9 авг 2026
 
 - DDL trace_spans разрешает status IN (ok,error,timeout,cancelled), а писатели слали "running"/"done" → SQLite молча отклонял INSERT (fire-and-forget). Каскад по FK: atom_usage.archivarius_span_id → atom_usage тоже отклонялся. В бою обе таблицы были пусты.
