@@ -1,3 +1,12 @@
+## Волна 36 — Петля диагностики спец-агентов замкнута (D-AUDIT-67, ч.2) · 9 авг 2026
+
+- Спаны спец-агентов получили trace_id и честный error-статус: раньше закрывались «ok» даже при сбое. Дефер через context.WithoutCancel (у Архивариуса ctx с таймаутом, defer идёт после cancel).
+- **archivist.go / atomizer.go / reflector.go** — defer: сбой → Diagnose (атрибуция по трассе + поиск повторов за 7д) → при 2+ похожих CreateCR (уведомление менеджеру); успех → IncrementVerified (правила копят подтверждения → статус verified).
+- **reflector.go** — weekly-режим вызывает ReviewCRs: проверенные 7+ дней → promoted, активные 30+ дней без подтверждений → deactivated.
+- Исправление в ходе работы: компонент спана Рефлексора называется reflector, CR-компонент — reflexor (validCRComponents); разведены.
+- **Тест** TestDiagnose_ErrorSpanAttribution: 3 error-спана → атрибуция + SuggestedCR.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 35 — Классификатор фидбека + режим «расследователь» Рефлексора (D-AUDIT-67) · 9 авг 2026
 
 - **pkg/pika/feedback.go** — NEW: ClassifyFeedback — детерминированный Go-классификатор негативного фидбека (таксономия Don-Yehiya et al. 2024): correction / wrong / clarification / rephrase (пересечение слов ≥0.6). 0 LLM.

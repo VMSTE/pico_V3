@@ -222,7 +222,7 @@ func (a *Archivist) GetCachedFocus() *Focus {
 func (a *Archivist) BuildPrompt(
 	ctx context.Context,
 	input ArchivistInput,
-) (*ArchivistResult, error) {
+) (_ *ArchivistResult, retErr error) {
 	// Fast path: return cached result (~80% of calls)
 	a.mu.RLock()
 	cached := a.lastResult
@@ -233,15 +233,32 @@ func (a *Archivist) BuildPrompt(
 
 	// PIKA-V3: Trace span (TZ-v2-9a block 3)
 	spanIDarchivist := fmt.Sprintf("span_archivist_%d", time.Now().UnixNano())
+	traceIDarchivist := fmt.Sprintf("trace_archivist_%d", time.Now().UnixNano())
 	a.currentSessionKey = input.SessionKey
 	a.currentSpanID = spanIDarchivist
 	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
-		SpanID: spanIDarchivist, Component: "archivist", Operation: "build_prompt",
+		SpanID: spanIDarchivist, TraceID: traceIDarchivist, Component: "archivist", Operation: "build_prompt",
 		// D-AUDIT-63: DDL CHECK не знает "running" — пишем разрешённый статус.
 		StartedAt: time.Now(), Status: "ok",
 	})
 	defer func() {
-		_ = a.mem.CompleteSpan(ctx, spanIDarchivist, "ok", nil, "", "")
+		// D-AUDIT-67: error-статус спана + петля диагностики.
+		// WithoutCancel: у archivist ctx уже с таймаутом, а defer идёт после cancel.
+		dctx := context.WithoutCancel(ctx)
+		st, errType, errMsg := "ok", "", ""
+		if retErr != nil {
+			st, errType, errMsg = "error", "agentic", retErr.Error()
+		}
+		_ = a.mem.CompleteSpan(dctx, spanIDarchivist, st, nil, errType, errMsg)
+		if a.diag != nil {
+			if retErr != nil {
+				if res := a.diag.Diagnose(dctx, traceIDarchivist); res.SuggestedCR != nil {
+					_ = a.diag.CreateCR(dctx, "archivist", *res.SuggestedCR)
+				}
+			} else {
+				_ = a.diag.IncrementVerified(dctx, "archivist")
+			}
+		}
 	}()
 	// Apply timeout
 	tMs := a.cfg.BuildPromptTimeoutMs

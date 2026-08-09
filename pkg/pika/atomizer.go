@@ -140,16 +140,33 @@ func (a *Atomizer) ShouldAtomize(
 // parse+validate -> INSERT atoms -> archive+delete (1 txn).
 func (a *Atomizer) Run(
 	ctx context.Context, sessionID string,
-) error {
+) (retErr error) {
 	// PIKA-V3: Trace span (TZ-v2-9a block 3)
 	spanIDatomizer := fmt.Sprintf("span_atomizer_%d", time.Now().UnixNano())
+	traceIDatomizer := fmt.Sprintf("trace_atomizer_%d", time.Now().UnixNano())
 	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
-		SpanID: spanIDatomizer, Component: "atomizer", Operation: "run",
+		SpanID: spanIDatomizer, TraceID: traceIDatomizer, Component: "atomizer", Operation: "run",
 		// D-AUDIT-63: DDL CHECK не знает "running" — пишем разрешённый статус.
 		StartedAt: time.Now(), Status: "ok",
 	})
 	defer func() {
-		_ = a.mem.CompleteSpan(ctx, spanIDatomizer, "ok", nil, "", "")
+		// D-AUDIT-67: error-статус спана + петля диагностики.
+		// WithoutCancel: у archivist ctx уже с таймаутом, а defer идёт после cancel.
+		dctx := context.WithoutCancel(ctx)
+		st, errType, errMsg := "ok", "", ""
+		if retErr != nil {
+			st, errType, errMsg = "error", "agentic", retErr.Error()
+		}
+		_ = a.mem.CompleteSpan(dctx, spanIDatomizer, st, nil, errType, errMsg)
+		if a.diag != nil {
+			if retErr != nil {
+				if res := a.diag.Diagnose(dctx, traceIDatomizer); res.SuggestedCR != nil {
+					_ = a.diag.CreateCR(dctx, "atomizer", *res.SuggestedCR)
+				}
+			} else {
+				_ = a.diag.IncrementVerified(dctx, "atomizer")
+			}
+		}
 	}()
 	// Step 1: Select chunk (oldest turns <= budget)
 	turnIDs, err := a.mem.GetOldestPikaSessionIDs(
