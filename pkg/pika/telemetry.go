@@ -6,6 +6,7 @@ package pika
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -39,6 +40,11 @@ type RecordLLMParams struct {
 	LatencyMs int64
 	Status    string
 	Error     string
+
+	// PIKA-V3 (D-AUDIT-64): полные данные хода для request_log
+	ToolCallsRequested int
+	ToolNames          []string
+	ReasoningTokens    int
 }
 
 // TelemetryConfig holds configuration for the Telemetry subsystem.
@@ -137,15 +143,23 @@ func (t *Telemetry) RecordLLMCall(
 		return
 	}
 	row := RequestLogRow{
-		ChatID:           p.ChatID,
-		Direction:        p.Direction,
-		Component:        p.Component,
-		Model:            p.Model,
-		PromptTokens:     p.TokensIn,
-		CompletionTokens: p.TokensOut,
-		CostUSD:          p.CostUSD,
-		ResponseMs:       int(p.LatencyMs),
-		Error:            p.Error,
+		ChatID:             p.ChatID,
+		Direction:          p.Direction,
+		Component:          p.Component,
+		Model:              p.Model,
+		PromptTokens:       p.TokensIn,
+		CompletionTokens:   p.TokensOut,
+		CostUSD:            p.CostUSD,
+		ResponseMs:         int(p.LatencyMs),
+		Error:              p.Error,
+		ToolCallsRequested: p.ToolCallsRequested,
+		ReasoningTokens:    p.ReasoningTokens,
+	}
+	// D-AUDIT-64: имена инструментов — JSON-массив строк
+	if len(p.ToolNames) > 0 {
+		if nj, jErr := json.Marshal(p.ToolNames); jErr == nil {
+			row.ToolNames = nj
+		}
 	}
 	// Fire-and-forget: telemetry should not block pipeline.
 	_, _ = t.botmem.InsertRequestLog(ctx, row)

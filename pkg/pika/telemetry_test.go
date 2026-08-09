@@ -328,3 +328,39 @@ func TestGetSystemState_Offline(t *testing.T) {
 		t.Errorf("status = %q, want offline", state.Status)
 	}
 }
+
+// D-AUDIT-64: request_log получает инструменты и reasoning-токены хода.
+func TestRecordLLMCall_FullFields(t *testing.T) {
+	bm := setupTelemetryDB(t)
+	tel := NewTelemetry(defaultTelemetryCfg(), bm, nil)
+
+	tel.RecordLLMCall(context.Background(), RecordLLMParams{
+		ChatID:             "s1",
+		Model:              "main",
+		Direction:          "chat",
+		Component:          "main",
+		TokensIn:           100,
+		TokensOut:          50,
+		ToolCallsRequested: 2,
+		ToolNames:          []string{"exec", "compose"},
+		ReasoningTokens:    40,
+	})
+
+	var requested, reasoning int
+	var names string
+	if err := bm.db.QueryRow(
+		`SELECT tool_calls_requested, reasoning_tokens, COALESCE(tool_names,'')
+		FROM request_log`,
+	).Scan(&requested, &reasoning, &names); err != nil {
+		t.Fatal(err)
+	}
+	if requested != 2 {
+		t.Errorf("tool_calls_requested = %d, want 2", requested)
+	}
+	if reasoning != 40 {
+		t.Errorf("reasoning_tokens = %d, want 40", reasoning)
+	}
+	if names != `["exec","compose"]` {
+		t.Errorf("tool_names = %q, want exec+compose JSON", names)
+	}
+}
