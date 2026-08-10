@@ -41,11 +41,19 @@ func NewAlwaysHealthyProvider() SystemStateProvider {
 // ArchivistInput holds the parameters for an Archivist
 // BuildPrompt call.
 type ArchivistInput struct {
-	SessionKey   string
-	Message      string
-	IsRotation   bool
-	ToolCatalog  []string // PIKA-V3: available tool names
-	SkillCatalog []string // PIKA-V3: available skill names
+	SessionKey string
+	Message    string
+	IsRotation bool
+	// D-AUDIT-60: каталог ТУЛОВ ОСНОВНОЙ МОДЕЛИ (не Архивариуса —
+	// его собственный search_context сюда не входит).
+	// Формат: GetSummaries() → "- `name` — description".
+	ToolCatalog  []string
+	SkillCatalog []string // available skill names
+	// D-AUDIT-60: активный план хода (пусто, если нет)
+	ActivePlan string
+	// D-AUDIT-60: лимиты рекомендаций из ToolSelectionConfig
+	MaxRecommendedTools  int
+	MaxRecommendedSkills int
 }
 
 // Focus represents the current task focus — 6 fields (D-55).

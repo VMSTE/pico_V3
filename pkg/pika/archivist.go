@@ -401,6 +401,15 @@ func (a *Archivist) buildUserMessage(
 		"max_tool_calls: %d\n", a.cfg.MaxToolCalls)
 	fmt.Fprintf(&sb,
 		"is_rotation: %v\n", input.IsRotation)
+	// D-AUDIT-60: честный вход — сессия, план, лимиты рекомендаций
+	fmt.Fprintf(&sb, "session_id: %s\n", input.SessionKey)
+	if input.ActivePlan != "" {
+		fmt.Fprintf(&sb, "active_plan: %s\n", input.ActivePlan)
+	}
+	fmt.Fprintf(&sb,
+		"max_recommended_tools: %d\n", input.MaxRecommendedTools)
+	fmt.Fprintf(&sb,
+		"max_recommended_skills: %d\n", input.MaxRecommendedSkills)
 	// PIKA-V3: inject tool/skill catalogs for LLM selection
 	if len(input.ToolCatalog) > 0 {
 		fmt.Fprintf(&sb,
