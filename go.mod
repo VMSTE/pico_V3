@@ -26,7 +26,7 @@ require (
 	github.com/minio/selfupdate v0.6.0
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/muesli/termenv v0.16.0
-	github.com/mymmrac/telego v1.8.0
+	github.com/mymmrac/telego v1.10.0
 	github.com/open-dingtalk/dingtalk-stream-sdk-go v0.9.1
 	github.com/openai/openai-go/v3 v3.22.0
 	github.com/pion/rtp v1.10.1
@@ -46,7 +46,7 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mautrix v0.27.0
-	modernc.org/sqlite v1.48.2
+	modernc.org/sqlite v1.53.0
 	rsc.io/qr v0.2.0
 )
 
@@ -104,16 +104,16 @@ require (
 	go.opentelemetry.io/otel/metric v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
-	modernc.org/libc v1.72.3 // indirect
+	modernc.org/libc v1.73.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
 
 require (
-	github.com/andybalholm/brotli v1.2.0 // indirect
+	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
-	github.com/bytedance/sonic v1.15.0 // indirect
-	github.com/bytedance/sonic/loader v0.5.0 // indirect
+	github.com/bytedance/sonic v1.15.2 // indirect
+	github.com/bytedance/sonic/loader v0.5.1 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/github/copilot-sdk/go v0.2.0
 	github.com/go-resty/resty/v2 v2.17.1 // indirect
@@ -128,7 +128,7 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.69.0 // indirect
+	github.com/valyala/fasthttp v1.71.0 // indirect
 	github.com/valyala/fastjson v1.6.10 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/arch v0.24.0 // indirect

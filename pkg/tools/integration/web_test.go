@@ -980,6 +980,10 @@ func TestIsPrivateOrRestrictedIP_Table(t *testing.T) {
 		{"2001:0000:4136:e378:8000:63bf:f5ff:fffe", true, "Teredo with client 10.0.0.1 (private)"},
 		{"2001:0000:4136:e378:8000:63bf:f7f6:fefe", false, "Teredo with client 8.9.1.1 (public)"},
 		{"2607:f8b0:4004:800::200e", false, "public IPv6 (Google)"},
+		{"::5efe:127.0.0.1", true, "ISATAP with embedded loopback"},
+		{"::5efe:10.1.2.3", true, "ISATAP with embedded private"},
+		{"2001:db8::5efe:192.168.1.1", true, "ISATAP 2001:db8 with embedded private"},
+		{"::5efe:8.8.8.8", false, "ISATAP with embedded public"},
 	}
 
 	for _, tt := range tests {
