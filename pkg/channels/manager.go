@@ -87,6 +87,7 @@ type Manager struct {
 	config        *config.Config
 	mediaStore    media.MediaStore
 	dispatchTask  *asyncTask
+	dispatchWg    sync.WaitGroup // ждём выхода диспетчеров до закрытия очередей
 	mux           *dynamicServeMux
 	httpServer    *http.Server
 	httpListeners []net.Listener
@@ -807,11 +808,12 @@ func (m *Manager) StartAll(ctx context.Context) error {
 	}
 
 	// Start the dispatcher that reads from the bus and routes to workers
-	go m.dispatchOutbound(dispatchCtx)
-	go m.dispatchOutboundMedia(dispatchCtx)
+	m.dispatchWg.Add(3)
+	go func() { defer m.dispatchWg.Done(); m.dispatchOutbound(dispatchCtx) }()
+	go func() { defer m.dispatchWg.Done(); m.dispatchOutboundMedia(dispatchCtx) }()
 
 	// Start the TTL janitor that cleans up stale typing/placeholder entries
-	go m.runTTLJanitor(dispatchCtx)
+	go func() { defer m.dispatchWg.Done(); m.runTTLJanitor(dispatchCtx) }()
 
 	// Start shared HTTP server if configured
 	if m.httpServer != nil {
@@ -876,6 +878,10 @@ func (m *Manager) StopAll(ctx context.Context) error {
 		m.dispatchTask.cancel()
 		m.dispatchTask = nil
 	}
+	// Диспетчер мог выбрать ветку send одновременно с cancel
+	// (select случаен) — ждём его полного выхода, иначе close(w.queue)
+	// ниже гоняется с w.queue <- msg (closechan vs chansend).
+	m.dispatchWg.Wait()
 
 	// Close all worker queues and wait for them to drain
 	for _, w := range m.workers {
