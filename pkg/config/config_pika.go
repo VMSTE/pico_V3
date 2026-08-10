@@ -112,6 +112,8 @@ type MCPServerACLConfig struct {
 	MaxOutputBytes int      `json:"max_output_bytes"`
 	TaintPolicy    string   `json:"taint_policy"`
 	RPM            int      `json:"rpm"` // 0 → per_server_rpm
+	// D-AUDIT-71: тулы, вручную разрешённые founder'ом после Guard-блокировки.
+	GuardExcept []string `json:"guard_except"`
 }
 
 // HealthConfig defines system health monitoring settings. PIKA-V3.

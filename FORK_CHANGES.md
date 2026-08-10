@@ -1,3 +1,15 @@
+## Волна 40 — Guard-аудит описаний MCP-тулов при регистрации + уведомление founder'а (D-AUDIT-71) · 10 авг 2026
+
+- После ACL (волна 38, проверка ИМЕНИ) добавлена вторая половина ворот: Guard читает ОПИСАНИЯ разрешённых тулов при подключении сервера (startup_audit, один пакетный вызов на сервер). Вердикт malicious/dangerous → тул не регистрируется.
+- **Уведомление founder'а**: блокировка шлёт сообщение менеджеру через NewManagerSender — сервер, тулы, причины + инструкция. Молча не блокируем.
+- **Решение за пользователем**: новое поле конфига security.mcp.servers.<имя>.guard_except — founder вручную разрешает тул после прочтения; при следующем старте регистрируется.
+- Fail-open при ошибке Guard (warn-лог): упавший сторож не останавливает систему.
+- **pkg/agent/mcp_guard_gate.go** (NEW) — mcpToolSummary, auditToolDefsWithGuard (ядро), applyGuardExcept, guardAuditMCPTools, notifyManagerGuardBlock. Использует продовый guardLLMCaller из волны 39.
+- **pkg/config/config_pika.go** — MCPServerACLConfig += GuardExcept.
+- **Тесты**: block-with-reason, fail-open на битом ответе Guard, override через guard_except, уведомление менеджеру через bus.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, RACE-TARGETED-GREEN, lint 0 issues.
+- Итог темы инструментов: все три источника (MCP, скиллы, хуки) проходят полный конвейер аудита.
+
 ## Волна 39 — Контентный аудит скиллов через MCP Guard (D-AUDIT-70) · 10 авг 2026
 
 - Скиллы проходили только модерацию реестра (IsMalwareBlocked) — содержимое SKILL.md никто не читал. Теперь при установке текст скилла уходит Guard-агенту (startup_audit, скилл как pseudo-tool), вердикт malicious/dangerous → каталог удаляется, бэкап восстанавливается. Fail-open при ошибке аудита (доступность > ложные блоки).
