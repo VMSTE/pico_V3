@@ -20,6 +20,14 @@ const defaultSkillRegistryName = "github"
 
 var persistInstalledSkillOriginMeta = writeOriginMeta
 
+// SkillAuditor проверяет содержимое SKILL.md до завершения установки
+// (D-AUDIT-70). blocked=true → установка отменяется, файлы удаляются.
+// Интерфейс живёт здесь, а реализация в pkg/agent: pkg/pika импортирует
+// pkg/tools, поэтому обратный импорт дал бы цикл.
+type SkillAuditor interface {
+	AuditSkill(ctx context.Context, slug, skillMarkdown string) (blocked bool, reason string)
+}
+
 // InstallSkillTool allows the LLM agent to install skills from registries.
 // It shares the same RegistryManager that FindSkillsTool uses,
 // so all registries configured in config are available for installation.
@@ -27,6 +35,7 @@ type InstallSkillTool struct {
 	registryMgr *skills.RegistryManager
 	workspace   string
 	mu          sync.Mutex
+	auditor     SkillAuditor
 }
 
 // NewInstallSkillTool creates a new InstallSkillTool.
@@ -38,6 +47,22 @@ func NewInstallSkillTool(registryMgr *skills.RegistryManager, workspace string) 
 		workspace:   workspace,
 		mu:          sync.Mutex{},
 	}
+}
+
+// SetAuditor подключает контентный аудит скиллов (D-AUDIT-70).
+// nil = аудит выключен.
+func (t *InstallSkillTool) SetAuditor(a SkillAuditor) {
+	t.auditor = a
+}
+
+// truncateSkillAuditContent ограничивает размер SKILL.md для аудита.
+func truncateSkillAuditContent(s string) string {
+	const maxRunes = 8000
+	r := []rune(s)
+	if len(r) > maxRunes {
+		return string(r[:maxRunes])
+	}
+	return s
 }
 
 func (t *InstallSkillTool) Name() string {
@@ -205,6 +230,17 @@ func (t *InstallSkillTool) Execute(ctx context.Context, args map[string]any) *To
 		}
 		restorePreviousInstall()
 		return ErrorResult(fmt.Sprintf("failed to install %q: registry archive is not a valid skill", slug))
+	}
+
+	// D-AUDIT-70: контентный аудит SKILL.md через Guard до завершения.
+	if t.auditor != nil {
+		if data, readErr := os.ReadFile(filepath.Join(targetDir, "SKILL.md")); readErr == nil {
+			if blocked, reason := t.auditor.AuditSkill(ctx, slug, truncateSkillAuditContent(string(data))); blocked {
+				_ = os.RemoveAll(targetDir)
+				restorePreviousInstall()
+				return ErrorResult(fmt.Sprintf("skill %q blocked by security audit: %s", slug, reason))
+			}
+		}
 	}
 
 	// Write origin metadata.
