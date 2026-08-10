@@ -129,6 +129,17 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 			serverCfg := al.cfg.Tools.MCP.Servers[serverName]
 			registerAsHidden := serverIsDeferred(al.cfg.Tools.MCP.Discovery.Enabled, serverCfg)
 
+			// D-AUDIT-69: единые ворота — per-server ACL ДО регистрации.
+			// deny-by-default: сервер без записи в security.mcp.servers
+			// не регистрирует ни одного тула.
+			aclNames := make([]string, 0, len(conn.Tools))
+			for _, t := range conn.Tools {
+				if t != nil {
+					aclNames = append(aclNames, t.Name)
+				}
+			}
+			aclAllow := al.gatedMCPToolNames(serverName, aclNames)
+
 			for _, agentID := range agentIDs {
 				agent, ok := al.registry.GetAgent(agentID)
 				if !ok || agent.ContextBuilder == nil {
@@ -136,7 +147,7 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 				}
 				if err := agent.ContextBuilder.RegisterPromptContributor(mcpServerPromptContributor{
 					serverName: serverName,
-					toolCount:  len(conn.Tools),
+					toolCount:  len(aclAllow),
 					deferred:   registerAsHidden,
 				}); err != nil {
 					logger.WarnCF("agent", "Failed to register MCP prompt contributor",
@@ -149,6 +160,9 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 			}
 
 			for _, tool := range conn.Tools {
+				if !aclAllow[tool.Name] {
+					continue
+				}
 				for _, agentID := range agentIDs {
 					agent, ok := al.registry.GetAgent(agentID)
 					if !ok {

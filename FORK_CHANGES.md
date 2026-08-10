@@ -1,3 +1,13 @@
+## Волна 38 — Единые ворота аудита тулов (D-AUDIT-69) · 10 авг 2026
+
+- Все источники тулов теперь проходят проверку до попадания в реестр.
+- **pkg/agent/agent_mcp.go** — per-server ACL (FilterAllowedTools, deny-by-default D-SEC-v3) вызывается ДО Register/RegisterHidden: сервер без записи в security.mcp.servers не получает ни одного тула, warning с подсказкой в логе. Раньше conn.Tools регистрировались напрямую — ACL был мёртвым кодом.
+- **pkg/agent/mcp_acl_gate.go** (NEW) — gatedMCPToolNames: ACL-фильтр по именам; pipeline строится из конфига на месте, если не была подключена ранее.
+- **pkg/agent/pipeline_execute.go** — respond-хук для ЗАРЕГИСТРИРОВАННОГО тула теперь требует ApproveTool (раньше hook мог подменить результат любого тула, включая exec, в обход одобрения). Плагинные незарегистрированные тулы — поведение без изменений.
+- **Скиллы** — без изменений: модерация реестра (IsMalwareBlocked) уже работает на всех 3 путях установки.
+- **Тесты**: TestGatedMCPToolNames_ACL (allowlist + deny unknown), TestAgentLoop_HookRespond_RegisteredToolRequiresApproval.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, RACE-TARGETED-GREEN, lint 0 issues.
+
 ## Волна 37 — Честный вход Архивариуса (D-AUDIT-60) · 10 авг 2026
 
 - Архивариус выбирал инструменты вслепую: каталог приходил только именами (agent.Tools.List()), а промпт требовал «сопоставь задачу с description». Хуже: сообщение пользователя вообще не передавалось (Message пуст) — бриф строился без вопроса.
