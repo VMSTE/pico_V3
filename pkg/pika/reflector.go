@@ -165,20 +165,36 @@ func (p *ReflectorPipeline) SetDiagnostics(d *DiagnosticsEngine) {
 // Pipeline: data prep → LLM → parse → apply.
 func (r *ReflectorPipeline) Run(
 	ctx context.Context, mode string,
-) error {
+) (retErr error) {
 	if !r.cfg.Enabled {
 		return nil
 	}
 
 	// PIKA-V3: Trace span (TZ-v2-9a block 3)
 	spanIDreflector := fmt.Sprintf("span_reflector_%d", time.Now().UnixNano())
+	traceIDreflector := fmt.Sprintf("trace_reflector_%d", time.Now().UnixNano())
 	_ = r.mem.InsertSpan(ctx, TraceSpanRow{
-		SpanID: spanIDreflector, Component: "reflector", Operation: "run",
+		SpanID: spanIDreflector, TraceID: traceIDreflector, Component: "reflector", Operation: "run",
 		// D-AUDIT-63: DDL CHECK не знает "running" — пишем разрешённый статус.
 		StartedAt: time.Now(), Status: "ok",
 	})
 	defer func() {
-		_ = r.mem.CompleteSpan(ctx, spanIDreflector, "ok", nil, "", "")
+		// D-AUDIT-67: error-статус спана + петля диагностики.
+		dctx := context.WithoutCancel(ctx)
+		st, errType, errMsg := "ok", "", ""
+		if retErr != nil {
+			st, errType, errMsg = "error", "pipeline", retErr.Error()
+		}
+		_ = r.mem.CompleteSpan(dctx, spanIDreflector, st, nil, errType, errMsg)
+		if r.diag != nil {
+			if retErr != nil {
+				if res := r.diag.Diagnose(dctx, traceIDreflector); res.SuggestedCR != nil {
+					_ = r.diag.CreateCR(dctx, "reflexor", *res.SuggestedCR)
+				}
+			} else {
+				_ = r.diag.IncrementVerified(dctx, "reflexor")
+			}
+		}
 	}()
 	// Step 1: Data prep — fetch knowledge_atoms by scope
 	atoms, err := r.fetchAtoms(ctx, mode)
@@ -235,6 +251,13 @@ func (r *ReflectorPipeline) Run(
 		return fmt.Errorf(
 			"pika/reflector: apply: %w", applyErr,
 		)
+	}
+
+	// D-AUDIT-67: weekly — пересмотр correction rules (промоушн/деактивация)
+	if mode == ReflectorWeekly && r.diag != nil {
+		if actions := r.diag.ReviewCRs(ctx); len(actions) > 0 {
+			log.Printf("[reflector] CR review: %d actions", len(actions))
+		}
 	}
 
 	// Step 6: Monthly-specific tasks

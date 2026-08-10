@@ -540,9 +540,9 @@ func (ts *turnState) Finish(isHardAbort bool) {
 
 	// Close pendingResults channel exactly once
 	ts.closeOnce.Do(func() {
-		if ts.pendingResults != nil {
-			close(ts.pendingResults)
-		}
+		// pendingResults НЕ закрываем: deliverSubTurnResult может
+		// отправлять результат параллельно (гонка close/send).
+		// Читатели — неблокирующий poll (select+default), GC заберёт канал.
 		ts.mu.Lock()
 		if ts.finishedChan == nil {
 			ts.finishedChan = make(chan struct{})

@@ -860,9 +860,11 @@ func TestAgentLoop_Steering_DirectResponseContinuesWithQueuedMessage(t *testing.
 	}
 
 	sessionKey := session.BuildMainSessionKey(routing.DefaultAgentID)
+	firstStartedCh := make(chan struct{})
+	releaseFirstCh := make(chan struct{})
 	provider := &blockingDirectProvider{
-		firstStarted: make(chan struct{}),
-		releaseFirst: make(chan struct{}),
+		firstStarted: firstStartedCh,
+		releaseFirst: releaseFirstCh,
 		firstResp:    "stale direct response",
 		finalResp:    "fresh response after steering",
 	}
@@ -889,7 +891,7 @@ func TestAgentLoop_Steering_DirectResponseContinuesWithQueuedMessage(t *testing.
 	}()
 
 	select {
-	case <-provider.firstStarted:
+	case <-firstStartedCh:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for first LLM call to start")
 	}
@@ -897,7 +899,7 @@ func TestAgentLoop_Steering_DirectResponseContinuesWithQueuedMessage(t *testing.
 	if err := al.Steer(providers.Message{Role: "user", Content: "follow-up instruction"}); err != nil {
 		t.Fatalf("Steer failed: %v", err)
 	}
-	close(provider.releaseFirst)
+	close(releaseFirstCh)
 
 	select {
 	case result := <-resultCh:

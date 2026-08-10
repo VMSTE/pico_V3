@@ -477,3 +477,33 @@ func diagContainsStr(s, sub string) bool {
 	}
 	return false
 }
+
+// D-AUDIT-67: Diagnose атрибутирует error-спан и предлагает CR при повторах.
+func TestDiagnose_ErrorSpanAttribution(t *testing.T) {
+	de, cleanup := newTestDiagnostics(t, nil, nil)
+	defer cleanup()
+	ctx := context.Background()
+	for _, tr := range []string{"t1", "t2", "t3"} {
+		sp := "sp-" + tr
+		if err := de.mem.InsertSpan(ctx, TraceSpanRow{
+			SpanID: sp, TraceID: tr, Component: "archivist",
+			Operation: "build_prompt",
+			StartedAt: time.Now().Add(-time.Hour), Status: "ok",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := de.mem.CompleteSpan(ctx, sp, "error", nil, "timeout", "boom"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res := de.Diagnose(ctx, "t1")
+	if res.Component != "archivist" {
+		t.Errorf("component = %q, want archivist", res.Component)
+	}
+	if res.ErrorKind != "error" {
+		t.Errorf("error kind = %q, want error", res.ErrorKind)
+	}
+	if res.SuggestedCR == nil {
+		t.Error("expected SuggestedCR for 2+ similar errors in 7d")
+	}
+}
