@@ -67,6 +67,33 @@ toolLoop:
 					toolArgs = toolReq.Arguments
 				}
 			case HookActionRespond:
+				// D-AUDIT-69: respond для ЗАРЕГИСТРИРОВАННОГО тула не обходит
+				// ApproveTool — иначе hook мог бы подменить результат exec и т.п.
+				// Плагинные (незарегистрированные) тулы — как раньше, без одобрения.
+				if _, registered := ts.agent.Tools.Get(toolName); registered && al.hooks != nil {
+					approval := al.hooks.ApproveTool(turnCtx, &ToolApprovalRequest{
+						Meta:      ts.eventMeta("runTurn", "turn.tool.approve"),
+						Context:   cloneTurnContext(ts.turnCtx),
+						Tool:      toolName,
+						Arguments: toolArgs,
+					})
+					if !approval.Approved {
+						exec.allResponsesHandled = false
+						denyContent := hookDeniedToolContent("Hook respond denied by approval hook", approval.Reason)
+						al.emitEvent(
+							EventKindToolExecSkipped,
+							ts.eventMeta("runTurn", "turn.tool.skipped"),
+							ToolExecSkippedPayload{Tool: toolName, Reason: denyContent},
+						)
+						deniedMsg := providers.Message{Role: "tool", Content: denyContent, ToolCallID: tc.ID}
+						messages = append(messages, deniedMsg)
+						if !ts.opts.NoHistory {
+							ts.agent.Sessions.AddFullMessage(ts.sessionKey, deniedMsg)
+							ts.recordPersistedMessage(deniedMsg)
+						}
+						continue
+					}
+				}
 				if toolReq != nil && toolReq.HookResult != nil {
 					hookResult := toolReq.HookResult
 
