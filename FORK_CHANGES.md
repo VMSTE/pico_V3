@@ -1,3 +1,12 @@
+## Волна 43 — registry_write: последний код-элемент архитектуры (D-AUDIT-74, ТЗ-v2-3f) · 10 авг 2026
+
+- Закрыт пустой шаг 6 протокола скриптов (§5.3): модель может писать в постоянный реестр. AGENT.md обещал registry_write — тул не существовал, теперь существует.
+- **pkg/pika/registry_write_tool.go** (NEW) — RegistryWriteTool: stateless singleton, toolshared.Tool, обёртка над RegistryHandler (ТЗ-v2-1c). kind ∈ {runbook, script, snapshot, correction_rule}; Go — единственный писатель (валидация в RegistryHandler); data clamp 64KB; tags только массив строк; результат JSON {status: created|updated, kind, key}.
+- **pkg/agent/instance.go** — регистрация в BRAIN-блоке (always-on, IsCore=true) рядом с search_memory и discover_tools.
+- **Тесты**: все 12 из спеки ТЗ-v2-3f (create/update ×4 kind, невалидные входы, tags, interface compliance).
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, lint 0 issues.
+- После этого PR архитектура v3 достроена по коду целиком; остаётся боевая проверка (активация сервера).
+
 ## Волна 42 — Per-server RPM для MCP-вызовов (D-AUDIT-73) · 10 авг 2026
 
 - Конфиг security.mcp.per_server_rpm (+ per-server rpm в ACL) существовал с D-SEC-v3, но потребителя не было. Теперь лимиты применяются.

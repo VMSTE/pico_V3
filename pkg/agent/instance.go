@@ -130,6 +130,9 @@ func NewAgentInstance(
 	// PIKA-V3: 🧠 BRAIN tools — always-on, IsCore=true
 	toolsRegistry.Register(pika.NewMemorySearch(botMem))
 	toolsRegistry.Register(pika.NewDiscoverTools(toolsRegistry))
+	// D-AUDIT-74 (ТЗ-v2-3f): registry_write — модель пишет runbook/скрипты/
+	// снапшоты/correction rules в постоянный реестр. Go — единственный писатель.
+	toolsRegistry.Register(pika.NewRegistryWriteTool(pika.NewRegistryHandler(botMem)))
 
 	// PIKA-V3: clarify — HITL tool, uses MessageBus for user communication
 	if msgBus != nil && cfg.Clarify.Enabled {
