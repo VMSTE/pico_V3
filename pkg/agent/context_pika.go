@@ -351,14 +351,20 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 	agent := c.adapter.al.registry.GetDefaultAgent()
 	var toolCat, skillCat []string
 	if agent != nil {
-		toolCat = agent.Tools.List()
+		// D-AUDIT-60: имена + описания (GetSummaries), не голые имена.
+		// Это тулы ОСНОВНОЙ МОДЕЛИ — search_context сюда не входит.
+		toolCat = agent.Tools.GetSummaries()
 		skillCat = agent.ContextBuilder.ListSkillNames()
 	}
 	result, err := c.adapter.cm.GetArchivist().BuildPrompt(
 		ctx, pika.ArchivistInput{
-			SessionKey:   sk,
-			ToolCatalog:  toolCat,
-			SkillCatalog: skillCat,
+			SessionKey:           sk,
+			Message:              req.CurrentMessage, // D-AUDIT-60: раньше не передавалось!
+			ToolCatalog:          toolCat,
+			SkillCatalog:         skillCat,
+			ActivePlan:           c.adapter.cm.ExtractActivePlan(ctx, sk),
+			MaxRecommendedTools:  c.adapter.al.cfg.ToolSelection.MaxRecommendedTools,
+			MaxRecommendedSkills: c.adapter.al.cfg.ToolSelection.MaxRecommendedSkills,
 		},
 	)
 	if err != nil {

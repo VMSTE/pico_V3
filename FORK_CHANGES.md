@@ -1,3 +1,13 @@
+## Волна 37 — Честный вход Архивариуса (D-AUDIT-60) · 10 авг 2026
+
+- Архивариус выбирал инструменты вслепую: каталог приходил только именами (agent.Tools.List()), а промпт требовал «сопоставь задачу с description». Хуже: сообщение пользователя вообще не передавалось (Message пуст) — бриф строился без вопроса.
+- **pkg/pika/interfaces.go** — ArchivistInput += ActivePlan, MaxRecommendedTools, MaxRecommendedSkills; комментарий-граница: каталог = тулы ОСНОВНОЙ модели, search_context сюда не входит.
+- **pkg/agent/context_pika.go** — передаём Message (req.CurrentMessage), каталог через GetSummaries() (имя+описание), ActivePlan (cm.ExtractActivePlan), лимиты из ToolSelectionConfig.
+- **pkg/pika/archivist.go** — Config-секция входа += session_id, active_plan, max_recommended_tools/skills.
+- **workspace/prompts/archivist_build.md** — убран search_context из CORE основной модели (это собственный тул Архивариуса); поля конфига переименованы под реальные (max_recommended_*).
+- **Тест** TestBuildUserMessage_HonestInput (NEW файл): все поля доезжают, active_plan опускается когда пуст.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 36 — Петля диагностики спец-агентов замкнута (D-AUDIT-67, ч.2) · 9 авг 2026
 
 - Спаны спец-агентов получили trace_id и честный error-статус: раньше закрывались «ok» даже при сбое. Дефер через context.WithoutCancel (у Архивариуса ctx с таймаутом, defer идёт после cancel).
