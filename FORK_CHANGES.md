@@ -1,3 +1,12 @@
+## Волна 44 — Харденинг /api/update + оценка CVE upstream (D-AUDIT-76) · 10 авг 2026
+
+- Оценка двух уязвимостей upstream по нашему коду: **CVE-2026-36045** (ExecTool, ≤v0.1.2) — закрыта наследием (расширенный denylist ~22 паттерна + symlink-защита + наши Confirmation Gate/RAD); **CVE-2026-6987** (Web Launcher, «no known fixed») — вредоносный паттерн в нашем коде отсутствует (restart без shell, autostart через shellQuote, auth + IP-allowlist + loopback дефолт).
+- Найден и закрыт реальный стык: **/api/update** принимал произвольные URL релиза и имя бинаря из POST → произвольный бинарь с чужого хоста через selfupdate.
+- **pkg/updater/validate.go** (NEW) — ValidateReleaseSource: URL пустой ИЛИ prefix официального release API; имя бинаря без path separators/traversal. Нарушение → 400 до загрузки.
+- **web/backend/api/update.go** — вызов валидации до UpdateSelfFromRelease.
+- **Тесты**: pkg/updater (9 кейсов) + web/backend/api (foreign URL → 400, traversal binary → 400).
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, lint 0 issues.
+
 ## Волна 43 — registry_write: последний код-элемент архитектуры (D-AUDIT-74, ТЗ-v2-3f) · 10 авг 2026
 
 - Закрыт пустой шаг 6 протокола скриптов (§5.3): модель может писать в постоянный реестр. AGENT.md обещал registry_write — тул не существовал, теперь существует.
