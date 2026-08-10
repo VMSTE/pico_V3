@@ -1,3 +1,11 @@
+## Волна 45 — Пакет фиксов №1 после ревизии upstream (D-AUDIT-78) · 10 авг 2026
+
+- **ISATAP SSRF закрыт** (зеркало upstream #3143, реализация по RFC 5214): `isPrivateOrRestrictedIP` в pkg/tools/integration/web.go теперь проверяет ISATAP-литералы — маркер `5efe` в байтах [10:12], встроенный IPv4 в [12:16], рекурсивная проверка. До этого адрес вида `::5efe:192.168.1.1` проходил гард.
+- **Депы до уровня v0.3.1**: modernc.org/sqlite 1.48.2→1.53.0, telego 1.8.0→1.10.0 (+ транзитивные fasthttp/libc). anthropic-sdk-go НЕ поднят: v1.50.2 удалил NewThinkingConfigAdaptiveParam, который использует наш provider.go — отдельная задача с адаптацией.
+- **Аудит panic-recovery** (без патчей): 70 точек запуска горутин в pkg/agent+pkg/channels, recover() только в 3 файлах — сигнал к отдельной задаче.
+- **Тесты**: таблица isPrivateOrRestrictedIP += 4 ISATAP-кейса.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN (33 пакета), RACE-TARGETED-GREEN, lint 0 issues.
+
 ## Волна 44 — Харденинг /api/update + оценка CVE upstream (D-AUDIT-76) · 10 авг 2026
 
 - Оценка двух уязвимостей upstream по нашему коду: **CVE-2026-36045** (ExecTool, ≤v0.1.2) — закрыта наследием (расширенный denylist ~22 паттерна + symlink-защита + наши Confirmation Gate/RAD); **CVE-2026-6987** (Web Launcher, «no known fixed») — вредоносный паттерн в нашем коде отсутствует (restart без shell, autostart через shellQuote, auth + IP-allowlist + loopback дефолт).

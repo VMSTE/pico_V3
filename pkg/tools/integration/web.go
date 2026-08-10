@@ -2110,6 +2110,12 @@ func isPrivateOrRestrictedIP(ip net.IP) bool {
 			client := net.IPv4(ip[12]^0xff, ip[13]^0xff, ip[14]^0xff, ip[15]^0xff)
 			return isPrivateOrRestrictedIP(client)
 		}
+		// ISATAP (RFC 5214): interface identifier ...:5efe:... embeds the IPv4
+		// at bytes [12:16]. Recurse on the embedded address (upstream #3143).
+		if ip[10] == 0x5e && ip[11] == 0xfe {
+			embedded := net.IPv4(ip[12], ip[13], ip[14], ip[15])
+			return isPrivateOrRestrictedIP(embedded)
+		}
 	}
 
 	return false
