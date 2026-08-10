@@ -1,3 +1,12 @@
+## Волна 39 — Контентный аудит скиллов через MCP Guard (D-AUDIT-70) · 10 авг 2026
+
+- Скиллы проходили только модерацию реестра (IsMalwareBlocked) — содержимое SKILL.md никто не читал. Теперь при установке текст скилла уходит Guard-агенту (startup_audit, скилл как pseudo-tool), вердикт malicious/dangerous → каталог удаляется, бэкап восстанавливается. Fail-open при ошибке аудита (доступность > ложные блоки).
+- **pkg/tools/integration/skills_install.go** — интерфейс SkillAuditor + SetAuditor + вызов аудита после валидации, до записи метаданных. Интерфейс в integration-пакете: pkg/pika импортирует pkg/tools, обратный импорт = цикл.
+- **pkg/agent/skill_guard.go** (NEW) — продовый guardLLMCaller (provider.Chat, модель и таймаут из Guard-конфига) + skillGuardAuditor + newSkillGuardAuditor. До этого MCPGuardLLMCaller существовал только как тестовый мок — Guard-аудит был мёртвым кодом. Теперь этот же caller можно подключить и к MCP StartupAudit (отдельная задача).
+- **pkg/agent/agent_init.go** — аудитор подключается при регистрации install_skill.
+- **Тесты**: TestSkillGuardAuditor_BlocksMalicious / AllowsSafe (pkg/agent), TestInstallSkillTool_AuditorBlocksMalicious / AuditorAllows (integration).
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, RACE-TARGETED-GREEN, lint 0 issues.
+
 ## Волна 38 — Единые ворота аудита тулов (D-AUDIT-69) · 10 авг 2026
 
 - Все источники тулов теперь проходят проверку до попадания в реестр.

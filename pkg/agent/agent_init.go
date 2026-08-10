@@ -232,7 +232,12 @@ func registerSharedTools(
 			}
 
 			if install_skills_enable {
-				agent.Tools.Register(tools.NewInstallSkillTool(registryMgr, agent.Workspace))
+				instTool := tools.NewInstallSkillTool(registryMgr, agent.Workspace)
+				// D-AUDIT-70: контентный аудит SKILL.md через MCP Guard
+				if aud := newSkillGuardAuditor(al, provider); aud != nil {
+					instTool.SetAuditor(aud)
+				}
+				agent.Tools.Register(instTool)
 			}
 		}
 

@@ -421,3 +421,42 @@ func TestInstallSkillToolForceReinstallRestoresPreviousSkillAfterMetadataFailure
 	require.NoError(t, err)
 	assert.Equal(t, oldContent, gotContent)
 }
+
+// D-AUDIT-70: аудитор блокирует установку — каталог удаляется.
+type blockingAuditor struct{}
+
+func (blockingAuditor) AuditSkill(context.Context, string, string) (bool, string) {
+	return true, "test block"
+}
+
+func TestInstallSkillTool_AuditorBlocksMalicious(t *testing.T) {
+	registryMgr := skills.NewRegistryManager()
+	registryMgr.AddRegistry(&mockGitHubInstallRegistry{})
+	workspace := t.TempDir()
+	tool := NewInstallSkillTool(registryMgr, workspace)
+	tool.SetAuditor(blockingAuditor{})
+
+	result := tool.Execute(context.Background(), map[string]any{"slug": "some-skill"})
+	assert.True(t, result.IsError)
+	assert.Contains(t, result.ForLLM, "blocked by security audit")
+	_, err := os.Stat(filepath.Join(workspace, "skills", "pr-review"))
+	assert.True(t, os.IsNotExist(err), "blocked skill directory should be removed")
+}
+
+// Пропускающий аудитор не ломает установку.
+type allowAuditor struct{}
+
+func (allowAuditor) AuditSkill(context.Context, string, string) (bool, string) {
+	return false, ""
+}
+
+func TestInstallSkillTool_AuditorAllows(t *testing.T) {
+	registryMgr := skills.NewRegistryManager()
+	registryMgr.AddRegistry(&mockGitHubInstallRegistry{})
+	tool := NewInstallSkillTool(registryMgr, t.TempDir())
+	tool.SetAuditor(allowAuditor{})
+
+	result := tool.Execute(context.Background(), map[string]any{"slug": "some-skill"})
+	assert.False(t, result.IsError)
+	assert.Contains(t, result.ForLLM, "Successfully installed skill")
+}
