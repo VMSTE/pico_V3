@@ -140,6 +140,16 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 			}
 			aclAllow := al.gatedMCPToolNames(serverName, aclNames)
 
+			// D-AUDIT-71: Guard startup audit — читаем ОПИСАНИЯ тулов,
+			// а не только имена (ACL). Блокировки уходят founder'у.
+			summaries := make([]mcpToolSummary, 0, len(aclNames))
+			for _, t := range conn.Tools {
+				if t != nil && aclAllow[t.Name] {
+					summaries = append(summaries, mcpToolSummary{Name: t.Name, Description: t.Description})
+				}
+			}
+			guardBlocked := al.guardAuditMCPTools(ctx, serverName, summaries)
+
 			for _, agentID := range agentIDs {
 				agent, ok := al.registry.GetAgent(agentID)
 				if !ok || agent.ContextBuilder == nil {
@@ -160,7 +170,7 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 			}
 
 			for _, tool := range conn.Tools {
-				if !aclAllow[tool.Name] {
+				if !aclAllow[tool.Name] || guardBlocked[tool.Name] {
 					continue
 				}
 				for _, agentID := range agentIDs {
