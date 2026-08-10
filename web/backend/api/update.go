@@ -42,6 +42,13 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		binary = "picoclaw-launcher"
 	}
 
+	// D-AUDIT-76: только наш release-источник, без traversal в имени бинаря.
+	if err := updater.ValidateReleaseSource(req.URL, binary); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(updateResponse{Status: "error", Message: err.Error()})
+		return
+	}
+
 	if err := updater.UpdateSelfFromRelease(req.URL, "", "", binary); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(updateResponse{Status: "error", Message: err.Error()})
