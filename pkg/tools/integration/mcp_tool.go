@@ -125,14 +125,20 @@ func sanitizeIdentifierComponent(s string) string {
 // whenever sanitization is lossy or the name is truncated, ensuring that two
 // names which differ only in disallowed characters remain distinct after sanitization.
 func (t *MCPTool) Name() string {
+	return MCPToolName(t.serverName, t.tool.Name)
+}
+
+// MCPToolName возвращает зарегистрированное имя для пары сервер/тул
+// (D-AUDIT-72). Нужен Rug Pull Guard для деактивации тула по имени.
+func MCPToolName(serverName, toolName string) string {
 	// Prefix with server name to avoid conflicts, and sanitize components
-	sanitizedServer := sanitizeIdentifierComponent(t.serverName)
-	sanitizedTool := sanitizeIdentifierComponent(t.tool.Name)
+	sanitizedServer := sanitizeIdentifierComponent(serverName)
+	sanitizedTool := sanitizeIdentifierComponent(toolName)
 	full := fmt.Sprintf("mcp_%s_%s", sanitizedServer, sanitizedTool)
 
 	// Check if sanitization was lossless (only lowercasing, no char replacement/truncation)
-	lossless := strings.ToLower(t.serverName) == sanitizedServer &&
-		strings.ToLower(t.tool.Name) == sanitizedTool
+	lossless := strings.ToLower(serverName) == sanitizedServer &&
+		strings.ToLower(toolName) == sanitizedTool
 
 	const maxTotal = 64
 	if lossless && len(full) <= maxTotal {
@@ -142,7 +148,7 @@ func (t *MCPTool) Name() string {
 	// Sanitization was lossy or name too long: append hash of the ORIGINAL names
 	// (not the sanitized names) so different originals always yield different hashes.
 	h := fnv.New32a()
-	_, _ = h.Write([]byte(t.serverName + "\x00" + t.tool.Name))
+	_, _ = h.Write([]byte(serverName + "\x00" + toolName))
 	suffix := fmt.Sprintf("%08x", h.Sum32()) // 8 chars
 
 	base := full

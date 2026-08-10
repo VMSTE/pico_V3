@@ -16,6 +16,24 @@ type mcpToolSummary struct {
 	Description string
 }
 
+// mcpSecurityPipeline возвращает живой pipeline, создавая и сохраняя при
+// первом вызове (D-AUDIT-72): хэши Rug Pull должны переживать вызовы.
+func (al *AgentLoop) mcpSecurityPipeline() *pika.MCPSecurityPipeline {
+	al.mu.RLock()
+	sec := al.mcpSecurity
+	al.mu.RUnlock()
+	if sec != nil {
+		return sec
+	}
+	sec = pika.NewMCPSecurityPipeline(
+		pika.DefaultMCPGuardConfig(), mapMCPServerPolicies(al.cfg), nil,
+	)
+	al.mu.Lock()
+	al.mcpSecurity = sec
+	al.mu.Unlock()
+	return sec
+}
+
 // auditToolDefsWithGuard — ядро: пакетный StartupAudit тулов сервера.
 // Возвращает name → reason для заблокированных. Чистое ядро:
 // override и уведомления живут в guardAuditMCPTools.
@@ -77,10 +95,7 @@ func (al *AgentLoop) guardAuditMCPTools(
 	if agent == nil || agent.Provider == nil {
 		return nil
 	}
-	sec := al.mcpSecurity
-	if sec == nil {
-		sec = pika.NewMCPSecurityPipeline(guardCfg, mapMCPServerPolicies(al.cfg), nil)
-	}
+	sec := al.mcpSecurityPipeline()
 	caller := guardLLMCaller{
 		provider: agent.Provider,
 		model:    guardCfg.Model,

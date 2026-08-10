@@ -77,6 +77,21 @@ func (r *ToolRegistry) RegisterHidden(tool Tool) {
 	logger.DebugCF("tools", "Registered hidden tool", map[string]any{"name": name})
 }
 
+// Unregister удаляет тул из реестра (D-AUDIT-72). Возвращает true, если
+// тул существовал. Используется Rug Pull Guard для деактивации
+// скомпрометированных тулов на ходу.
+func (r *ToolRegistry) Unregister(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.tools[name]; !ok {
+		return false
+	}
+	delete(r.tools, name)
+	r.version.Add(1)
+	logger.WarnCF("tools", "Tool unregistered", map[string]any{"name": name})
+	return true
+}
+
 // SetMediaStore injects a MediaStore into all registered tools that can
 // consume it, and remembers it for future registrations.
 func (r *ToolRegistry) SetMediaStore(store media.MediaStore) {

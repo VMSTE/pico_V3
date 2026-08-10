@@ -25,6 +25,17 @@ type headerTransport struct {
 	headers map[string]string
 }
 
+// toolsListChangedHook — коллбэк на notifications/tools/list_changed (D-AUDIT-72).
+var toolsListChangedHook atomic.Value // func(serverName string)
+
+// SetOnToolsListChanged подписывает на уведомления tools/list_changed от всех
+// серверов. Вызывается один раз при wiring (event-driven Rug Pull Guard).
+func (m *Manager) SetOnToolsListChanged(fn func(serverName string)) {
+	if fn != nil {
+		toolsListChangedHook.Store(fn)
+	}
+}
+
 func expandHomeCommandPath(command string) string {
 	if command == "" || command[0] != '~' {
 		return command
@@ -294,10 +305,20 @@ func connectServer(
 		})
 
 	// Create client
+	clientOpts := &mcp.ClientOptions{}
+	// D-AUDIT-72: сервер сам сообщает об изменении списка тулов (event-driven).
+	if fn := toolsListChangedHook.Load(); fn != nil {
+		cb := fn.(func(string))
+		clientOpts.ToolListChangedHandler = func(
+			_ context.Context, _ *mcp.ToolListChangedRequest,
+		) {
+			cb(name)
+		}
+	}
 	client := mcp.NewClient(&mcp.Implementation{
 		Name:    "picoclaw",
 		Version: "1.0.0",
-	}, nil)
+	}, clientOpts)
 
 	// Create transport based on configuration
 	// Auto-detect transport type if not explicitly specified
@@ -528,6 +549,28 @@ func (m *Manager) CallTool(
 	}
 
 	return result, nil
+}
+
+// RefreshServerTools перечитывает список тулов с живого сервера (D-AUDIT-72)
+// и обновляет кэшированный снапшот. Вызывается по notifications/tools/list_changed.
+func (m *Manager) RefreshServerTools(ctx context.Context, name string) ([]*mcp.Tool, error) {
+	m.mu.RLock()
+	conn, ok := m.servers[name]
+	m.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("server %s not found", name)
+	}
+	var out []*mcp.Tool
+	for tool, err := range conn.Session.Tools(ctx, nil) {
+		if err != nil {
+			return nil, fmt.Errorf("list tools from %s: %w", name, err)
+		}
+		out = append(out, tool)
+	}
+	m.mu.Lock()
+	conn.Tools = out
+	m.mu.Unlock()
+	return out, nil
 }
 
 func listServerTools(

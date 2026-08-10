@@ -1,3 +1,15 @@
+## Волна 41 — Rug Pull Guard event-driven (D-AUDIT-72, D-SEC-v2) · 10 авг 2026
+
+- Подмена описаний MCP-тулов посреди сессии теперь ловится строго по событию, как задумано в D-SEC-v2: handler на notifications/tools/list_changed (нативный ClientOptions.ToolListChangedHandler в go-sdk) → tools/list заново → hash-diff (CheckRugPull) → re-audit изменённых/новых через Guard → malicious → Unregister из реестров всех агентов + уведомление founder'а. Никаких тикеров/опросов (первый вариант с polling 15 мин отвергнут — антипаттерн).
+- **Flood-guard** (D-SEC-v2): >2 list_changed в час от сервера = suspicious → события игнорируются, founder получает alert.
+- **pkg/mcp/manager.go** — SetOnToolsListChanged (подписка), ClientOptions.ToolListChangedHandler в connectServer, RefreshServerTools (перечитать список по событию).
+- **pkg/tools/registry.go** — Unregister (деактивация тула на ходу). **pkg/tools/integration/mcp_tool.go** — экспорт MCPToolName (рефактор Name). **pkg/tools/integration_facade.go** — re-export.
+- **pkg/pika/mcp_security.go** — HasToolHashes (нет эталона → первая сверка только записывает его).
+- **pkg/agent/rug_pull.go** (NEW) — recordListChanged (flood), notifyManager, handleToolsListChanged, rugPullRecheck (ядро). Новые тулы при list_changed проходят ACL + Guard, как при старте. Прошедшие changed пере-регистрируются (описание обновляется).
+- **pkg/agent/mcp_guard_gate.go + mcp_acl_gate.go** — pipeline персистится на AgentLoop (mcpSecurityPipeline get-or-create): хэши переживают вызовы.
+- **Тесты**: flood-limit, flood-alert founder'у, baseline-record, malicious → unregister + notify. Плюс Unregister тест в pkg/tools.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, RACE-TARGETED-GREEN, lint 0 issues.
+
 ## Волна 40 — Guard-аудит описаний MCP-тулов при регистрации + уведомление founder'а (D-AUDIT-71) · 10 авг 2026
 
 - После ACL (волна 38, проверка ИМЕНИ) добавлена вторая половина ворот: Guard читает ОПИСАНИЯ разрешённых тулов при подключении сервера (startup_audit, один пакетный вызов на сервер). Вердикт malicious/dangerous → тул не регистрируется.

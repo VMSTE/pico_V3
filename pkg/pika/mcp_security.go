@@ -604,6 +604,20 @@ func (p *MCPSecurityPipeline) UpdateToolHashes(
 	}
 }
 
+// HasToolHashes reports whether a hash baseline exists for the server
+// (D-AUDIT-72). Нет эталона → первая сверка просто записывает его.
+func (p *MCPSecurityPipeline) HasToolHashes(serverName string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	prefix := serverName + ":"
+	for k := range p.toolHashes {
+		if strings.HasPrefix(k, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // ── Layer 5: Audit Trail (autoEvent mapping for MCP) ─────────
 
 // MCPAutoEventMappings returns toolTypeMap and toolTagMap

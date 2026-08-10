@@ -41,6 +41,11 @@ func NewMCPTool(manager MCPManager, serverName string, tool *mcp.Tool) *MCPTool 
 	return integrationtools.NewMCPTool(manager, serverName, tool)
 }
 
+// MCPToolName возвращает зарегистрированное имя для пары сервер/тул (D-AUDIT-72).
+func MCPToolName(serverName, toolName string) string {
+	return integrationtools.MCPToolName(serverName, toolName)
+}
+
 func NewFindSkillsTool(registryMgr *skills.RegistryManager, cache *skills.SearchCache) *FindSkillsTool {
 	return integrationtools.NewFindSkillsTool(registryMgr, cache)
 }

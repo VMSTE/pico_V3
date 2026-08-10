@@ -13,12 +13,7 @@ import (
 // Если security pipeline не подключён — строится из конфига на месте,
 // так что ворота работают независимо от порядка wiring.
 func (al *AgentLoop) gatedMCPToolNames(serverName string, names []string) map[string]bool {
-	sec := al.mcpSecurity
-	if sec == nil {
-		sec = pika.NewMCPSecurityPipeline(
-			pika.DefaultMCPGuardConfig(), mapMCPServerPolicies(al.cfg), nil,
-		)
-	}
+	sec := al.mcpSecurityPipeline()
 	defs := make([]pika.MCPToolDef, 0, len(names))
 	for _, n := range names {
 		defs = append(defs, pika.MCPToolDef{Name: n})

@@ -22,6 +22,8 @@ type mcpRuntime struct {
 	mu       sync.Mutex
 	manager  *mcp.Manager
 	initErr  error
+	// D-AUDIT-72: журнал list_changed для flood-guard (unix-время).
+	listChangedLog map[string][]int64
 }
 
 func (r *mcpRuntime) reset() *mcp.Manager {
@@ -258,6 +260,8 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 		}
 
 		al.mcp.setManager(mcpManager)
+		// D-AUDIT-72: event-driven Rug Pull Guard (D-SEC-v2)
+		mcpManager.SetOnToolsListChanged(al.handleToolsListChanged)
 	})
 
 	return al.mcp.getInitErr()
