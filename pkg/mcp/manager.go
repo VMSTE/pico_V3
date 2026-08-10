@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/time/rate"
 
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
@@ -34,6 +35,30 @@ func (m *Manager) SetOnToolsListChanged(fn func(serverName string)) {
 	if fn != nil {
 		toolsListChangedHook.Store(fn)
 	}
+}
+
+// SetServerRPM задаёт лимит вызовов в минуту для сервера (D-AUDIT-73).
+// rpm <= 0 снимает лимит. Token bucket из golang.org/x/time/rate
+// (тот же upstream-примитив, что в channels и providers).
+func (m *Manager) SetServerRPM(serverName string, rpm int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.limiters == nil {
+		m.limiters = map[string]*rate.Limiter{}
+	}
+	if rpm <= 0 {
+		delete(m.limiters, serverName)
+		return
+	}
+	m.limiters[serverName] = rate.NewLimiter(rate.Limit(float64(rpm)/60.0), rpm)
+}
+
+// allowCall проверяет лимит, не блокируя (D-AUDIT-73).
+func (m *Manager) allowCall(serverName string) bool {
+	m.mu.RLock()
+	limiter := m.limiters[serverName]
+	m.mu.RUnlock()
+	return limiter == nil || limiter.Allow()
 }
 
 func expandHomeCommandPath(command string) string {
@@ -138,10 +163,12 @@ type ServerConnection struct {
 
 // Manager manages multiple MCP server connections
 type Manager struct {
-	servers map[string]*ServerConnection
-	mu      sync.RWMutex
-	closed  atomic.Bool    // changed from bool to atomic.Bool to avoid TOCTOU race
-	wg      sync.WaitGroup // tracks in-flight CallTool calls
+	// D-AUDIT-73: per-server RPM limiters (security.mcp).
+	limiters map[string]*rate.Limiter
+	servers  map[string]*ServerConnection
+	mu       sync.RWMutex
+	closed   atomic.Bool    // changed from bool to atomic.Bool to avoid TOCTOU race
+	wg       sync.WaitGroup // tracks in-flight CallTool calls
 }
 
 var connectServerFunc = connectServer
@@ -516,6 +543,15 @@ func (m *Manager) CallTool(
 
 	if !ok {
 		return nil, fmt.Errorf("server %s not found", serverName)
+	}
+
+	// D-AUDIT-73: per-server RPM (security.mcp). Неблокирующе: превышение →
+	// честная ошибка модели, цикл обрывается сразу, ход не подвисает на Wait.
+	if !m.allowCall(serverName) {
+		return nil, fmt.Errorf(
+			"rate limit exceeded for MCP server %q (security.mcp per_server_rpm): wait and retry later",
+			serverName,
+		)
 	}
 	defer m.wg.Done()
 

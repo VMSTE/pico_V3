@@ -1,3 +1,12 @@
+## Волна 42 — Per-server RPM для MCP-вызовов (D-AUDIT-73) · 10 авг 2026
+
+- Конфиг security.mcp.per_server_rpm (+ per-server rpm в ACL) существовал с D-SEC-v3, но потребителя не было. Теперь лимиты применяются.
+- **Механизм — upstream-примитив**: golang.org/x/time/rate token bucket (тот же, что в channels и providers). Ничего не писали с нуля.
+- **pkg/mcp/manager.go** — SetServerRPM + allowCall + проверка в CallTool. Неблокирующе (Allow, не Wait): превышение → честная ошибка модели «лимит N/мин, подожди» — зацикленный агент обрывается на 61-м вызове, ход не подвисает. Reconnect не двоит счётчик.
+- **pkg/agent/agent_mcp.go** — wiring: лимиты из mapMCPServerPolicies при подключении серверов.
+- **Тест**: burst проходит, превышение отклоняется, снятие лимита работает, сервер без лимита не затронут.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, lint 0 issues.
+
 ## Волна 41 — Rug Pull Guard event-driven (D-AUDIT-72, D-SEC-v2) · 10 авг 2026
 
 - Подмена описаний MCP-тулов посреди сессии теперь ловится строго по событию, как задумано в D-SEC-v2: handler на notifications/tools/list_changed (нативный ClientOptions.ToolListChangedHandler в go-sdk) → tools/list заново → hash-diff (CheckRugPull) → re-audit изменённых/новых через Guard → malicious → Unregister из реестров всех агентов + уведомление founder'а. Никаких тикеров/опросов (первый вариант с polling 15 мин отвергнут — антипаттерн).
