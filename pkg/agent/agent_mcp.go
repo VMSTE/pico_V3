@@ -118,6 +118,11 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 
 		// Register MCP tools for all agents
 		servers := mcpManager.GetServers()
+
+		// D-AUDIT-73: per-server RPM из security.mcp (per_server_rpm + ACL rpm).
+		for _, pol := range mapMCPServerPolicies(al.cfg) {
+			mcpManager.SetServerRPM(pol.Name, pol.RPM)
+		}
 		uniqueTools := 0
 		totalRegistrations := 0
 		agentIDs := al.registry.ListAgentIDs()
