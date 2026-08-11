@@ -359,7 +359,9 @@ func (p *Pipeline) CallLLM(
 					logger.RecoverPanicNoExit(r)
 				}
 			}()
-			al.publishPicoReasoning(turnCtx, reasoningContent, ts.chatID)
+			// WithoutCancel: publish — post-turn работа, отмена хода
+			// не должна её убивать (гонка на нагруженных CI).
+			al.publishPicoReasoning(context.WithoutCancel(turnCtx), reasoningContent, ts.chatID)
 		}()
 	} else {
 		go func() {
@@ -368,8 +370,10 @@ func (p *Pipeline) CallLLM(
 					logger.RecoverPanicNoExit(r)
 				}
 			}()
+			// WithoutCancel: см. выше — reasoning channel не должен
+			// терять сообщение при быстром завершении хода.
 			al.handleReasoning(
-				turnCtx,
+				context.WithoutCancel(turnCtx),
 				reasoningContent,
 				ts.channel,
 				al.targetReasoningChannelID(ts.channel),
@@ -399,7 +403,20 @@ func (p *Pipeline) CallLLM(
 		for _, tc := range exec.response.ToolCalls {
 			reqToolNames = append(reqToolNames, tc.Name)
 		}
-		al.telemetry.RecordLLMCall(turnCtx, pika.RecordLLMParams{
+		// PIKA-V3 (D-AUDIT-81): task_tag из кэшированного FOCUS Архивариуса
+		// (0 LLM — читаем кэш), chain_id/position хода.
+		taskTag := ""
+		if adapter, ok := p.ContextManager.(*pikaContextManagerAdapter); ok && adapter.cm != nil {
+			if arch := adapter.cm.GetArchivist(); arch != nil {
+				if focuser, ok := arch.(interface{ GetCachedFocus() *pika.Focus }); ok {
+					if f := focuser.GetCachedFocus(); f != nil {
+						taskTag = f.Task
+					}
+				}
+			}
+		}
+		chainPos := iteration
+		ts.lastRequestLogID = al.telemetry.RecordLLMCall(turnCtx, pika.RecordLLMParams{
 			ChatID:             ts.sessionKey,
 			Model:              exec.llmModel,
 			Direction:          "chat",
@@ -410,6 +427,9 @@ func (p *Pipeline) CallLLM(
 			ToolCallsRequested: len(exec.response.ToolCalls),
 			ToolNames:          reqToolNames,
 			ReasoningTokens:    len(reasoningContent) / 4,
+			TaskTag:            taskTag,
+			ChainID:            ts.ensureChainID(),
+			ChainPosition:      &chainPos,
 		})
 	}
 	// PIKA-V3: Record reasoning -> reasoning_log (TZ-v2-9a)

@@ -364,3 +364,31 @@ func TestRecordLLMCall_FullFields(t *testing.T) {
 		t.Errorf("tool_names = %q, want exec+compose JSON", names)
 	}
 }
+
+// D-AUDIT-81: task_tag/chain_id/chain_position доезжают до request_log.
+func TestRecordLLMCall_TaskChain(t *testing.T) {
+	bm := setupTelemetryDB(t)
+	tel := NewTelemetry(defaultTelemetryCfg(), bm, nil)
+
+	pos := 2
+	id := tel.RecordLLMCall(context.Background(), RecordLLMParams{
+		ChatID: "s1", Model: "main", Direction: "chat", Component: "main",
+		TokensIn: 100, TokensOut: 50,
+		TaskTag: "deploy", ChainID: "chain-1", ChainPosition: &pos,
+	})
+	if id == 0 {
+		t.Fatal("expected non-zero row id")
+	}
+
+	var tag, chain string
+	var gotPos int
+	if err := bm.db.QueryRow(
+		`SELECT COALESCE(task_tag,''), COALESCE(chain_id,''), chain_position
+		FROM request_log WHERE id=?`, id,
+	).Scan(&tag, &chain, &gotPos); err != nil {
+		t.Fatal(err)
+	}
+	if tag != "deploy" || chain != "chain-1" || gotPos != 2 {
+		t.Errorf("got tag=%q chain=%q pos=%d, want deploy/chain-1/2", tag, chain, gotPos)
+	}
+}

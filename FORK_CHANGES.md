@@ -1,3 +1,11 @@
+## Волна 48 — Продюсеры телеметрии: task_tag, chain_id, tool outcomes (D-AUDIT-81) · 11 авг 2026
+
+- **task_tag**: pipeline_llm.go читает кэшированный FOCUS Архивариуса (GetCachedFocus через GetArchivist, type-assertion — без Архивариуса тег пустой) → request_log. 0 LLM, как предписывает архитектура (notion-693 §5B).
+- **chain_id / chain_position**: UUID цепочки генерируется lazy на первом LLM-вызове хода (turnState.ensureChainID), позиция = iteration. Отклонение от D-51 зафиксировано: одиночные вызовы тоже получают chain длиной 1 (аналитика фильтрует MAX(position)>1).
+- **tool_calls_success/failed**: RecordLLMCall возвращает id строки; pipeline_execute.go после каждого реального исполнения инкрементирует счётчики (BotMemory.UpdateRequestLogToolResults, UPDATE по id). Hook-respond/deny пути не считаются — только реальные выполнения.
+- **Тесты**: TestRecordLLMCall_TaskChain, TestUpdateRequestLogToolResults.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, RACE-GREEN, lint 0 issues.
+
 ## Волна 47 — Пакет фиксов №3: anthropic-sdk 1.50.2 + хвост panic-recovery (D-AUDIT-80) · 11 авг 2026
 
 - **anthropic-sdk-go 1.26.0 → 1.50.2**: v1.50.2 удалил NewThinkingConfigAdaptiveParam() — provider.go переведён на структурный литерал &anthropic.ThinkingConfigAdaptiveParam{} (паттерн подтверждён message_test.go самого SDK; Type сериализуется автоматически).
