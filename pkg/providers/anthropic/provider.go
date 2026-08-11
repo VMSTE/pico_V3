@@ -219,7 +219,7 @@ func buildParams(
 	apiModel := strings.ReplaceAll(model, ".", "-")
 
 	params := anthropic.MessageNewParams{
-		Model:     anthropic.Model(apiModel),
+		Model:     apiModel,
 		Messages:  anthropicMessages,
 		MaxTokens: maxTokens,
 	}
