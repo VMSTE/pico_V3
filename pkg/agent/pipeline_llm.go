@@ -359,7 +359,9 @@ func (p *Pipeline) CallLLM(
 					logger.RecoverPanicNoExit(r)
 				}
 			}()
-			al.publishPicoReasoning(turnCtx, reasoningContent, ts.chatID)
+			// WithoutCancel: publish — post-turn работа, отмена хода
+			// не должна её убивать (гонка на нагруженных CI).
+			al.publishPicoReasoning(context.WithoutCancel(turnCtx), reasoningContent, ts.chatID)
 		}()
 	} else {
 		go func() {
@@ -368,8 +370,10 @@ func (p *Pipeline) CallLLM(
 					logger.RecoverPanicNoExit(r)
 				}
 			}()
+			// WithoutCancel: см. выше — reasoning channel не должен
+			// терять сообщение при быстром завершении хода.
 			al.handleReasoning(
-				turnCtx,
+				context.WithoutCancel(turnCtx),
 				reasoningContent,
 				ts.channel,
 				al.targetReasoningChannelID(ts.channel),
