@@ -469,12 +469,15 @@ func (r *ReflectorPipeline) callLLM(
 		{Role: "system", Content: sysPrompt},
 		{Role: "user", Content: userContent},
 	}
+	// D-AUDIT-82: телеметрия спутника в request_log.
+	llmStart := time.Now()
 	resp, err := r.provider.Chat(
 		ctx, msgs, nil, r.cfg.Model, nil,
 	)
 	if err != nil {
 		return "", fmt.Errorf("LLM call: %w", err)
 	}
+	RecordSatelliteLLM(ctx, r.mem, "reflexor", "review", "", r.cfg.Model, resp, llmStart)
 	return resp.Content, nil
 }
 
