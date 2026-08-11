@@ -218,7 +218,7 @@ func (a *Atomizer) Run(
 
 	// Step 5: LLM call with retry on validation error
 	output, err := a.callWithRetry(
-		ctx, promptText, userContent, turnIDs,
+		ctx, sessionID, promptText, userContent, turnIDs,
 	)
 	if err != nil {
 		a.reportFailure()
@@ -261,7 +261,7 @@ func (a *Atomizer) Run(
 // callWithRetry calls LLM with repair retries on failure.
 func (a *Atomizer) callWithRetry(
 	ctx context.Context,
-	promptText, userContent string,
+	sessionID, promptText, userContent string,
 	validTurns []string,
 ) (*atomizerLLMResponse, error) {
 	var lastErr error
@@ -275,7 +275,7 @@ func (a *Atomizer) callWithRetry(
 		}
 
 		raw, callErr := a.callLLM(
-			ctx, sysPrompt, userContent,
+			ctx, sessionID, sysPrompt, userContent,
 		)
 		if callErr != nil {
 			lastErr = callErr
@@ -303,18 +303,21 @@ func (a *Atomizer) callWithRetry(
 // callLLM sends system+user to LLM, returns raw content.
 func (a *Atomizer) callLLM(
 	ctx context.Context,
-	sysPrompt, userContent string,
+	sessionID, sysPrompt, userContent string,
 ) (string, error) {
 	msgs := []providers.Message{
 		{Role: "system", Content: sysPrompt},
 		{Role: "user", Content: userContent},
 	}
+	// D-AUDIT-82: телеметрия спутника в request_log.
+	llmStart := time.Now()
 	resp, err := a.provider.Chat(
 		ctx, msgs, nil, a.cfg.Model, nil,
 	)
 	if err != nil {
 		return "", fmt.Errorf("LLM call: %w", err)
 	}
+	RecordSatelliteLLM(ctx, a.mem, "atomizer", "atomize", sessionID, a.cfg.Model, resp, llmStart)
 	return resp.Content, nil
 }
 

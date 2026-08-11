@@ -1,3 +1,11 @@
+## Волна 49 — Телеметрия спутников + component=subturn + latency (D-AUDIT-82) · 11 авг 2026
+
+- **RecordSatelliteLLM** (pkg/pika/telemetry.go, NEW): fire-and-forget запись вызова спутника в request_log — component, direction, model, токены из usage, response_ms. nil-safe.
+- **Спутники подключены** (D-83 наконец исполнено): archivarius (build_prompt, session из currentSessionKey), atomizer (atomize, sessionID протащен через callWithRetry→callLLM), reflexor (review), mcp_guard (guard_audit — покрывает и skill audit, тот же caller).
+- **pipeline_llm.go**: component="subturn" при ts.depth>0 (суб-агенты spawn больше не маскируются под main); LatencyMs = время retry-цикла → оживает P95-латентность в аналитике.
+- **Тест** TestRecordSatelliteLLM.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, RACE-GREEN, lint 0 issues.
+
 ## Волна 48 — Продюсеры телеметрии: task_tag, chain_id, tool outcomes (D-AUDIT-81) · 11 авг 2026
 
 - **task_tag**: pipeline_llm.go читает кэшированный FOCUS Архивариуса (GetCachedFocus через GetArchivist, type-assertion — без Архивариуса тег пустой) → request_log. 0 LLM, как предписывает архитектура (notion-693 §5B).

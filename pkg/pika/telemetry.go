@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+
+	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
 // ProgressNotifier sends degradation/recovery notifications
@@ -173,6 +175,40 @@ func (t *Telemetry) RecordLLMCall(
 	// id строки возвращаем для досчёта tool outcomes (D-AUDIT-81).
 	id, _ := t.botmem.InsertRequestLog(ctx, row)
 	return id
+}
+
+// RecordSatelliteLLM пишет LLM-вызов внутреннего спутника (archivarius,
+// atomizer, reflexor, mcp_guard) в request_log (D-AUDIT-82, D-83).
+// Fire-and-forget: ошибки глушим — телеметрия не должна ронять спутника.
+// start.IsZero() → response_ms=0.
+func RecordSatelliteLLM(
+	ctx context.Context,
+	bm *BotMemory,
+	component, direction, sessionKey, model string,
+	resp *providers.LLMResponse,
+	start time.Time,
+) {
+	if bm == nil || resp == nil {
+		return
+	}
+	var tokIn, tokOut int
+	if resp.Usage != nil {
+		tokIn = resp.Usage.PromptTokens
+		tokOut = resp.Usage.CompletionTokens
+	}
+	responseMs := 0
+	if !start.IsZero() {
+		responseMs = int(time.Since(start).Milliseconds())
+	}
+	_, _ = bm.InsertRequestLog(ctx, RequestLogRow{
+		ChatID:           sessionKey,
+		Direction:        direction,
+		Component:        component,
+		Model:            model,
+		PromptTokens:     tokIn,
+		CompletionTokens: tokOut,
+		ResponseMs:       responseMs,
+	})
 }
 
 // RecordToolCall records a tool call result into the sliding
