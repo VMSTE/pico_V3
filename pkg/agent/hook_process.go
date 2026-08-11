@@ -139,9 +139,30 @@ func NewProcessHook(ctx context.Context, name string, opts ProcessHookOptions) (
 		done:         make(chan struct{}),
 	}
 
-	go ph.readLoop(stdout)
-	go ph.readStderr(stderr)
-	go ph.waitLoop()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
+		ph.readLoop(stdout)
+	}()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
+		ph.readStderr(stderr)
+	}()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
+		ph.waitLoop()
+	}()
 
 	helloCtx := ctx
 	if helloCtx == nil {
@@ -387,6 +408,11 @@ func (ph *ProcessHook) send(ctx context.Context, msg processHookRPCMessage) erro
 
 	done := make(chan error, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
 		_, writeErr := ph.stdin.Write(body)
 		done <- writeErr
 	}()

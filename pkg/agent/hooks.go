@@ -214,7 +214,14 @@ func NewHookManager(eventBus *EventBus) *HookManager {
 	}
 
 	hm.sub = eventBus.Subscribe(hookObserverBufferSize)
-	go hm.dispatchEvents()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
+		hm.dispatchEvents()
+	}()
 	return hm
 }
 
@@ -579,6 +586,11 @@ func (hm *HookManager) runObserver(name string, observer EventObserver, evt Even
 
 	done := make(chan error, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
 		done <- observer.OnEvent(ctx, evt)
 	}()
 
@@ -704,6 +716,11 @@ func runInterceptorHook[T any](
 	}
 	done := make(chan result, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
 		value, decision, err := fn(ctx)
 		done <- result{value: value, decision: decision, err: err}
 	}()
@@ -745,6 +762,11 @@ func runApprovalHook(
 	}
 	done := make(chan result, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
 		decision, err := fn(ctx)
 		done <- result{decision: decision, err: err}
 	}()

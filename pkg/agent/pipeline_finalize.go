@@ -69,6 +69,11 @@ func (p *Pipeline) Finalize(
 	if al := p.al; al.atomizer != nil {
 		bgCtx := context.Background()
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.RecoverPanicNoExit(r)
+				}
+			}()
 			ok, err := al.atomizer.ShouldAtomize(bgCtx, ts.sessionKey)
 			if err != nil {
 				logger.WarnCF("pika", "Atomizer threshold check failed", map[string]any{"error": err.Error()})

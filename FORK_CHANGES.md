@@ -1,3 +1,11 @@
+## Волна 46 — Пакет фиксов №2: panic-recovery на боевых горутинах (D-AUDIT-79) · 11 авг 2026
+
+- **64 точки запуска горутин получили defer recover → logger.RecoverPanicNoExit**: паника пишется в panic-лог, процесс выживает (раньше — падение всего процесса).
+- Классы: manager.go диспетчеры/воркеры (10), ядро агента hooks/hook_process/pipeline_finalize (9), боевые петли всех каналов (~42), pkg/mcp (3).
+- Пропущены осознанно: 6 точек с существующим recover (agent.go ×2, subturn.go ×2, discord/voice.go ×2), pipeline_llm.go:356/358 (многострочные вызовы — отдельная задача).
+- Честно: recover ≠ рестарт — упавшая петля мертва до рестарта процесса, но процесс живёт и причина в panic-логе. Супервизор с автоперезапуском — отдельный дизайн.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, RACE-TARGETED-GREEN, lint 0 issues.
+
 ## Волна 45 — Пакет фиксов №1 после ревизии upstream (D-AUDIT-78) · 10 авг 2026
 
 - **ISATAP SSRF закрыт** (зеркало upstream #3143, реализация по RFC 5214): `isPrivateOrRestrictedIP` в pkg/tools/integration/web.go теперь проверяет ISATAP-литералы — маркер `5efe` в байтах [10:12], встроенный IPv4 в [12:16], рекурсивная проверка. До этого адрес вида `::5efe:192.168.1.1` проходил гард.

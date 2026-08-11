@@ -773,8 +773,22 @@ func (m *Manager) StartAll(ctx context.Context) error {
 		}
 		w := newChannelWorker(name, channel, channelType)
 		m.workers[name] = w
-		go m.runWorker(dispatchCtx, name, w)
-		go m.runMediaWorker(dispatchCtx, name, w)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.RecoverPanicNoExit(r)
+				}
+			}()
+			m.runWorker(dispatchCtx, name, w)
+		}()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.RecoverPanicNoExit(r)
+				}
+			}()
+			m.runMediaWorker(dispatchCtx, name, w)
+		}()
 	}
 
 	if len(m.channels) > 0 && len(m.workers) == 0 {
@@ -809,11 +823,35 @@ func (m *Manager) StartAll(ctx context.Context) error {
 
 	// Start the dispatcher that reads from the bus and routes to workers
 	m.dispatchWg.Add(3)
-	go func() { defer m.dispatchWg.Done(); m.dispatchOutbound(dispatchCtx) }()
-	go func() { defer m.dispatchWg.Done(); m.dispatchOutboundMedia(dispatchCtx) }()
+	go func() {
+		defer m.dispatchWg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
+		m.dispatchOutbound(dispatchCtx)
+	}()
+	go func() {
+		defer m.dispatchWg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
+		m.dispatchOutboundMedia(dispatchCtx)
+	}()
 
 	// Start the TTL janitor that cleans up stale typing/placeholder entries
-	go func() { defer m.dispatchWg.Done(); m.runTTLJanitor(dispatchCtx) }()
+	go func() {
+		defer m.dispatchWg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
+		m.runTTLJanitor(dispatchCtx)
+	}()
 
 	// Start shared HTTP server if configured
 	if m.httpServer != nil {
@@ -821,6 +859,11 @@ func (m *Manager) StartAll(ctx context.Context) error {
 			for _, listener := range m.httpListeners {
 				ln := listener
 				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							logger.RecoverPanicNoExit(r)
+						}
+					}()
 					logger.InfoCF("channels", "Shared HTTP server listening", map[string]any{
 						"addr": ln.Addr().String(),
 					})
@@ -834,6 +877,11 @@ func (m *Manager) StartAll(ctx context.Context) error {
 			}
 		} else {
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.RecoverPanicNoExit(r)
+					}
+				}()
 				logger.InfoCF("channels", "Shared HTTP server listening", map[string]any{
 					"addr": m.httpServer.Addr,
 				})
@@ -1407,8 +1455,22 @@ func (m *Manager) Reload(ctx context.Context, cfg *config.Config) error {
 		}
 		w := newChannelWorker(name, channel, channelType)
 		m.workers[name] = w
-		go m.runWorker(dispatchCtx, name, w)
-		go m.runMediaWorker(dispatchCtx, name, w)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.RecoverPanicNoExit(r)
+				}
+			}()
+			m.runWorker(dispatchCtx, name, w)
+		}()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.RecoverPanicNoExit(r)
+				}
+			}()
+			m.runMediaWorker(dispatchCtx, name, w)
+		}()
 		deferFuncs = append(deferFuncs, func() {
 			m.RegisterChannel(name, channel)
 		})
@@ -1417,6 +1479,11 @@ func (m *Manager) Reload(ctx context.Context, cfg *config.Config) error {
 	// Commit hashes only on full success.
 	m.channelHashes = list
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.RecoverPanicNoExit(r)
+			}
+		}()
 		for _, f := range deferFuncs {
 			f()
 		}
