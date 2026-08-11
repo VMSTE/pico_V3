@@ -646,6 +646,23 @@ func (bm *BotMemory) InsertRequestLog(ctx context.Context, r RequestLogRow) (int
 	return res.LastInsertId()
 }
 
+// UpdateRequestLogToolResults increments tool_calls_success/failed counters
+// on the given request_log row (D-AUDIT-81, §8.4).
+func (bm *BotMemory) UpdateRequestLogToolResults(
+	ctx context.Context, id int64, success, failed int,
+) error {
+	_, err := bm.db.ExecContext(ctx,
+		`UPDATE request_log
+		SET tool_calls_success = tool_calls_success + ?,
+		    tool_calls_failed  = tool_calls_failed + ?
+		WHERE id = ?`,
+		success, failed, id)
+	if err != nil {
+		return fmt.Errorf("pika/botmemory: update request log tool results: %w", err)
+	}
+	return nil
+}
+
 // InsertReasoningLog persists a reasoning log row.
 func (bm *BotMemory) InsertReasoningLog(ctx context.Context, r ReasoningLogRow) (int64, error) {
 	res, err := bm.db.ExecContext(ctx,

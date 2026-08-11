@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
@@ -227,6 +229,10 @@ type turnState struct {
 	tokenBudget      *atomic.Int64        // Shared token budget counter
 	lastFinishReason string               // Last LLM finish_reason
 	lastUsage        *providers.UsageInfo // Last LLM usage info
+
+	// PIKA-V3 (D-AUDIT-81): цепочка вызовов + строка request_log хода
+	chainID          string // UUID цепочки LLM-вызовов хода (lazy, D-51)
+	lastRequestLogID int64  // id строки request_log последнего LLM-вызова
 
 	// Back-reference to the owning AgentLoop (set for SubTurns only, used for hard abort cascade)
 	al *AgentLoop
@@ -621,6 +627,16 @@ func (ts *turnState) SetLastUsage(usage *providers.UsageInfo) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.lastUsage = usage
+}
+
+// ensureChainID lazily generates the chain UUID for this turn (D-AUDIT-81, D-51).
+func (ts *turnState) ensureChainID() string {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.chainID == "" {
+		ts.chainID = uuid.NewString()
+	}
+	return ts.chainID
 }
 
 // =============================================================================

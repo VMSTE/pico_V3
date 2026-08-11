@@ -568,6 +568,33 @@ func TestInsertRequestLog(t *testing.T) {
 	}
 }
 
+// D-AUDIT-81: инкремент tool_calls_success/failed по id строки.
+func TestUpdateRequestLogToolResults(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+	id, err := bm.InsertRequestLog(ctx, RequestLogRow{
+		ChatID: "s1", Direction: "chat", Component: "main", Model: "m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bm.UpdateRequestLogToolResults(ctx, id, 2, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := bm.UpdateRequestLogToolResults(ctx, id, 1, 0); err != nil {
+		t.Fatal(err)
+	}
+	var succ, fail int
+	if err := bm.db.QueryRow(
+		`SELECT tool_calls_success, tool_calls_failed FROM request_log WHERE id=?`, id,
+	).Scan(&succ, &fail); err != nil {
+		t.Fatal(err)
+	}
+	if succ != 3 || fail != 1 {
+		t.Errorf("got success=%d failed=%d, want 3/1", succ, fail)
+	}
+}
+
 func TestQueryCorrelatedTools(t *testing.T) {
 	bm := setupTestDB(t)
 	ctx := context.Background()

@@ -644,6 +644,23 @@ toolLoop:
 			})
 		}
 
+		// PIKA-V3 (D-AUDIT-81): досчёт success/failed в строку request_log
+		// LLM-вызова, который запросил этот инструмент (§8.4).
+		if al.botmem != nil && toolResult != nil && ts.lastRequestLogID > 0 {
+			succ, fail := 0, 0
+			if toolResult.IsError {
+				fail = 1
+			} else {
+				succ = 1
+			}
+			if uErr := al.botmem.UpdateRequestLogToolResults(
+				ctx, ts.lastRequestLogID, succ, fail,
+			); uErr != nil {
+				logger.WarnCF("agent", "request_log tool results update failed",
+					map[string]any{"error": uErr.Error()})
+			}
+		}
+
 		// PIKA-V3: связь «атомы подсказки → первый инструмент» (D-AUDIT-61).
 		// Пишет Go, детерминированно; ошибка записи не роняет ход.
 		if al.botmem != nil && toolResult != nil {

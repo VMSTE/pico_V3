@@ -45,6 +45,11 @@ type RecordLLMParams struct {
 	ToolCallsRequested int
 	ToolNames          []string
 	ReasoningTokens    int
+
+	// PIKA-V3 (D-AUDIT-81): продюсеры task/chain телеметрии
+	TaskTag       string
+	ChainID       string
+	ChainPosition *int
 }
 
 // TelemetryConfig holds configuration for the Telemetry subsystem.
@@ -133,14 +138,14 @@ func (t *Telemetry) CheckBudget() (
 // Called from pipeline_llm.go AFTER each LLM invocation.
 func (t *Telemetry) RecordLLMCall(
 	ctx context.Context, p RecordLLMParams,
-) {
+) int64 {
 	t.mu.Lock()
 	t.ensureBudgetDate()
 	t.spentTodayUSD += p.CostUSD
 	t.mu.Unlock()
 
 	if t.botmem == nil {
-		return
+		return 0
 	}
 	row := RequestLogRow{
 		ChatID:             p.ChatID,
@@ -154,6 +159,9 @@ func (t *Telemetry) RecordLLMCall(
 		Error:              p.Error,
 		ToolCallsRequested: p.ToolCallsRequested,
 		ReasoningTokens:    p.ReasoningTokens,
+		TaskTag:            p.TaskTag,
+		ChainID:            p.ChainID,
+		ChainPosition:      p.ChainPosition,
 	}
 	// D-AUDIT-64: имена инструментов — JSON-массив строк
 	if len(p.ToolNames) > 0 {
@@ -162,7 +170,9 @@ func (t *Telemetry) RecordLLMCall(
 		}
 	}
 	// Fire-and-forget: telemetry should not block pipeline.
-	_, _ = t.botmem.InsertRequestLog(ctx, row)
+	// id строки возвращаем для досчёта tool outcomes (D-AUDIT-81).
+	id, _ := t.botmem.InsertRequestLog(ctx, row)
+	return id
 }
 
 // RecordToolCall records a tool call result into the sliding
