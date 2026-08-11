@@ -1,3 +1,9 @@
+## Волна 47 — Пакет фиксов №3: anthropic-sdk 1.50.2 + хвост panic-recovery (D-AUDIT-80) · 11 авг 2026
+
+- **anthropic-sdk-go 1.26.0 → 1.50.2**: v1.50.2 удалил NewThinkingConfigAdaptiveParam() — provider.go переведён на структурный литерал &anthropic.ThinkingConfigAdaptiveParam{} (паттерн подтверждён message_test.go самого SDK; Type сериализуется автоматически).
+- **pipeline_llm.go:356/358 — последние 2 горутины без recover** (publishPicoReasoning, handleReasoning; многострочные вызовы, не взятые механическим патчем D-AUDIT-79): обёрнуты defer recover → logger.RecoverPanicNoExit. Инвентарь panic-recovery теперь закрыт полностью.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, RACE-GREEN, lint 0 issues.
+
 ## Волна 46 — Пакет фиксов №2: panic-recovery на боевых горутинах (D-AUDIT-79) · 11 авг 2026
 
 - **64 точки запуска горутин получили defer recover → logger.RecoverPanicNoExit**: паника пишется в panic-лог, процесс выживает (раньше — падение всего процесса).

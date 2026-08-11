@@ -353,14 +353,28 @@ func (p *Pipeline) CallLLM(
 		// Pico tool-call turns publish their reasoning/content/tool summary as a
 		// structured sequence after the tool-call payload is normalized below.
 	} else if ts.channel == "pico" {
-		go al.publishPicoReasoning(turnCtx, reasoningContent, ts.chatID)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.RecoverPanicNoExit(r)
+				}
+			}()
+			al.publishPicoReasoning(turnCtx, reasoningContent, ts.chatID)
+		}()
 	} else {
-		go al.handleReasoning(
-			turnCtx,
-			reasoningContent,
-			ts.channel,
-			al.targetReasoningChannelID(ts.channel),
-		)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.RecoverPanicNoExit(r)
+				}
+			}()
+			al.handleReasoning(
+				turnCtx,
+				reasoningContent,
+				ts.channel,
+				al.targetReasoningChannelID(ts.channel),
+			)
+		}()
 	}
 	al.emitEvent(
 		EventKindLLMResponse,
