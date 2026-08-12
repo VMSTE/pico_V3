@@ -1,3 +1,9 @@
+## Волна 54 — Read-only telemetry API для Web UI (D-AUDIT-86) · 12 авг 2026
+
+- web/backend/api/pika_dashboard.go — GET /api/pika/overview (сегодня/всего: запросы, токены, ошибки, error%; P95 латентности; разрез по компонентам) и GET /api/pika/requests?limit=N (последние N≤200 строк request_log). Лончер читает bot_memory.db напрямую, ТОЛЬКО read-only (file:...?mode=ro); БД отсутствует → available:false. Путь: PIKA_DB_PATH → agents.defaults.memory_db_path → legacy sessions/bot_memory.db.
+- Тесты: query-функции на temp DB (периоды, компоненты, P95, пустой период) + resolvePikaDBPath (env > конфиг).
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 53 — Интерактивный CLI-онбординг: мастер модели (D-AUDIT-85) · 12 авг 2026
 
 - cmd/picoclaw/internal/onboard/model_wizard.go — после создания конфига: меню провайдеров (Ollama/OpenAI/Anthropic/OpenRouter/DeepSeek/Groq/Other), скрытый ввод ключа (term.ReadPassword), проверка связи бесплатным GET /models (Anthropic: x-api-key + anthropic-version), выбор модели из живого списка, запись в model_list + дефолт + SaveConfig.
