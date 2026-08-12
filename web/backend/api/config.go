@@ -39,6 +39,8 @@ func (h *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	maskMCPServerSecrets(cfg)
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(cfg); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
@@ -87,6 +89,11 @@ func (h *Handler) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	applyConfigSecretsFromMap(&cfg, raw)
+
+	// D-AUDIT-87: restore real MCP secrets where the client echoed the mask.
+	if oldCfg, lErr := config.LoadConfig(h.configPath); lErr == nil {
+		restoreMCPServerSecrets(&cfg, oldCfg)
+	}
 
 	if errs := validateConfig(&cfg); len(errs) > 0 {
 		w.Header().Set("Content-Type", "application/json")
@@ -188,6 +195,11 @@ func (h *Handler) handlePatchConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	applyConfigSecretsFromMap(&newCfg, base)
+
+	// D-AUDIT-87: restore real MCP secrets where the client echoed the mask.
+	if oldCfg, lErr := config.LoadConfig(h.configPath); lErr == nil {
+		restoreMCPServerSecrets(&newCfg, oldCfg)
+	}
 
 	if errs := validateConfig(&newCfg); len(errs) > 0 {
 		w.Header().Set("Content-Type", "application/json")
