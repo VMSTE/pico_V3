@@ -1,3 +1,10 @@
+## Волна 51 — MCP API для Web UI: probe в pkg/mcp (D-AUDIT-84) · 12 авг 2026
+
+- pkg/mcp/probe.go — exported ProbeServer (connect + tool count): переиспользуется CLI и Web.
+- web/backend/api/mcp.go — GET/PUT/DELETE /api/mcp/servers + POST /{name}/test; секреты отдаются только именами ключей; PUT включает tools.mcp, DELETE последнего сервера выключает (как CLI).
+- cmd/picoclaw/internal/mcp/helpers.go — defaultServerProbe делегирует в pkg/mcp (убрано дублирование).
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 49 — Телеметрия спутников + component=subturn + latency (D-AUDIT-82) · 11 авг 2026
 
 - **RecordSatelliteLLM** (pkg/pika/telemetry.go, NEW): fire-and-forget запись вызова спутника в request_log — component, direction, model, токены из usage, response_ms. nil-safe.
