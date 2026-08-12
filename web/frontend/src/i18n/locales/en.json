@@ -14,7 +14,8 @@
     "show_less_channels": "Less",
     "config": "Config",
     "logs": "Logs",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "pika": "Pika"
   },
   "launcherLogin": {
     "title": "Sign in",
@@ -459,6 +460,29 @@
     }
   },
   "pages": {
+    "pika": {
+      "description": "Live telemetry from bot_memory.db: tokens, errors, latency per component. Auto-refreshes every 30 s.",
+      "refresh": "Refresh",
+      "unavailable": "No telemetry yet. The gateway will start writing data after the first requests.",
+      "today": "Today (tokens)",
+      "totals": "All time (tokens)",
+      "requests": "Requests",
+      "tokens": "Tokens",
+      "errors": "Errors",
+      "error_rate": "Error rate (today)",
+      "p95": "P95 latency",
+      "components_title": "Components",
+      "component": "Component",
+      "avg_ms": "Avg latency",
+      "recent_title": "Recent requests",
+      "col_time": "Time",
+      "col_model": "Model",
+      "col_task": "Task",
+      "col_tokens": "Tokens",
+      "col_ms": "Latency",
+      "col_error": "Error",
+      "load_error": "Failed to load telemetry"
+    },
     "mcp": {
       "description": "Connect MCP servers to give the agent extra tools. Secrets are stored in the config file and never shown here.",
       "add_server": "Add server",

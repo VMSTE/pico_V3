@@ -1,3 +1,9 @@
+## Волна 55 — Страница телеметрии Pika в Web UI (D-AUDIT-86) · 12 авг 2026
+
+- web/frontend/src/api/pika.ts + components/pika/pika-page.tsx + routes/pika.tsx — страница /pika: карточки «сегодня/всего» (токены, запросы), error-rate, P95, таблица компонентов (main/subturn/спутники), лента последних 50 запросов (время, компонент, модель, task_tag, токены, латентность, ошибка). Автообновление 30с + кнопка Refresh. available=false → пустое состояние-подсказка.
+- Сайдбар: пункт Pika (IconActivity) после MCP; переводы en/zh.
+- Гейты: FE-BUILD-OK, LINT-OK.
+
 ## Волна 54 — Read-only telemetry API для Web UI (D-AUDIT-86) · 12 авг 2026
 
 - web/backend/api/pika_dashboard.go — GET /api/pika/overview (сегодня/всего: запросы, токены, ошибки, error%; P95 латентности; разрез по компонентам) и GET /api/pika/requests?limit=N (последние N≤200 строк request_log). Лончер читает bot_memory.db напрямую, ТОЛЬКО read-only (file:...?mode=ro); БД отсутствует → available:false. Путь: PIKA_DB_PATH → agents.defaults.memory_db_path → legacy sessions/bot_memory.db.
