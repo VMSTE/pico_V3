@@ -13,6 +13,7 @@ var embeddedFiles embed.FS
 func NewOnboardCommand() *cobra.Command {
 	var encrypt bool
 	var resetPrompts bool
+	var skipModel bool
 
 	cmd := &cobra.Command{
 		Use:     "onboard",
@@ -21,7 +22,7 @@ func NewOnboardCommand() *cobra.Command {
 		// Run without subcommands → original onboard flow
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) == 0 {
-				onboard(encrypt, resetPrompts)
+				onboard(encrypt, resetPrompts, skipModel)
 			} else {
 				_ = cmd.Help()
 			}
@@ -32,6 +33,8 @@ func NewOnboardCommand() *cobra.Command {
 		"Enable credential encryption (generates SSH key and prompts for passphrase)")
 	cmd.Flags().BoolVar(&resetPrompts, "reset-prompts", false,
 		"Reset prompts to defaults (overwrite user-edited prompts)")
+	cmd.Flags().BoolVar(&skipModel, "skip-model", false,
+		"Skip the interactive model setup wizard")
 
 	return cmd
 }
