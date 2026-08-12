@@ -88,12 +88,12 @@ func (h *Handler) handlePutMCPServer(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	var req mcpServerRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+	if uErr := json.Unmarshal(body, &req); uErr != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON: %v", uErr), http.StatusBadRequest)
 		return
 	}
-	if err := validateMCPServerRequest(name, &req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if vErr := validateMCPServerRequest(name, &req); vErr != nil {
+		http.Error(w, vErr.Error(), http.StatusBadRequest)
 		return
 	}
 
