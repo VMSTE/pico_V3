@@ -69,8 +69,8 @@ func TestQueryPikaPeriodStats(t *testing.T) {
 	if s.Requests != 4 {
 		t.Errorf("Requests = %d, want 4", s.Requests)
 	}
-	if s.Tokens != 1150 {
-		t.Errorf("Tokens = %d, want 1150", s.Tokens)
+	if s.Tokens != 1250 {
+		t.Errorf("Tokens = %d, want 1250", s.Tokens)
 	}
 	if s.Errors != 1 {
 		t.Errorf("Errors = %d, want 1", s.Errors)

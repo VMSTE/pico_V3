@@ -232,6 +232,9 @@ func queryPikaComponents(ctx context.Context, db *sql.DB) []pikaComponentStats {
 		}
 		out = append(out, c)
 	}
+	if rErr := rows.Err(); rErr != nil {
+		return nil
+	}
 	return out
 }
 
@@ -259,6 +262,9 @@ func queryPikaRequests(ctx context.Context, db *sql.DB, limit int) []pikaRequest
 			continue
 		}
 		out = append(out, r)
+	}
+	if rErr := rows.Err(); rErr != nil {
+		return nil
 	}
 	return out
 }
