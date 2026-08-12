@@ -1,3 +1,10 @@
+## Волна 53 — Интерактивный CLI-онбординг: мастер модели (D-AUDIT-85) · 12 авг 2026
+
+- cmd/picoclaw/internal/onboard/model_wizard.go — после создания конфига: меню провайдеров (Ollama/OpenAI/Anthropic/OpenRouter/DeepSeek/Groq/Other), скрытый ввод ключа (term.ReadPassword), проверка связи бесплатным GET /models (Anthropic: x-api-key + anthropic-version), выбор модели из живого списка, запись в model_list + дефолт + SaveConfig.
+- Пропуск мастера: stdin не терминал (лаунчер гоняет onboard с stdin "n\n"), модель уже задана, флаг --skip-model.
+- Тесты fetchModelIDs через httptest (200, 401, заголовки Anthropic).
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 52 — MCP-страница в Web UI (D-AUDIT-84) · 12 авг 2026
 
 - web/frontend/src/api/mcp.ts — клиент для /api/mcp/servers (list/put/delete/test).

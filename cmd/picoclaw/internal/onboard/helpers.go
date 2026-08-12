@@ -15,7 +15,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/credential"
 )
 
-func onboard(encrypt bool, resetPrompts bool) {
+func onboard(encrypt bool, resetPrompts bool, skipModel bool) {
 	configPath := internal.GetConfigPath()
 
 	configExists := false
@@ -81,6 +81,8 @@ func onboard(encrypt bool, resetPrompts bool) {
 	workspace := cfg.WorkspacePath()
 	preservePrompts := cfg.Onboard.PreserveUserPrompts && !resetPrompts
 	createWorkspaceTemplates(workspace, preservePrompts)
+
+	maybeRunModelWizard(cfg, configPath, skipModel)
 
 	cliui.PrintOnboardComplete(internal.Logo, encrypt, configPath)
 }
