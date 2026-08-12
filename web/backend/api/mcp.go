@@ -267,3 +267,53 @@ func validateMCPServerRequest(name string, req *mcpServerRequest) error {
 	}
 	return nil
 }
+
+// D-AUDIT-87: MCP env/headers are plain maps (not SecureString), so without
+// masking their values would be fully visible in GET /api/config.
+
+const mcpMaskedSecret = "[NOT_HERE]"
+
+// maskMCPServerSecrets replaces non-empty MCP env/header values with the
+// [NOT_HERE] placeholder, consistent with SecureString masking.
+func maskMCPServerSecrets(cfg *config.Config) {
+	for name, srv := range cfg.Tools.MCP.Servers {
+		for k, v := range srv.Env {
+			if v != "" {
+				srv.Env[k] = mcpMaskedSecret
+			}
+		}
+		for k, v := range srv.Headers {
+			if v != "" {
+				srv.Headers[k] = mcpMaskedSecret
+			}
+		}
+		cfg.Tools.MCP.Servers[name] = srv
+	}
+}
+
+// restoreMCPServerSecrets puts back real MCP env/header values where the
+// client echoed the [NOT_HERE] mask. Without this, a full-config save from
+// the UI would overwrite real secrets with the placeholder.
+func restoreMCPServerSecrets(cfg *config.Config, old *config.Config) {
+	for name, srv := range cfg.Tools.MCP.Servers {
+		oldSrv, ok := old.Tools.MCP.Servers[name]
+		if !ok {
+			continue
+		}
+		for k, v := range srv.Env {
+			if v == mcpMaskedSecret {
+				if oldV, exists := oldSrv.Env[k]; exists {
+					srv.Env[k] = oldV
+				}
+			}
+		}
+		for k, v := range srv.Headers {
+			if v == mcpMaskedSecret {
+				if oldV, exists := oldSrv.Headers[k]; exists {
+					srv.Headers[k] = oldV
+				}
+			}
+		}
+		cfg.Tools.MCP.Servers[name] = srv
+	}
+}
