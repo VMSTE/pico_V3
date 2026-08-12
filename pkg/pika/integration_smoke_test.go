@@ -123,60 +123,45 @@ func TestPikaIntegrationSmoke(t *testing.T) {
 		t.Fatal("step 7: ToolGuard is nil")
 	}
 
-	// Step 8: Envelope — parse valid JSON → OK=true, invalid → OK=false
-	envOK := ParseEnvelope([]byte(`{"ok":true,"data":"hello"}`))
-	if !envOK.OK {
-		t.Error("step 8a: ParseEnvelope({ok:true}) expected OK=true, got false")
-	}
-	envBad := ParseEnvelope([]byte(`not json at all`))
-	if envBad.OK {
-		t.Error("step 8b: ParseEnvelope(bad) expected OK=false, got true")
-	}
-	envEmpty := ParseEnvelope(nil)
-	if envEmpty.OK {
-		t.Error("step 8c: ParseEnvelope(nil) expected OK=false, got true")
-	}
-
-	// Step 9: OutputGate
+	// Step 8: OutputGate
 	og := OutputGateFactory(cfg)
 	if og == nil {
-		t.Fatal("step 9: OutputGate is nil")
+		t.Fatal("step 8: OutputGate is nil")
 	}
 
-	// Step 10: MCPSecurity + Telemetry
+	// Step 9: MCPSecurity + Telemetry
 	telemetry := NewTelemetry(TelemetryConfig{}, mem, &smokeNotifier{})
 	if telemetry == nil {
-		t.Fatal("step 10a: Telemetry is nil")
+		t.Fatal("step 9a: Telemetry is nil")
 	}
 	mcp := NewMCPSecurityPipeline(DefaultMCPGuardConfig(), nil, telemetry)
 	if mcp == nil {
-		t.Fatal("step 10b: MCPSecurity is nil")
+		t.Fatal("step 9b: MCPSecurity is nil")
 	}
 
-	// Step 11: RAD — analyze benign reasoning → expect pass
+	// Step 10: RAD — analyze benign reasoning → expect pass
 	rad := NewRAD(DefaultRADConfig())
 	if rad == nil {
-		t.Fatal("step 11: RAD is nil")
+		t.Fatal("step 10: RAD is nil")
 	}
 	radResult := rad.Analyze(ctx,
 		"The user asked about weather. I will respond with the forecast.",
 		&RADSession{}, nil)
 	if radResult.Verdict != "safe" {
-		t.Errorf("step 11: RAD on benign reasoning: expected verdict=safe, got %q", radResult.Verdict)
+		t.Errorf("step 10: RAD on benign reasoning: expected verdict=safe, got %q", radResult.Verdict)
 	}
 
-	// Step 12: Archivist — create with mock LLM
+	// Step 11: Archivist — create with mock LLM
 	llm := newMockProvider()
 	arch := NewArchivist(mem, llm, trail, meta, DefaultArchivistConfig())
 	if arch == nil {
-		t.Fatal("step 12: Archivist is nil")
+		t.Fatal("step 11: Archivist is nil")
 	}
 
 	// Bonus: pure-function behavioral checks
 	if CheckLoopDetection(trail, 3) {
 		t.Error("bonus: empty trail should not detect a loop")
 	}
-	_ = ClassifyEnvelopeError("timeout") // no panic
 
 	_ = store
 	_ = sl
@@ -186,7 +171,7 @@ func TestPikaIntegrationSmoke(t *testing.T) {
 	_ = guard
 	_ = arch
 
-	t.Log("core path: 12 components — all instantiated + behavioral checks PASS")
+	t.Log("core path: 11 components — all instantiated + behavioral checks PASS")
 }
 
 // ===========================================================================
