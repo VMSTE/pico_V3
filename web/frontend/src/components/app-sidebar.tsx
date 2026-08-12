@@ -1,5 +1,6 @@
 import { IconChevronRight } from "@tabler/icons-react"
 import {
+  IconActivity,
   IconAtom,
   IconChevronsDown,
   IconChevronsUp,
@@ -155,6 +156,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.mcp",
             url: "/mcp",
             icon: IconPlug,
+            translateTitle: true,
+          },
+          {
+            title: "navigation.pika",
+            url: "/pika",
+            icon: IconActivity,
             translateTitle: true,
           },
         ],

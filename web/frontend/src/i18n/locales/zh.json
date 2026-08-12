@@ -14,7 +14,8 @@
     "show_less_channels": "收起",
     "config": "配置",
     "logs": "日志",
-    "mcp": "MCP"
+    "mcp": "MCP",
+    "pika": "Pika"
   },
   "launcherLogin": {
     "title": "登录",
@@ -459,6 +460,29 @@
     }
   },
   "pages": {
+    "pika": {
+      "description": "来自 bot_memory.db 的实时遥测：各组件的 token、错误与延迟。每 30 秒自动刷新。",
+      "refresh": "刷新",
+      "unavailable": "暂无遥测数据。网关处理首批请求后将开始写入。",
+      "today": "今日（tokens）",
+      "totals": "累计（tokens）",
+      "requests": "请求数",
+      "tokens": "Tokens",
+      "errors": "错误",
+      "error_rate": "错误率（今日）",
+      "p95": "P95 延迟",
+      "components_title": "组件",
+      "component": "组件",
+      "avg_ms": "平均延迟",
+      "recent_title": "最近请求",
+      "col_time": "时间",
+      "col_model": "模型",
+      "col_task": "任务",
+      "col_tokens": "Tokens",
+      "col_ms": "延迟",
+      "col_error": "错误",
+      "load_error": "加载遥测数据失败"
+    },
     "mcp": {
       "description": "连接 MCP 服务器，为智能体提供额外工具。密钥保存在配置文件中，此处不会显示。",
       "add_server": "添加服务器",
