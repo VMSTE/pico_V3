@@ -13,7 +13,8 @@
     "show_more_channels": "更多",
     "show_less_channels": "收起",
     "config": "配置",
-    "logs": "日志"
+    "logs": "日志",
+    "mcp": "MCP"
   },
   "launcherLogin": {
     "title": "登录",
@@ -458,6 +459,41 @@
     }
   },
   "pages": {
+    "mcp": {
+      "description": "连接 MCP 服务器，为智能体提供额外工具。密钥保存在配置文件中，此处不会显示。",
+      "add_server": "添加服务器",
+      "empty": "尚未配置 MCP 服务器。",
+      "global_disabled": "MCP 集成当前已禁用，保存服务器后将自动启用。",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "test": "测试",
+      "test_success": "连接成功 — {{count}} 个工具",
+      "test_failed": "连接失败",
+      "delete": "删除",
+      "confirm_delete": "确定删除 MCP 服务器「{{name}}」吗？此操作不可撤销。",
+      "delete_success": "服务器已删除。",
+      "save_success": "服务器已保存，重启服务后生效。",
+      "save_error": "保存服务器失败",
+      "delete_error": "删除服务器失败",
+      "load_error": "加载 MCP 服务器失败",
+      "form": {
+        "name": "名称",
+        "name_placeholder": "例如 filesystem",
+        "type": "传输方式",
+        "command": "命令",
+        "command_placeholder": "例如 npx",
+        "args": "参数",
+        "args_placeholder": "例如 -y @modelcontextprotocol/server-filesystem /tmp",
+        "url": "URL",
+        "url_placeholder": "例如 https://mcp.example.com/mcp",
+        "env": "环境变量",
+        "env_placeholder": "KEY=value，每行一个",
+        "headers": "HTTP 头",
+        "headers_placeholder": "Name: Value，每行一个",
+        "deferred_label": "延迟加载（工具隐藏，按需发现）",
+        "validation_target": "请填写名称（字母、数字、_ -）以及命令（stdio）或 URL（http/sse）。"
+      }
+    },
     "agent": {
       "load_error": "加载 Agent 支持信息失败。",
       "skills": {

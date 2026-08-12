@@ -1,3 +1,10 @@
+## Волна 52 — MCP-страница в Web UI (D-AUDIT-84) · 12 авг 2026
+
+- web/frontend/src/api/mcp.ts — клиент для /api/mcp/servers (list/put/delete/test).
+- web/frontend/src/components/mcp/mcp-page.tsx — страница: список серверов (имя, тип, цель, статус, env/header-ключи), форма добавления (stdio: command+args+env; http/sse: url+headers; deferred), кнопки Test (probe, тост с числом тулов) и Delete (confirm). Без toggle/edit v1: GET маскирует значения секретов, полный PUT затёр бы их — toggle ждёт merge-aware PATCH эндпоинт.
+- routes/mcp.tsx + пункт в сайдбаре (IconPlug), переводы en/zh.
+- Гейты: FE-BUILD-OK, LINT-OK (routeTree.gen.ts перегенерирован сборкой).
+
 ## Волна 51 — MCP API для Web UI: probe в pkg/mcp (D-AUDIT-84) · 12 авг 2026
 
 - pkg/mcp/probe.go — exported ProbeServer (connect + tool count): переиспользуется CLI и Web.

@@ -13,7 +13,8 @@
     "show_more_channels": "More",
     "show_less_channels": "Less",
     "config": "Config",
-    "logs": "Logs"
+    "logs": "Logs",
+    "mcp": "MCP"
   },
   "launcherLogin": {
     "title": "Sign in",
@@ -458,6 +459,41 @@
     }
   },
   "pages": {
+    "mcp": {
+      "description": "Connect MCP servers to give the agent extra tools. Secrets are stored in the config file and never shown here.",
+      "add_server": "Add server",
+      "empty": "No MCP servers configured yet.",
+      "global_disabled": "MCP integration is disabled. Saving a server will enable it.",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "test": "Test",
+      "test_success": "Connected — {{count}} tools",
+      "test_failed": "Connection failed",
+      "delete": "Delete",
+      "confirm_delete": "Delete MCP server \"{{name}}\"? This cannot be undone.",
+      "delete_success": "Server deleted.",
+      "save_success": "Server saved. Restart the gateway for it to take effect.",
+      "save_error": "Failed to save server",
+      "delete_error": "Failed to delete server",
+      "load_error": "Failed to load MCP servers",
+      "form": {
+        "name": "Name",
+        "name_placeholder": "e.g. filesystem",
+        "type": "Transport",
+        "command": "Command",
+        "command_placeholder": "e.g. npx",
+        "args": "Arguments",
+        "args_placeholder": "e.g. -y @modelcontextprotocol/server-filesystem /tmp",
+        "url": "URL",
+        "url_placeholder": "e.g. https://mcp.example.com/mcp",
+        "env": "Environment variables",
+        "env_placeholder": "KEY=value, one per line",
+        "headers": "HTTP headers",
+        "headers_placeholder": "Name: Value, one per line",
+        "deferred_label": "Deferred (tools hidden until discovered)",
+        "validation_target": "Fill in name (letters, digits, _ -) and command (stdio) or URL (http/sse)."
+      }
+    },
     "agent": {
       "load_error": "Failed to load agent support information.",
       "skills": {
