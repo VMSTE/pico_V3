@@ -318,27 +318,11 @@ func defaultServerProbe(
 	server config.MCPServerConfig,
 	workspacePath string,
 ) (probeResult, error) {
-	mgr := picomcp.NewManager()
-	defer func() { _ = mgr.Close() }()
-
-	server.Enabled = true
-	mcpCfg := config.MCPConfig{
-		ToolConfig: config.ToolConfig{Enabled: true},
-		Servers: map[string]config.MCPServerConfig{
-			name: server,
-		},
-	}
-
-	if err := mgr.LoadFromMCPConfig(ctx, mcpCfg, workspacePath); err != nil {
+	res, err := picomcp.ProbeServer(ctx, name, server, workspacePath)
+	if err != nil {
 		return probeResult{}, err
 	}
-
-	conn, ok := mgr.GetServer(name)
-	if !ok {
-		return probeResult{}, fmt.Errorf("server %q did not register a connection", name)
-	}
-
-	return probeResult{ToolCount: len(conn.Tools)}, nil
+	return probeResult{ToolCount: res.ToolCount}, nil
 }
 
 func confirmOverwrite(r io.Reader, w io.Writer, name string) (bool, error) {
