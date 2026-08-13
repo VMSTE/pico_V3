@@ -18,7 +18,8 @@
     "pika": "Pika",
     "security": "安全",
     "subagents": "子智能体",
-    "health": "健康"
+    "health": "健康",
+    "analytics": "分析"
   },
   "launcherLogin": {
     "title": "登录",
@@ -463,6 +464,25 @@
     }
   },
   "pages": {
+    "analytics": {
+      "description": "分析流水线：告警阈值、报告上限与调度。更改将在重启网关后生效。",
+      "note_defaults": "留空的字段将使用内置默认值（显示为占位符）。",
+      "save_success": "分析设置已保存，重启网关后生效。",
+      "save_error": "保存分析设置失败",
+      "load_error": "加载配置失败",
+      "general": {
+        "title": "常规",
+        "desc": "流水线开关、SQL 查询目录、Telegram 投递与定时调度。"
+      },
+      "thresholds": {
+        "title": "告警阈值",
+        "desc": "指标超过阈值时将在报告中触发告警。"
+      },
+      "reports": {
+        "title": "报告上限",
+        "desc": "生成报告的最大长度与 Top-N 数量。"
+      }
+    },
     "health": {
       "description": "降级阈值、备用服务商与进度通知。更改将在重启网关后生效。",
       "note_defaults": "留空的字段将使用内置默认值。管理员频道/会话 ID 在「安全」页面配置。",

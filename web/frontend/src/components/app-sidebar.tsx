@@ -2,6 +2,7 @@ import { IconChevronRight } from "@tabler/icons-react"
 import {
   IconActivity,
   IconAtom,
+  IconChartBar,
   IconChevronsDown,
   IconChevronsUp,
   IconHeartbeat,
@@ -194,6 +195,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.health",
             url: "/health",
             icon: IconHeartbeat,
+            translateTitle: true,
+          },
+          {
+            title: "navigation.analytics",
+            url: "/analytics",
+            icon: IconChartBar,
             translateTitle: true,
           },
           {

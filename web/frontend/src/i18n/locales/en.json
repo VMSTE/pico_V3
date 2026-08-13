@@ -18,7 +18,8 @@
     "pika": "Pika",
     "security": "Security",
     "subagents": "Subagents",
-    "health": "Health"
+    "health": "Health",
+    "analytics": "Analytics"
   },
   "launcherLogin": {
     "title": "Sign in",
@@ -463,6 +464,25 @@
     }
   },
   "pages": {
+    "analytics": {
+      "description": "Analytics pipeline: alert thresholds, report limits and schedule. Changes apply after a gateway restart.",
+      "note_defaults": "Empty fields inherit the built-in defaults (shown as placeholders).",
+      "save_success": "Analytics settings saved. Restart the gateway for them to take effect.",
+      "save_error": "Failed to save analytics settings",
+      "load_error": "Failed to load configuration",
+      "general": {
+        "title": "General",
+        "desc": "Pipeline switch, SQL queries directory, Telegram delivery and cron schedule."
+      },
+      "thresholds": {
+        "title": "Alert thresholds",
+        "desc": "A metric crossing its threshold triggers an alert in the report."
+      },
+      "reports": {
+        "title": "Report limits",
+        "desc": "Maximum length and top-N sizes of the generated reports."
+      }
+    },
     "health": {
       "description": "Degradation thresholds, fallback provider and progress notifications. Changes apply after a gateway restart.",
       "note_defaults": "Empty fields inherit the built-in defaults. Manager channel/chat ID are configured on the Security page.",
