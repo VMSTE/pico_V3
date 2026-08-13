@@ -345,7 +345,7 @@ func (ae *AnalyticsEngine) collectMetrics(ctx context.Context, p AnalyticsPeriod
 
 func (ae *AnalyticsEngine) loadSQL(name string) ([]string, error) {
 	path := filepath.Join(ae.queriesDir, name)
-	data, err := os.ReadFile(path) // #nosec G304 -- path comes from config (prompt_file/queries_dir), not user input; D-90 hot-reload
+	data, err := os.ReadFile(path) // #nosec G304 -- config path, D-90
 	if err != nil {
 		return nil, fmt.Errorf("pika/analytics: loadSQL %s: %w", name, err)
 	}
@@ -420,7 +420,7 @@ func (ae *AnalyticsEngine) queryLLMMetrics(ctx context.Context, start, end strin
 			if rErr := rows.Err(); rErr != nil {
 				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
-			rows.Close()
+			_ = rows.Close()
 		}
 	}
 
@@ -438,7 +438,7 @@ func (ae *AnalyticsEngine) queryLLMMetrics(ctx context.Context, start, end strin
 			if rErr := rows.Err(); rErr != nil {
 				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
-			rows.Close()
+			_ = rows.Close()
 			if len(latencies) > 0 {
 				out.P95ResponseMs = analyticsPercentile(latencies, 95)
 			}
@@ -479,7 +479,7 @@ func (ae *AnalyticsEngine) queryToolMetrics(ctx context.Context, start, end stri
 			if rErr := rows.Err(); rErr != nil {
 				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
-			rows.Close()
+			_ = rows.Close()
 		}
 	}
 	return nil
@@ -529,7 +529,7 @@ func (ae *AnalyticsEngine) querySubagentMetrics(ctx context.Context, start, end 
 			if rErr := rows.Err(); rErr != nil {
 				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
-			rows.Close()
+			_ = rows.Close()
 		}
 	}
 
@@ -548,7 +548,7 @@ func (ae *AnalyticsEngine) querySubagentMetrics(ctx context.Context, start, end 
 			if rErr := rows.Err(); rErr != nil {
 				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
-			rows.Close()
+			_ = rows.Close()
 			for comp, durs := range durMap {
 				if s, ok := compMap[comp]; ok {
 					s.P95DurationMs = analyticsPercentile(durs, 95)
@@ -632,7 +632,7 @@ func (ae *AnalyticsEngine) queryAtomUsageMetrics(ctx context.Context, start, end
 			if rErr := rows.Err(); rErr != nil {
 				log.Printf("[analytics] WARN rows.Err: %v", rErr)
 			}
-			rows.Close()
+			_ = rows.Close()
 		}
 	}
 
@@ -1019,9 +1019,9 @@ func (ae *AnalyticsEngine) sendReport(ctx context.Context, text string) error {
 
 func (ae *AnalyticsEngine) fallbackWriteReport(text string) error {
 	dir := "/workspace/exports"
-	_ = os.MkdirAll(dir, 0o755)
+	_ = os.MkdirAll(dir, 0o750)
 	fname := filepath.Join(dir, fmt.Sprintf("analytics_%s.md", time.Now().Format("2006-01-02_15-04")))
-	if err := os.WriteFile(fname, []byte(text), 0o644); err != nil {
+	if err := os.WriteFile(fname, []byte(text), 0o600); err != nil {
 		return fmt.Errorf("pika/analytics: fallback write: %w", err)
 	}
 	log.Printf("[analytics] fallback: report saved to %s", fname)

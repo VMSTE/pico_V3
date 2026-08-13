@@ -187,8 +187,8 @@ func NewBotMemory(db *sql.DB) (*BotMemory, error) {
 
 // Close releases zstd encoder and decoder resources.
 func (bm *BotMemory) Close() {
-	bm.encoder.Close()
-	bm.decoder.Close()
+	_ = bm.encoder.Close()
+	_ = bm.decoder.Close()
 }
 
 func (bm *BotMemory) compress(data []byte) []byte {

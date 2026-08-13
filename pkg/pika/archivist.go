@@ -345,7 +345,7 @@ func (a *Archivist) loadPromptFile() (string, error) {
 	if path == "" {
 		return defaultArchivistPrompt, nil
 	}
-	data, err := os.ReadFile(path) // #nosec G304 -- path comes from config (prompt_file/queries_dir), not user input; D-90 hot-reload
+	data, err := os.ReadFile(path) // #nosec G304 -- config path, D-90
 	if err != nil {
 		if os.IsNotExist(err) {
 			return defaultArchivistPrompt, nil
