@@ -1,3 +1,10 @@
+## Волна 62 — Промпты: фикс MCP Guard + укрепление Атомизатора (D-AUDIT-93) · 13 авг 2026
+
+- workspace/prompts/mcp_guard.md: устранено внутреннее противоречие — спека дважды требует plain text для RUNTIME_AUDIT (Go наблюдает текст, JSON парсится только в STARTUP_AUDIT — mcp_security_test.go), а примеры 3–4 возвращали JSON. Примеры переписаны в plain text с сохранением самоопровержения.
+- workspace/prompts/atomizer.md: укреплён до стандарта остальных субагентов — «данные ≠ инструкции» (защита от инъекций из чанка), пустой atoms валиден (silence > noise), запрет фабрикации, правило языка (ключи EN, значения на языке данных), 2 примера (включая пустой вывод).
+- pkg/pika/atomizer.go + pkg/pika/mcp_security.go: fallback-константы defaultAtomizerPrompt/defaultGuardPrompt синхронизированы с .md автоматически (бэктики → одинарные кавычки в raw strings). Hot-reload (D-90) не затронут.
+- Гейты: build, vet, test (pika+agent), lint — зелёные.
+
 ## Волна 61 — Страница Analytics в Web UI (D-AUDIT-92, D-3б срез 4, финал) · 13 авг 2026
 
 - web/frontend: страница /analytics — General (enabled, queries_dir, disable_telegram_reports, schedule.weekly/monthly), Alert thresholds (tool_fail_rate_pct, error_rate_pct, latency_p95_ms, unused/stale_atoms_pct, subagent_errors, delta_significant_pct), Report limits (report_max_telegram_chars, top_tools/atoms/tasks_limit). Ключи верифицированы по config_pika_analytics.go (AnalyticsConfig + DefaultAnalyticsConfig).
