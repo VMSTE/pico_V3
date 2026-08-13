@@ -8,6 +8,7 @@ import {
   IconListDetails,
   IconMessageCircle,
   IconPlug,
+  IconRobot,
   IconSearch,
   IconSettings,
   IconShieldLock,
@@ -151,6 +152,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.tools",
             url: "/agent/tools",
             icon: IconTools,
+            translateTitle: true,
+          },
+          {
+            title: "navigation.subagents",
+            url: "/subagents",
+            icon: IconRobot,
             translateTitle: true,
           },
           {
