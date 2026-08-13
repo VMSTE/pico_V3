@@ -17,7 +17,8 @@
     "mcp": "MCP",
     "pika": "Pika",
     "security": "Security",
-    "subagents": "Subagents"
+    "subagents": "Subagents",
+    "health": "Health"
   },
   "launcherLogin": {
     "title": "Sign in",
@@ -462,6 +463,29 @@
     }
   },
   "pages": {
+    "health": {
+      "description": "Degradation thresholds, fallback provider and progress notifications. Changes apply after a gateway restart.",
+      "note_defaults": "Empty fields inherit the built-in defaults. Manager channel/chat ID are configured on the Security page.",
+      "save_success": "Health settings saved. Restart the gateway for them to take effect.",
+      "save_error": "Failed to save health settings",
+      "load_error": "Failed to load configuration",
+      "thresholds": {
+        "title": "Degradation thresholds",
+        "desc": "When a component exceeds a threshold over the window, it is marked degraded and the manager is notified."
+      },
+      "fallback": {
+        "title": "Fallback provider",
+        "desc": "Backup LLM used when the main provider is degraded."
+      },
+      "reporting": {
+        "title": "Reporting",
+        "desc": "System report switches: typing indicator, alert dedup, daily health summary."
+      },
+      "progress": {
+        "title": "Progress notifications",
+        "desc": "Live progress messages in the chat while the agent works."
+      }
+    },
     "subagents": {
       "description": "Background subagent settings. Changes apply after a gateway restart.",
       "note_defaults": "Empty fields inherit the built-in defaults.",
