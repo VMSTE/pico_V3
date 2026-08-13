@@ -1,6 +1,11 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sipeed/picoclaw/pkg/config"
@@ -22,8 +27,8 @@ func TestMCPServerInfoFromConfig_StdioMasksSecrets(t *testing.T) {
 	if info.Target != "npx -y @modelcontextprotocol/server-filesystem /tmp" {
 		t.Errorf("Target = %q", info.Target)
 	}
-	if len(info.EnvKeys) != 1 || info.EnvKeys[0] != "API_KEY" {
-		t.Errorf("EnvKeys = %v, want [API_KEY]", info.EnvKeys)
+	if info.Env["API_KEY"] != mcpMaskedSecret {
+		t.Errorf("Env[API_KEY] = %q, want masked", info.Env["API_KEY"])
 	}
 	// The secret value must not appear anywhere in the info struct output.
 	if info.Target == "supersecret" {
@@ -112,5 +117,72 @@ func TestRestoreMCPServerSecrets(t *testing.T) {
 	}
 	if fresh.Tools.MCP.Servers["brand-new-server"].Env["K"] != "v" {
 		t.Error("unknown server must be untouched")
+	}
+}
+
+func writeMCPServerConfig(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+	initial := `{"version":3,"tools":{"mcp":{"enabled":true,` +
+		`"servers":{"fs":{"enabled":true,"command":"npx","env":{"K":"secret"}}}}}}`
+	if err := os.WriteFile(configPath, []byte(initial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return configPath
+}
+
+func TestPatchMCPServer_TogglesEnabledKeepsSecrets(t *testing.T) {
+	configPath := writeMCPServerConfig(t)
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.registerMCPRoutes(mux)
+
+	req := httptest.NewRequest(
+		http.MethodPatch, "/api/mcp/servers/fs", strings.NewReader(`{"enabled":false}`),
+	)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := cfg.Tools.MCP.Servers["fs"]
+	if srv.Enabled {
+		t.Error("expected enabled=false after PATCH")
+	}
+	if srv.Env["K"] != "secret" {
+		t.Errorf("env must be untouched by PATCH, got %q", srv.Env["K"])
+	}
+}
+
+func TestPutMCPServer_RestoresMaskedSecrets(t *testing.T) {
+	configPath := writeMCPServerConfig(t)
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.registerMCPRoutes(mux)
+
+	body := `{"enabled":true,"command":"npx","env":{"K":"[NOT_HERE]","NEW":"v2"}}`
+	req := httptest.NewRequest(http.MethodPut, "/api/mcp/servers/fs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := cfg.Tools.MCP.Servers["fs"]
+	if srv.Env["K"] != "secret" {
+		t.Errorf("masked value not restored, got %q", srv.Env["K"])
+	}
+	if srv.Env["NEW"] != "v2" {
+		t.Errorf("new value lost, got %q", srv.Env["NEW"])
 	}
 }

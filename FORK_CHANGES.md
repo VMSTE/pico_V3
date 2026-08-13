@@ -1,3 +1,10 @@
+## Волна 56 — MCP secrets masking + PATCH toggle (D-AUDIT-87, D-AUDIT-88) · 12 авг 2026
+
+- (Ретро, PR #102) Маскировка MCP env/headers в GET /api/config ([NOT_HERE]) + восстановление реальных значений при PUT/PATCH всего конфига (handleUpdateConfig/handlePatchConfig).
+- web/backend/api/mcp.go — PATCH /api/mcp/servers/{name}: частичное обновление enabled/deferred, секреты не участвуют. GET /api/mcp/servers отдаёт структуру сервера (command/args/url/type/deferred) + env/headers с замаскированными значениями — фундамент формы редактирования. handlePutMCPServer восстанавливает маску из старой записи (restoreMaskedServerValues).
+- Тесты: handler-тесты PATCH toggle (env нетронут) и PUT restore через httptest.
+- Гейты: GOFMT-CLEAN, BUILD-OK, VET-OK, TESTS-GREEN, golangci-lint 0 issues.
+
 ## Волна 55 — Страница телеметрии Pika в Web UI (D-AUDIT-86) · 12 авг 2026
 
 - web/frontend/src/api/pika.ts + components/pika/pika-page.tsx + routes/pika.tsx — страница /pika: карточки «сегодня/всего» (токены, запросы), error-rate, P95, таблица компонентов (main/subturn/спутники), лента последних 50 запросов (время, компонент, модель, task_tag, токены, латентность, ошибка). Автообновление 30с + кнопка Refresh. available=false → пустое состояние-подсказка.
