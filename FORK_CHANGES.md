@@ -1,3 +1,9 @@
+## Волна 60 — Страница Health в Web UI (D-AUDIT-91, D-3б срез 3) · 13 авг 2026
+
+- web/frontend: страница /health — пороги деградации (window_size, tool_fail_threshold_pct, latency_threshold_ms), fallback-провайдер (provider/model/api_key_env/base_url), reporting-флаги (typing, dedup, daily summary), progress-уведомления (enabled, throttle, delete_on_complete, step text, stop command). Ключи верифицированы по config_pika.go (HealthConfig/FallbackProviderConfig/ProgressConfig). Адрес менеджера не дублируется — он на /security.
+- Через существующий PATCH /api/config; path-хелперы переиспользованы из api/subagents.ts. Сайдбар: Health (IconHeartbeat) в Services; переводы en/zh.
+- Гейты: FE-BUILD-OK, LINT-OK.
+
 ## Волна 59 — Страница субагентов в Web UI (D-AUDIT-90, D-3б срез 2) · 13 авг 2026
 
 - web/frontend: страница /subagents — карточки Atomizer/Reflexor/MCP Guard/Archivist: enabled, model, prompt_file + специфичные поля (trigger_tokens/chunk_max_tokens; timeout_ms + schedule.daily/weekly/monthly; suspicious_* + startup_audit + reaudit + hash_algorithm; max_tool_calls, build_prompt_timeout_ms, memory_brief.*, reasoning_*). Ключи верифицированы по pkg/config/config.go (AgentConfig) и config_pika_test.go (ScheduleConfig).

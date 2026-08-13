@@ -17,7 +17,8 @@
     "mcp": "MCP",
     "pika": "Pika",
     "security": "安全",
-    "subagents": "子智能体"
+    "subagents": "子智能体",
+    "health": "健康"
   },
   "launcherLogin": {
     "title": "登录",
@@ -462,6 +463,29 @@
     }
   },
   "pages": {
+    "health": {
+      "description": "降级阈值、备用服务商与进度通知。更改将在重启网关后生效。",
+      "note_defaults": "留空的字段将使用内置默认值。管理员频道/会话 ID 在「安全」页面配置。",
+      "save_success": "健康设置已保存，重启网关后生效。",
+      "save_error": "保存健康设置失败",
+      "load_error": "加载配置失败",
+      "thresholds": {
+        "title": "降级阈值",
+        "desc": "组件在窗口期内超过阈值时标记为降级并通知管理员。"
+      },
+      "fallback": {
+        "title": "备用服务商",
+        "desc": "主服务商降级时使用的备用 LLM。"
+      },
+      "reporting": {
+        "title": "报告",
+        "desc": "系统报告开关：输入中提示、告警去重、每日健康摘要。"
+      },
+      "progress": {
+        "title": "进度通知",
+        "desc": "智能体工作时在聊天中显示实时进度消息。"
+      }
+    },
     "subagents": {
       "description": "后台子智能体设置。更改将在重启网关后生效。",
       "note_defaults": "留空的字段将使用内置默认值。",

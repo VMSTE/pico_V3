@@ -4,6 +4,7 @@ import {
   IconAtom,
   IconChevronsDown,
   IconChevronsUp,
+  IconHeartbeat,
   IconKey,
   IconListDetails,
   IconMessageCircle,
@@ -187,6 +188,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.security",
             url: "/security",
             icon: IconShieldLock,
+            translateTitle: true,
+          },
+          {
+            title: "navigation.health",
+            url: "/health",
+            icon: IconHeartbeat,
             translateTitle: true,
           },
           {
