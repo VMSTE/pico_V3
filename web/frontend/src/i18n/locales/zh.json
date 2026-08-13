@@ -16,7 +16,8 @@
     "logs": "日志",
     "mcp": "MCP",
     "pika": "Pika",
-    "security": "安全"
+    "security": "安全",
+    "subagents": "子智能体"
   },
   "launcherLogin": {
     "title": "登录",
@@ -461,6 +462,29 @@
     }
   },
   "pages": {
+    "subagents": {
+      "description": "后台子智能体设置。更改将在重启网关后生效。",
+      "note_defaults": "留空的字段将使用内置默认值。",
+      "save_success": "子智能体设置已保存，重启网关后生效。",
+      "save_error": "保存子智能体设置失败",
+      "load_error": "加载配置失败",
+      "atomizer": {
+        "name": "Atomizer（原子化器）",
+        "desc": "在后台将轮转的会话压缩为知识原子。"
+      },
+      "reflexor": {
+        "name": "Reflector（反思器）",
+        "desc": "定时反思：每日、每周、每月的记忆回顾。"
+      },
+      "mcp_guard": {
+        "name": "MCP Guard（MCP 守卫）",
+        "desc": "在注册和列表变更时审计 MCP 服务器工具。"
+      },
+      "archivist": {
+        "name": "Archivist（档案员）",
+        "desc": "为主智能体构建每轮的记忆摘要与上下文。"
+      }
+    },
     "security": {
       "description": "确认门、RAD 异常检测与管理员告警。更改将在重启网关后生效。",
       "gate_title": "确认门",

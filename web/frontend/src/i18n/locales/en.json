@@ -16,7 +16,8 @@
     "logs": "Logs",
     "mcp": "MCP",
     "pika": "Pika",
-    "security": "Security"
+    "security": "Security",
+    "subagents": "Subagents"
   },
   "launcherLogin": {
     "title": "Sign in",
@@ -461,6 +462,29 @@
     }
   },
   "pages": {
+    "subagents": {
+      "description": "Background subagent settings. Changes apply after a gateway restart.",
+      "note_defaults": "Empty fields inherit the built-in defaults.",
+      "save_success": "Subagent settings saved. Restart the gateway for them to take effect.",
+      "save_error": "Failed to save subagent settings",
+      "load_error": "Failed to load configuration",
+      "atomizer": {
+        "name": "Atomizer",
+        "desc": "Compresses rotated sessions into knowledge atoms in the background."
+      },
+      "reflexor": {
+        "name": "Reflector",
+        "desc": "Cron-driven reflection: daily, weekly and monthly memory reviews."
+      },
+      "mcp_guard": {
+        "name": "MCP Guard",
+        "desc": "Audits MCP server tools on registration and on list changes."
+      },
+      "archivist": {
+        "name": "Archivist",
+        "desc": "Builds the per-turn memory brief and context for the main agent."
+      }
+    },
     "security": {
       "description": "Confirmation gate, RAD detector and manager alerts. Changes apply after a gateway restart.",
       "gate_title": "Confirmation gate",

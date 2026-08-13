@@ -1,3 +1,10 @@
+## Волна 59 — Страница субагентов в Web UI (D-AUDIT-90, D-3б срез 2) · 13 авг 2026
+
+- web/frontend: страница /subagents — карточки Atomizer/Reflexor/MCP Guard/Archivist: enabled, model, prompt_file + специфичные поля (trigger_tokens/chunk_max_tokens; timeout_ms + schedule.daily/weekly/monthly; suspicious_* + startup_audit + reaudit + hash_algorithm; max_tool_calls, build_prompt_timeout_ms, memory_brief.*, reasoning_*). Ключи верифицированы по pkg/config/config.go (AgentConfig) и config_pika_test.go (ScheduleConfig).
+- agents.list — массив, merge-patch заменяет его целиком → страница читает весь список, upsert'ит 4 записи по id и отдаёт назад полный merged list; чужие агенты не трогаются.
+- Сайдбар: пункт Subagents (IconRobot) в группе Agent; переводы en/zh.
+- Гейты: FE-BUILD-OK, LINT-OK.
+
 ## Волна 58 — Страница Security в Web UI (D-AUDIT-89, D-3б срез 1) · 13 авг 2026
 
 - web/frontend: страница /security — гейт подтверждения (таблица dangerous_ops с level/confirm, critical_paths, confirm_timeout_min), RAD (enabled, drift/block/warn), адрес менеджера (health.reporting.manager_*). Сохранение через существующий PATCH /api/config (merge-patch; удалённые ops уходят как null). Бэкенд не тронут.
