@@ -1,3 +1,10 @@
+## Волна 57 — MCP toggle/edit в Web UI (D-AUDIT-88) · 13 авг 2026
+
+- web/frontend: тумблер enabled на карточке сервера (PATCH, секреты не участвуют), кнопка Edit — форма предзаполняется структурой сервера, секреты показаны как [NOT_HERE] и при сохранении восстанавливаются бэкендом (PR #103).
+- api/mcp.ts переписан под расширенный GET (command/args/url + маскированные env/headers) + patchMCPServer.
+- Переводы en/zh: edit, patch_success, toggle_error, secret_keep_hint.
+- Гейты: FE-BUILD-OK, LINT-OK. Хвост D-1 закрыт полностью.
+
 ## Волна 56 — MCP secrets masking + PATCH toggle (D-AUDIT-87, D-AUDIT-88) · 12 авг 2026
 
 - (Ретро, PR #102) Маскировка MCP env/headers в GET /api/config ([NOT_HERE]) + восстановление реальных значений при PUT/PATCH всего конфига (handleUpdateConfig/handlePatchConfig).
