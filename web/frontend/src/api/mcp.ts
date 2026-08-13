@@ -6,9 +6,13 @@ export interface MCPServerInfo {
   target: string
   enabled: boolean
   deferred?: boolean
-  env_keys?: string[]
+  command?: string
+  args?: string[]
+  url?: string
+  // Values are masked by the backend as "[NOT_HERE]".
+  env?: Record<string, string>
+  headers?: Record<string, string>
   env_file?: string
-  headers?: string[]
 }
 
 export interface MCPServersResponse {
@@ -32,6 +36,11 @@ export interface MCPTestResponse {
   status: string
   tool_count?: number
   message?: string
+}
+
+export interface MCPServerPatch {
+  enabled?: boolean
+  deferred?: boolean
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -67,6 +76,20 @@ export async function putMCPServer(
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    },
+  )
+}
+
+export async function patchMCPServer(
+  name: string,
+  patch: MCPServerPatch,
+): Promise<{ status: string }> {
+  return request<{ status: string }>(
+    `/api/mcp/servers/${encodeURIComponent(name)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
     },
   )
 }

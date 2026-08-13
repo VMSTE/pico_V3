@@ -1,9 +1,10 @@
 import {
+  IconActivity,
   IconLoader2,
+  IconPencil,
   IconPlug,
   IconPlus,
   IconTrash,
-  IconActivity,
 } from "@tabler/icons-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
@@ -13,8 +14,10 @@ import { toast } from "sonner"
 import {
   deleteMCPServer,
   getMCPServers,
+  patchMCPServer,
   putMCPServer,
   testMCPServer,
+  type MCPServerInfo,
   type MCPServerPayload,
 } from "@/api/mcp"
 import { PageHeader } from "@/components/page-header"
@@ -40,11 +43,19 @@ function parseKeyValueLines(
   return Object.keys(out).length > 0 ? out : undefined
 }
 
+function mapToLines(map: Record<string, string> | undefined, sep: string): string {
+  return Object.entries(map ?? {})
+    .map(([k, v]) => k + sep + v)
+    .join("\n")
+}
+
 export function MCPPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   const [showForm, setShowForm] = useState(false)
+  const [editingName, setEditingName] = useState<string | null>(null)
+  const [editEnabled, setEditEnabled] = useState(true)
   const [name, setName] = useState("")
   const [transport, setTransport] = useState<Transport>("stdio")
   const [command, setCommand] = useState("")
@@ -60,6 +71,8 @@ export function MCPPage() {
   })
 
   const resetForm = () => {
+    setEditingName(null)
+    setEditEnabled(true)
     setName("")
     setTransport("stdio")
     setCommand("")
@@ -70,6 +83,26 @@ export function MCPPage() {
     setDeferred(false)
   }
 
+  const startEdit = (srv: MCPServerInfo) => {
+    setEditingName(srv.name)
+    setEditEnabled(srv.enabled)
+    setName(srv.name)
+    const tr: Transport =
+      srv.type === "stdio" || srv.type === "http" || srv.type === "sse"
+        ? srv.type
+        : srv.command
+          ? "stdio"
+          : "http"
+    setTransport(tr)
+    setCommand(srv.command ?? "")
+    setArgsText((srv.args ?? []).join(" "))
+    setUrl(srv.url ?? "")
+    setEnvText(mapToLines(srv.env, "="))
+    setHeadersText(mapToLines(srv.headers, ": "))
+    setDeferred(srv.deferred === true)
+    setShowForm(true)
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const trimmedName = name.trim()
@@ -77,7 +110,7 @@ export function MCPPage() {
         throw new Error(t("pages.mcp.form.validation_target"))
       }
       const payload: MCPServerPayload = {
-        enabled: true,
+        enabled: editingName !== null ? editEnabled : true,
         type: transport,
         deferred: deferred ? true : undefined,
       }
@@ -108,6 +141,20 @@ export function MCPPage() {
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : t("pages.mcp.save_error"))
+    },
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: (srv: MCPServerInfo) =>
+      patchMCPServer(srv.name, { enabled: !srv.enabled }),
+    onSuccess: () => {
+      toast.success(t("pages.mcp.patch_success"))
+      void queryClient.invalidateQueries({ queryKey: ["mcp-servers"] })
+    },
+    onError: (err) => {
+      toast.error(
+        err instanceof Error ? err.message : t("pages.mcp.toggle_error"),
+      )
     },
   })
 
@@ -146,7 +193,10 @@ export function MCPPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setShowForm((v) => !v)}
+            onClick={() => {
+              resetForm()
+              setShowForm((v) => !v)
+            }}
           >
             <IconPlus className="size-4" />
             {t("pages.mcp.add_server")}
@@ -175,6 +225,7 @@ export function MCPPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={t("pages.mcp.form.name_placeholder")}
+                  disabled={editingName !== null}
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm">
@@ -255,6 +306,12 @@ export function MCPPage() {
               {t("pages.mcp.form.deferred_label")}
             </label>
 
+            {editingName !== null && (
+              <p className="text-muted-foreground text-xs">
+                {t("pages.mcp.secret_keep_hint")}
+              </p>
+            )}
+
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -308,19 +365,30 @@ export function MCPPage() {
                     <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
                       {srv.type}
                     </span>
-                    <span
+                    <button
+                      type="button"
+                      onClick={() => toggleMutation.mutate(srv)}
+                      disabled={toggleMutation.isPending}
                       className={
                         srv.enabled
-                          ? "rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-600 dark:text-green-400"
-                          : "bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
+                          ? "cursor-pointer rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-600 dark:text-green-400"
+                          : "bg-muted text-muted-foreground cursor-pointer rounded px-1.5 py-0.5 text-xs"
                       }
                     >
                       {srv.enabled
                         ? t("pages.mcp.enabled")
                         : t("pages.mcp.disabled")}
-                    </span>
+                    </button>
                   </div>
                   <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => startEdit(srv)}
+                    >
+                      <IconPencil className="size-4" />
+                      {t("pages.mcp.edit")}
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -357,9 +425,10 @@ export function MCPPage() {
                 <div className="text-muted-foreground font-mono text-xs break-all">
                   {srv.target}
                 </div>
-                {(srv.env_keys?.length || srv.headers?.length) && (
+                {(Object.keys(srv.env ?? {}).length > 0 ||
+                  Object.keys(srv.headers ?? {}).length > 0) && (
                   <div className="flex flex-wrap gap-1">
-                    {srv.env_keys?.map((k) => (
+                    {Object.keys(srv.env ?? {}).map((k) => (
                       <span
                         key={`env-${k}`}
                         className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs"
@@ -367,7 +436,7 @@ export function MCPPage() {
                         {k}
                       </span>
                     ))}
-                    {srv.headers?.map((k) => (
+                    {Object.keys(srv.headers ?? {}).map((k) => (
                       <span
                         key={`hdr-${k}`}
                         className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs"
