@@ -15,7 +15,8 @@
     "config": "Config",
     "logs": "Logs",
     "mcp": "MCP",
-    "pika": "Pika"
+    "pika": "Pika",
+    "security": "Security"
   },
   "launcherLogin": {
     "title": "Sign in",
@@ -460,6 +461,30 @@
     }
   },
   "pages": {
+    "security": {
+      "description": "Confirmation gate, RAD detector and manager alerts. Changes apply after a gateway restart.",
+      "gate_title": "Confirmation gate",
+      "gate_hint": "The gate is armed when at least one operation is listed. Unknown effects on an armed gate ask the manager (deny-by-default).",
+      "timeout": "Confirmation timeout (min)",
+      "critical_paths": "Critical paths",
+      "critical_paths_hint": "Glob patterns, one per line. files.write to these paths asks for confirmation.",
+      "ops_title": "Dangerous operations",
+      "op_key": "Operation (e.g. compose.up)",
+      "add_op": "Add operation",
+      "delete_op_confirm": "Remove operation \"{{name}}\"?",
+      "rad_title": "RAD — reasoning anomaly detector",
+      "rad_enabled": "Enabled",
+      "rad_drift": "Drift threshold",
+      "rad_block": "Block score",
+      "rad_warn": "Warn score",
+      "manager_title": "Manager alerts",
+      "manager_hint": "Where to send confirmations and system reports (diagnostics, analytics, progress).",
+      "manager_channel": "Manager channel (e.g. telegram)",
+      "manager_chat_id": "Manager chat ID",
+      "save_success": "Security settings saved. Restart the gateway for them to take effect.",
+      "save_error": "Failed to save security settings",
+      "load_error": "Failed to load configuration"
+    },
     "pika": {
       "description": "Live telemetry from bot_memory.db: tokens, errors, latency per component. Auto-refreshes every 30 s.",
       "refresh": "Refresh",

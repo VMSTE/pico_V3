@@ -10,6 +10,7 @@ import {
   IconPlug,
   IconSearch,
   IconSettings,
+  IconShieldLock,
   IconSparkles,
   IconTools,
 } from "@tabler/icons-react"
@@ -173,6 +174,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "navigation.config",
             url: "/config",
             icon: IconSettings,
+            translateTitle: true,
+          },
+          {
+            title: "navigation.security",
+            url: "/security",
+            icon: IconShieldLock,
             translateTitle: true,
           },
           {
