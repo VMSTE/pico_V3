@@ -394,6 +394,7 @@ func (bm *BotMemory) GetEventsByTurns(ctx context.Context, sid string, tids []st
 		return nil, nil
 	}
 	args := inArgs(sid, tids)
+	// #nosec G202 -- only '?' placeholders (generated from a count) are concatenated; all values parameterized via args
 	rows, err := bm.db.QueryContext(ctx,
 		`SELECT id,ts,type,summary,outcome,tags,data,chat_id,pika_session_id
 		FROM events WHERE chat_id=? AND pika_session_id IN (`+placeholders(len(tids))+`)
@@ -686,6 +687,7 @@ func (bm *BotMemory) GetReasoningByTurns(ctx context.Context, sid string, tids [
 		return nil, nil
 	}
 	args := inArgs(sid, tids)
+	// #nosec G202 -- only '?' placeholders (generated from a count) are concatenated; all values parameterized via args
 	rows, err := bm.db.QueryContext(ctx,
 		`SELECT chat_id,msg_index,task,mode,reasoning_text,reasoning_tokens,
 		prompt_components,tool_calls,context_pct,reasoning_keywords,pika_session_id
@@ -800,6 +802,7 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 	ph := placeholders(len(turnIDs))
 	args := inArgs(sid, turnIDs)
 	// messages -> messages_archive
+	// #nosec G202 -- only '?' placeholders (generated from a count) are concatenated; all values parameterized via args
 	mRows, err := tx.QueryContext(ctx,
 		`SELECT id,chat_id,pika_session_id,ts,role,content,tokens,metadata
 		FROM messages WHERE chat_id=? AND pika_session_id IN (`+ph+`)
@@ -836,6 +839,7 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 		return fmt.Errorf("pika/botmemory: archive iter msgs: %w", rowErr)
 	}
 	// events -> events_archive
+	// #nosec G202 -- only '?' placeholders (generated from a count) are concatenated; all values parameterized via args
 	eRows, err := tx.QueryContext(ctx,
 		`SELECT id,ts,type,summary,outcome,tags,data,chat_id,pika_session_id
 		FROM events WHERE chat_id=? AND pika_session_id IN (`+ph+`)`, args...)
@@ -869,6 +873,7 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 		return fmt.Errorf("pika/botmemory: archive iter evts: %w", rowErr)
 	}
 	// reasoning_log -> reasoning_log_archive
+	// #nosec G202 -- only '?' placeholders (generated from a count) are concatenated; all values parameterized via args
 	rRows, err := tx.QueryContext(ctx,
 		`SELECT id,chat_id,pika_session_id,ts,task,mode,reasoning_text,
 		reasoning_tokens,prompt_components,tool_calls,context_pct,

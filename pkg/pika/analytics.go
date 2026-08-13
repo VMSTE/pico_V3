@@ -345,7 +345,7 @@ func (ae *AnalyticsEngine) collectMetrics(ctx context.Context, p AnalyticsPeriod
 
 func (ae *AnalyticsEngine) loadSQL(name string) ([]string, error) {
 	path := filepath.Join(ae.queriesDir, name)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path comes from config (prompt_file/queries_dir), not user input; D-90 hot-reload
 	if err != nil {
 		return nil, fmt.Errorf("pika/analytics: loadSQL %s: %w", name, err)
 	}

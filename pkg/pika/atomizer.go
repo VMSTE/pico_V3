@@ -458,7 +458,7 @@ func (a *Atomizer) loadPromptFile() (string, error) {
 	if path == "" {
 		return defaultAtomizerPrompt, nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path comes from config (prompt_file/queries_dir), not user input; D-90 hot-reload
 	if err != nil {
 		if os.IsNotExist(err) {
 			return defaultAtomizerPrompt, nil
@@ -522,6 +522,7 @@ func (a *Atomizer) getMessagesByTurns(
 	}
 	args := inArgs(sid, tids)
 	ph := placeholders(len(tids))
+	// #nosec G202 -- only '?' placeholders (generated from a count) are concatenated; all values parameterized via args
 	q := `SELECT id, chat_id, pika_session_id, ts, role,
 		content, tokens, msg_index, metadata
 		FROM messages WHERE chat_id=?
