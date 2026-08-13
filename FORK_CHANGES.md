@@ -1,3 +1,11 @@
+## Волна 63 — CI bug-hunt: race + gosec + coverage, фикс WriteFileAtomic (D-AUDIT-94) · 13 авг 2026
+
+- pkg/fileutil/file.go — FIX: WriteFileAtomic перешёл с ручной схемы имени temp-файла (pid+UnixNano) на os.CreateTemp. Race-прогон поймал реальную коллизию: два параллельных писателя в одном процессе получали одинаковый нанотик (грубые часы macOS) → «file exists» → падение сохранения. В бою: одновременные SaveConfig (две вкладки морды / автосейв) могли обламываться. Права файла не изменились (Chmod(perm) перед rename).
+- .github/workflows/pr.yml — NEW jobs: race_cover (go test -race + coverage summary в PR) и gosec_fork (gosec -confidence=high по ./pkg/pika/... — наш код; сегодня чисто, гейт сохранит это).
+- Полный прогон gosec (401 находка на 112k строк) разобран вручную: G704 SSRF (utils/http_retry, utils/download) — ложные, универсальные HTTP-помощники, SSRF-гейт живёт в web_fetch; G703 path traversal — ложные (пути из конфига; skills.go защищён ValidateSkillIdentifier — режет /, \, ..); G115/G404/G101 — upstream-шум вне нашей зоны (каналы qq/weixin/serial/asr, джиттер ретраев). pkg/pika: 0 находок.
+- Race-прогон всего репо: 0 data races (pkg/pika зелёный за 284с). Покрытие: 58.2%.
+- Гейты: BUILD-OK, VET-OK, FILEUTIL-OK ×3, RACE-REPRO-FIXED ×10, GOSEC-PIKA-CLEAN, LINT-OK.
+
 ## Волна 62 — Промпты: фикс MCP Guard + укрепление Атомизатора (D-AUDIT-93) · 13 авг 2026
 
 - workspace/prompts/mcp_guard.md: устранено внутреннее противоречие — спека дважды требует plain text для RUNTIME_AUDIT (Go наблюдает текст, JSON парсится только в STARTUP_AUDIT — mcp_security_test.go), а примеры 3–4 возвращали JSON. Примеры переписаны в plain text с сохранением самоопровержения.

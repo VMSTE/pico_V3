@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 // WriteFileAtomic atomically writes data to a file using a temp file + rename pattern.
@@ -57,11 +56,13 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 
 	// Create temp file in the same directory (ensures atomic rename works)
 	// Using a hidden prefix (.tmp-) to avoid issues with some tools
-	tmpFile, err := os.OpenFile(
-		filepath.Join(dir, fmt.Sprintf(".tmp-%d-%d", os.Getpid(), time.Now().UnixNano())),
-		os.O_WRONLY|os.O_CREATE|os.O_EXCL,
-		perm,
-	)
+	// D-AUDIT-94: os.CreateTemp guarantees a unique name. The manual
+	// pid+UnixNano scheme collided under concurrent writes (same-process
+	// writers can share one nanosecond tick on coarse clocks, e.g. macOS),
+	// failing with "file exists". Found by the race-detector run.
+	// Note: CreateTemp starts with 0600; Chmod(perm) below sets the final
+	// permissions before the atomic rename, so behavior is unchanged.
+	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
