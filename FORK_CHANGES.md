@@ -1,3 +1,9 @@
+## Волна 58 — Страница Security в Web UI (D-AUDIT-89, D-3б срез 1) · 13 авг 2026
+
+- web/frontend: страница /security — гейт подтверждения (таблица dangerous_ops с level/confirm, critical_paths, confirm_timeout_min), RAD (enabled, drift/block/warn), адрес менеджера (health.reporting.manager_*). Сохранение через существующий PATCH /api/config (merge-patch; удалённые ops уходят как null). Бэкенд не тронут.
+- Сайдбар: пункт Security (IconShieldLock) в группе Services; переводы en/zh.
+- Гейты: FE-BUILD-OK, LINT-OK.
+
 ## Волна 57 — MCP toggle/edit в Web UI (D-AUDIT-88) · 13 авг 2026
 
 - web/frontend: тумблер enabled на карточке сервера (PATCH, секреты не участвуют), кнопка Edit — форма предзаполняется структурой сервера, секреты показаны как [NOT_HERE] и при сохранении восстанавливаются бэкендом (PR #103).

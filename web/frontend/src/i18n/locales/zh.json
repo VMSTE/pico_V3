@@ -15,7 +15,8 @@
     "config": "配置",
     "logs": "日志",
     "mcp": "MCP",
-    "pika": "Pika"
+    "pika": "Pika",
+    "security": "安全"
   },
   "launcherLogin": {
     "title": "登录",
@@ -460,6 +461,30 @@
     }
   },
   "pages": {
+    "security": {
+      "description": "确认门、RAD 异常检测与管理员告警。更改将在重启网关后生效。",
+      "gate_title": "确认门",
+      "gate_hint": "只要列出一个操作，确认门即启用。未知效果将向管理员询问（默认拒绝）。",
+      "timeout": "确认超时（分钟）",
+      "critical_paths": "关键路径",
+      "critical_paths_hint": "每行一个 Glob 模式。写入这些路径时将请求确认。",
+      "ops_title": "危险操作",
+      "op_key": "操作（例如 compose.up）",
+      "add_op": "添加操作",
+      "delete_op_confirm": "删除操作「{{name}}」吗？",
+      "rad_title": "RAD — 推理异常检测",
+      "rad_enabled": "启用",
+      "rad_drift": "漂移阈值",
+      "rad_block": "阻断分数",
+      "rad_warn": "警告分数",
+      "manager_title": "管理员告警",
+      "manager_hint": "确认请求与系统报告（诊断、分析、进度）的发送目标。",
+      "manager_channel": "管理员频道（例如 telegram）",
+      "manager_chat_id": "管理员会话 ID",
+      "save_success": "安全设置已保存，重启网关后生效。",
+      "save_error": "保存安全设置失败",
+      "load_error": "加载配置失败"
+    },
     "pika": {
       "description": "来自 bot_memory.db 的实时遥测：各组件的 token、错误与延迟。每 30 秒自动刷新。",
       "refresh": "刷新",
