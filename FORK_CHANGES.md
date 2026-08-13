@@ -1,3 +1,10 @@
+## Волна 61 — Страница Analytics в Web UI (D-AUDIT-92, D-3б срез 4, финал) · 13 авг 2026
+
+- web/frontend: страница /analytics — General (enabled, queries_dir, disable_telegram_reports, schedule.weekly/monthly), Alert thresholds (tool_fail_rate_pct, error_rate_pct, latency_p95_ms, unused/stale_atoms_pct, subagent_errors, delta_significant_pct), Report limits (report_max_telegram_chars, top_tools/atoms/tasks_limit). Ключи верифицированы по config_pika_analytics.go (AnalyticsConfig + DefaultAnalyticsConfig).
+- Через существующий PATCH /api/config. Сайдбар: Analytics (IconChartBar) в Services; переводы en/zh.
+- D-3б закрыт: Security + Subagents + Health + Analytics — все срезы ТЗ-v2-10a в морде (кроме осознанно отложенного security.mcp ACL).
+- Гейты: FE-BUILD-OK, LINT-OK.
+
 ## Волна 60 — Страница Health в Web UI (D-AUDIT-91, D-3б срез 3) · 13 авг 2026
 
 - web/frontend: страница /health — пороги деградации (window_size, tool_fail_threshold_pct, latency_threshold_ms), fallback-провайдер (provider/model/api_key_env/base_url), reporting-флаги (typing, dedup, daily summary), progress-уведомления (enabled, throttle, delete_on_complete, step text, stop command). Ключи верифицированы по config_pika.go (HealthConfig/FallbackProviderConfig/ProgressConfig). Адрес менеджера не дублируется — он на /security.
