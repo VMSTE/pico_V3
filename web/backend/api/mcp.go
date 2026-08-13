@@ -21,14 +21,17 @@ import (
 var mcpServerNameRe = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 type mcpServerInfo struct {
-	Name     string   `json:"name"`
-	Type     string   `json:"type"`
-	Target   string   `json:"target"`
-	Enabled  bool     `json:"enabled"`
-	Deferred *bool    `json:"deferred,omitempty"`
-	EnvKeys  []string `json:"env_keys,omitempty"`
-	EnvFile  string   `json:"env_file,omitempty"`
-	Headers  []string `json:"headers,omitempty"`
+	Name     string            `json:"name"`
+	Type     string            `json:"type"`
+	Target   string            `json:"target"`
+	Enabled  bool              `json:"enabled"`
+	Deferred *bool             `json:"deferred,omitempty"`
+	Command  string            `json:"command,omitempty"`
+	Args     []string          `json:"args,omitempty"`
+	URL      string            `json:"url,omitempty"`
+	Env      map[string]string `json:"env,omitempty"`
+	Headers  map[string]string `json:"headers,omitempty"`
+	EnvFile  string            `json:"env_file,omitempty"`
 }
 
 type mcpServerRequest struct {
@@ -47,6 +50,7 @@ type mcpServerRequest struct {
 func (h *Handler) registerMCPRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/mcp/servers", h.handleListMCPServers)
 	mux.HandleFunc("PUT /api/mcp/servers/{name}", h.handlePutMCPServer)
+	mux.HandleFunc("PATCH /api/mcp/servers/{name}", h.handlePatchMCPServer)
 	mux.HandleFunc("DELETE /api/mcp/servers/{name}", h.handleDeleteMCPServer)
 	mux.HandleFunc("POST /api/mcp/servers/{name}/test", h.handleTestMCPServer)
 }
@@ -106,7 +110,8 @@ func (h *Handler) handlePutMCPServer(w http.ResponseWriter, r *http.Request) {
 	if cfg.Tools.MCP.Servers == nil {
 		cfg.Tools.MCP.Servers = map[string]config.MCPServerConfig{}
 	}
-	cfg.Tools.MCP.Servers[name] = config.MCPServerConfig{
+	oldSrv, hadOld := cfg.Tools.MCP.Servers[name]
+	newSrv := config.MCPServerConfig{
 		Enabled:  req.Enabled,
 		Deferred: req.Deferred,
 		Command:  strings.TrimSpace(req.Command),
@@ -117,6 +122,11 @@ func (h *Handler) handlePutMCPServer(w http.ResponseWriter, r *http.Request) {
 		URL:      strings.TrimSpace(req.URL),
 		Headers:  req.Headers,
 	}
+	if hadOld {
+		// D-AUDIT-88: клиент мог вернуть маску — восстановить реальные значения.
+		restoreMaskedServerValues(&newSrv, oldSrv)
+	}
+	cfg.Tools.MCP.Servers[name] = newSrv
 	cfg.Tools.MCP.Enabled = true
 
 	if err := config.SaveConfig(h.configPath, cfg); err != nil {
@@ -204,21 +214,30 @@ func mcpServerInfoFromConfig(name string, srv config.MCPServerConfig) mcpServerI
 		Target:   mcpServerTarget(srv),
 		Enabled:  srv.Enabled,
 		Deferred: srv.Deferred,
+		Command:  srv.Command,
+		Args:     srv.Args,
+		URL:      srv.URL,
 		EnvFile:  srv.EnvFile,
 	}
 	if len(srv.Env) > 0 {
-		info.EnvKeys = make([]string, 0, len(srv.Env))
-		for k := range srv.Env {
-			info.EnvKeys = append(info.EnvKeys, k)
+		info.Env = make(map[string]string, len(srv.Env))
+		for k, v := range srv.Env {
+			if v != "" {
+				info.Env[k] = mcpMaskedSecret
+			} else {
+				info.Env[k] = ""
+			}
 		}
-		sort.Strings(info.EnvKeys)
 	}
 	if len(srv.Headers) > 0 {
-		info.Headers = make([]string, 0, len(srv.Headers))
-		for k := range srv.Headers {
-			info.Headers = append(info.Headers, k)
+		info.Headers = make(map[string]string, len(srv.Headers))
+		for k, v := range srv.Headers {
+			if v != "" {
+				info.Headers[k] = mcpMaskedSecret
+			} else {
+				info.Headers[k] = ""
+			}
 		}
-		sort.Strings(info.Headers)
 	}
 	return info
 }
@@ -315,5 +334,80 @@ func restoreMCPServerSecrets(cfg *config.Config, old *config.Config) {
 			}
 		}
 		cfg.Tools.MCP.Servers[name] = srv
+	}
+}
+
+type mcpServerPatchRequest struct {
+	Enabled  *bool `json:"enabled"`
+	Deferred *bool `json:"deferred"`
+}
+
+// handlePatchMCPServer partially updates one server entry. Only enabled and
+// deferred are patchable here — secrets never pass through this endpoint.
+//
+//	PATCH /api/mcp/servers/{name}
+func (h *Handler) handlePatchMCPServer(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	var req mcpServerPatchRequest
+	if uErr := json.Unmarshal(body, &req); uErr != nil {
+		http.Error(w, fmt.Sprintf("Invalid JSON: %v", uErr), http.StatusBadRequest)
+		return
+	}
+	if req.Enabled == nil && req.Deferred == nil {
+		http.Error(w, "nothing to update: send enabled and/or deferred", http.StatusBadRequest)
+		return
+	}
+
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load config: %v", err), http.StatusInternalServerError)
+		return
+	}
+	srv, ok := cfg.Tools.MCP.Servers[name]
+	if !ok {
+		http.Error(w, fmt.Sprintf("MCP server %q not found", name), http.StatusNotFound)
+		return
+	}
+
+	if req.Enabled != nil {
+		srv.Enabled = *req.Enabled
+	}
+	if req.Deferred != nil {
+		srv.Deferred = req.Deferred
+	}
+	cfg.Tools.MCP.Servers[name] = srv
+
+	if sErr := config.SaveConfig(h.configPath, cfg); sErr != nil {
+		http.Error(w, fmt.Sprintf("Failed to save config: %v", sErr), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// restoreMaskedServerValues copies real values from oldSrv where the client
+// echoed the [NOT_HERE] mask (D-AUDIT-88).
+func restoreMaskedServerValues(newSrv *config.MCPServerConfig, oldSrv config.MCPServerConfig) {
+	for k, v := range newSrv.Env {
+		if v == mcpMaskedSecret {
+			if oldV, exists := oldSrv.Env[k]; exists {
+				newSrv.Env[k] = oldV
+			}
+		}
+	}
+	for k, v := range newSrv.Headers {
+		if v == mcpMaskedSecret {
+			if oldV, exists := oldSrv.Headers[k]; exists {
+				newSrv.Headers[k] = oldV
+			}
+		}
 	}
 }
