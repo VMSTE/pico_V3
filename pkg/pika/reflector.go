@@ -934,7 +934,7 @@ func (r *ReflectorPipeline) loadPromptFile() (
 	if path == "" {
 		return defaultReflectorPrompt, nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- config path, D-90
 	if err != nil {
 		if os.IsNotExist(err) {
 			return defaultReflectorPrompt, nil

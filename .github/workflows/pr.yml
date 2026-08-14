@@ -64,3 +64,47 @@ jobs:
 
       - name: Run go test
         run: go test -tags goolm,stdjson ./...
+
+  race_cover:
+    name: Race + Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Run go generate
+        run: go generate ./...
+
+      - name: Run go test with race detector and coverage
+        run: CGO_ENABLED=1 go test -race -coverprofile=cover.out -tags goolm,stdjson $(go list -tags goolm,stdjson ./... | grep -v 'picoclaw/web/')
+
+      - name: Coverage summary
+        run: |
+          go tool cover -func=cover.out | tail -1 | tee coverage.txt
+          echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+          cat coverage.txt >> "$GITHUB_STEP_SUMMARY"
+
+  gosec_fork:
+    name: Gosec (fork scope)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Run gosec on fork core (pkg/pika)
+        run: gosec -confidence=high ./pkg/pika/...

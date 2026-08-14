@@ -279,7 +279,7 @@ func (d *DiagnosticsEngine) BuildSubagentPrompt(ctx context.Context, component s
 	}
 
 	// 2. Hot-reload: read file on every call (D-90 pattern).
-	baseData, err := os.ReadFile(path)
+	baseData, err := os.ReadFile(path) // #nosec G304 -- config path, D-90
 	if err != nil {
 		return "", fmt.Errorf("pika/diagnostics: read prompt %s: %w", path, err)
 	}

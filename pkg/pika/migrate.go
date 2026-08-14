@@ -27,7 +27,7 @@ func Migrate(dbPath string) (*sql.DB, error) {
 	for _, p := range pragmas {
 		_, err = db.Exec(p)
 		if err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("pika/migrate: pragma %q: %w", p, err)
 		}
 	}
@@ -39,14 +39,14 @@ func Migrate(dbPath string) (*sql.DB, error) {
 		description TEXT NOT NULL
 	)`)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("pika/migrate: create schema_version: %w", err)
 	}
 
 	// Current version
 	ver, err := CurrentVersion(db)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("pika/migrate: read version: %w", err)
 	}
 
@@ -67,14 +67,14 @@ func Migrate(dbPath string) (*sql.DB, error) {
 		}
 		tx, txErr := db.Begin()
 		if txErr != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("pika/migrate: begin v%d: %w", m.version, txErr)
 		}
 
 		_, execErr := tx.Exec(m.ddl)
 		if execErr != nil {
 			_ = tx.Rollback()
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("pika/migrate: apply v%d: %w", m.version, execErr)
 		}
 		_, execErr = tx.Exec(
@@ -83,11 +83,11 @@ func Migrate(dbPath string) (*sql.DB, error) {
 		)
 		if execErr != nil {
 			_ = tx.Rollback()
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("pika/migrate: record v%d: %w", m.version, execErr)
 		}
 		if commitErr := tx.Commit(); commitErr != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("pika/migrate: commit v%d: %w", m.version, commitErr)
 		}
 	}
