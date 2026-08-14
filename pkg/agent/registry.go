@@ -14,6 +14,7 @@ import (
 
 // AgentRegistry manages multiple agent instances and routes messages to them.
 type AgentRegistry struct {
+	cfg      *config.Config
 	agents   map[string]*AgentInstance
 	resolver *routing.RouteResolver
 	mu       sync.RWMutex
@@ -26,6 +27,7 @@ func NewAgentRegistry(
 	msgBus pika.ClarifyBus,
 ) *AgentRegistry {
 	registry := &AgentRegistry{
+		cfg:      cfg,
 		agents:   make(map[string]*AgentInstance),
 		resolver: routing.NewRouteResolver(cfg),
 	}
@@ -52,6 +54,12 @@ func NewAgentRegistry(
 					"workspace": instance.Workspace,
 					"model":     instance.Model,
 				})
+		}
+	}
+
+	for _, instance := range registry.agents {
+		if instance.ContextBuilder != nil {
+			instance.ContextBuilder.WithAgentDiscovery(instance.ID, registry.ListSpawnableAgents)
 		}
 	}
 
@@ -89,10 +97,15 @@ func (r *AgentRegistry) CanSpawnSubagent(parentAgentID, targetAgentID string) bo
 	if !ok {
 		return false
 	}
-	if parent.Subagents == nil || parent.Subagents.AllowAgents == nil {
+	return agentAllowsSubagent(parent, routing.NormalizeAgentID(targetAgentID))
+}
+
+// agentAllowsSubagent reports whether parent may spawn/delegate to targetNorm.
+// PIKA-PORT: upstream v0.2.9 (shared by CanSpawnSubagent and discovery).
+func agentAllowsSubagent(parent *AgentInstance, targetNorm string) bool {
+	if parent == nil || parent.Subagents == nil || parent.Subagents.AllowAgents == nil {
 		return false
 	}
-	targetNorm := routing.NormalizeAgentID(targetAgentID)
 	for _, allowed := range parent.Subagents.AllowAgents {
 		if allowed == "*" {
 			return true
@@ -102,6 +115,16 @@ func (r *AgentRegistry) CanSpawnSubagent(parentAgentID, targetAgentID string) bo
 		}
 	}
 	return false
+}
+
+// agentHasSpawnTool reports whether the agent has the spawn tool registered.
+// PIKA-PORT: upstream v0.2.9.
+func agentHasSpawnTool(agent *AgentInstance) bool {
+	if agent == nil || agent.Tools == nil {
+		return false
+	}
+	_, ok := agent.Tools.Get("spawn")
+	return ok
 }
 
 // ForEachTool calls fn for every tool registered under the given name
@@ -133,11 +156,13 @@ func (r *AgentRegistry) Close() {
 func (r *AgentRegistry) GetDefaultAgent() *AgentInstance {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if agent, ok := r.agents["main"]; ok {
-		return agent
+	if id := r.defaultAgentIDLocked(); id != "" {
+		if agent, ok := r.agents[id]; ok {
+			return agent
+		}
 	}
-	for _, agent := range r.agents {
-		return agent
+	for id := range r.agents {
+		return r.agents[id]
 	}
 	return nil
 }

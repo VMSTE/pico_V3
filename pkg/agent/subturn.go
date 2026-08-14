@@ -173,7 +173,11 @@ type SubTurnConfig struct {
 	// Used by team tool to enforce token limits across all team members.
 	InitialTokenBudget *atomic.Int64
 
-	// Can be extended with temperature, topP, etc.
+	// TargetAgentID, when set, runs the sub-turn as the specified agent.
+	// The target agent's workspace, model, tools, and system prompt are used
+	// instead of the caller's. If empty, the sub-turn runs as the parent agent.
+	// PIKA-PORT: upstream v0.2.9.
+	TargetAgentID string
 }
 
 // ====================== Context Keys ======================
@@ -225,6 +229,7 @@ func (s *AgentLoopSpawner) SpawnSubTurn(
 		Critical:           cfg.Critical,
 		Timeout:            cfg.Timeout,
 		MaxContextRunes:    cfg.MaxContextRunes,
+		TargetAgentID:      cfg.TargetAgentID,
 	}
 
 	return spawnSubTurn(ctx, s.al, parentTS, agentCfg)
@@ -288,7 +293,7 @@ func spawnSubTurn(
 	}
 
 	// 2. Config validation
-	if cfg.Model == "" {
+	if cfg.Model == "" && cfg.TargetAgentID == "" {
 		return nil, ErrInvalidSubTurnConfig
 	}
 
@@ -309,9 +314,20 @@ func spawnSubTurn(
 	// Get the agent instance from parent, falling back to the default agent.
 	// Wrap it in a shallow copy that uses an ephemeral (in-memory only) session store
 	// so that child turns never pollute or persist to the parent's session history.
-	baseAgent := parentTS.agent
-	if baseAgent == nil {
-		baseAgent = al.registry.GetDefaultAgent()
+	// PIKA-PORT: upstream v0.2.9 — TargetAgentID resolution: the child runs
+	// with the target agent's workspace, model, tools, and system prompt.
+	var baseAgent *AgentInstance
+	if cfg.TargetAgentID != "" {
+		var ok bool
+		baseAgent, ok = al.registry.GetAgent(cfg.TargetAgentID)
+		if !ok {
+			return nil, fmt.Errorf("target agent %q not found in registry", cfg.TargetAgentID)
+		}
+	} else {
+		baseAgent = parentTS.agent
+		if baseAgent == nil {
+			baseAgent = al.registry.GetDefaultAgent()
+		}
 	}
 	if baseAgent == nil {
 		return nil, errors.New("parent turnState has no agent instance")

@@ -1,3 +1,11 @@
+## Волна 64 — Порт мультиагентности из upstream v0.2.9 (D-AUDIT-96) · 14 авг 2026
+
+- Хирургический порт (НЕ merge): delegate tool (синхронное делегирование именованному агенту с ожиданием результата) + agent discovery prompt (пиры в системном промпте через ListSpawnableAgents, фильтр по правам spawn — deny-by-default, спец-агенты Pika не протекают).
+- С тега v0.2.9 дословно: pkg/tools/delegate.go(+test), pkg/agent/discovery.go(+test); оптом (CLEAN): spawn.go(+test), subagent.go, definition.go. prompt_contributors.go/prompt_test.go с тега НЕ взяты (апстрим переписал их под per-agent allowlist-механику) — discovery-контрибьютор написан вручную под наш PromptBuildRequest API: pkg/agent/agent_discovery_prompt.go. Теговый discovery_test.go адаптирован под нашу сигнатуру NewAgentRegistry (третий аргумент ClarifyBus = nil).
+- Хирургия в наших файлах: registry.go (cfg-поле, wiring WithAgentDiscovery, хелперы agentAllowsSubagent/agentHasSpawnTool, GetDefaultAgent через defaultAgentIDLocked), context.go (поле+метод WithAgentDiscovery), subturn.go (TargetAgentID: поле/маппинг/валидация/резолюция агента), agent_init.go (регистрация delegate при >1 агенте).
+- СОЗНАТЕЛЬНО НЕ взято: миграция EventBus→pkg/events, evolution bridge, AGENT.md frontmatter как конфиг (per-agent tool/MCP allowlists — отдельный порт), TurnProfile-пропагация, warnOnUnknownAgentToolDeclarations.
+- Гейты: FMT/BUILD/VET, тесты agent+tools, race по новым тестам ×2, lint.
+
 ## Волна 63 — CI bug-hunt: race + gosec + coverage, фикс WriteFileAtomic (D-AUDIT-94) · 13 авг 2026
 
 - pkg/fileutil/file.go — FIX: WriteFileAtomic перешёл с ручной схемы имени temp-файла (pid+UnixNano) на os.CreateTemp. Race-прогон поймал реальную коллизию: два параллельных писателя в одном процессе получали одинаковый нанотик (грубые часы macOS) → «file exists» → падение сохранения. В бою: одновременные SaveConfig (две вкладки морды / автосейв) могли обламываться. Права файла не изменились (Chmod(perm) перед rename).
