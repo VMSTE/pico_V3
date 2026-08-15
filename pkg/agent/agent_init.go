@@ -332,6 +332,19 @@ func registerSharedTools(
 
 				agent.Tools.Register(spawnTool)
 
+				// PIKA-PORT: upstream v0.2.9 — delegate tool for multi-agent setups.
+				// Auto-enabled when multiple agents exist; synchronous handoff via
+				// SubTurn (waits for the result). Independent of the subagent tool.
+				if len(registry.ListAgentIDs()) > 1 {
+					delegateTool := tools.NewDelegateTool()
+					delegateTool.SetSpawner(NewSubTurnSpawner(al))
+					delegateTool.SetAllowlistChecker(func(targetAgentID string) bool {
+						return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
+					})
+					delegateTool.SetSelfAgentID(currentAgentID)
+					agent.Tools.Register(delegateTool)
+				}
+
 				// Also register the synchronous subagent tool
 				subagentTool := tools.NewSubagentTool(subagentManager)
 				subagentTool.SetSpawner(NewSubTurnSpawner(al))

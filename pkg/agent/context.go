@@ -26,6 +26,7 @@ type ContextBuilder struct {
 	workspace      string
 	skillsLoader   *skills.SkillsLoader
 	splitOnMarker  bool
+	agentDiscovery func(agentID string) []AgentDescriptor
 	promptRegistry *PromptRegistry
 
 	// Cache for system prompt to avoid rebuilding on every call.
@@ -85,6 +86,30 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 		skillsLoader:   skills.NewSkillsLoader(workspace, globalSkillsDir, builtinSkillsDir),
 		promptRegistry: NewPromptRegistry(),
 	}
+}
+
+// WithAgentDiscovery registers the agent discovery prompt contributor.
+// PIKA-PORT: upstream v0.2.9 (feat/agent-discovery-prompt).
+func (cb *ContextBuilder) WithAgentDiscovery(
+	agentID string,
+	discover func(agentID string) []AgentDescriptor,
+) *ContextBuilder {
+	cb.agentDiscovery = discover
+	if discover != nil {
+		if err := cb.RegisterPromptContributor(agentDiscoveryPromptContributor{
+			agentID:  agentID,
+			discover: discover,
+		}); err != nil {
+			logger.WarnCF(
+				"agent",
+				"Failed to register agent discovery prompt contributor",
+				map[string]any{
+					"error": err.Error(),
+				},
+			)
+		}
+	}
+	return cb
 }
 
 func (cb *ContextBuilder) RegisterPromptSource(desc PromptSourceDescriptor) error {
