@@ -61,10 +61,16 @@ func TestSearchMessages_ScopeAndMultiword(t *testing.T) {
 	}
 	res, _ = ms.searchMessages(ctx, "любимый цвет", 10, "chat-a", "all")
 	if len(res) != 1 {
-		t.Fatalf("multiword AND hit: got %d, want 1", len(res))
+		t.Fatalf("multiword full match: got %d, want 1", len(res))
 	}
 	res, _ = ms.searchMessages(ctx, "цвет погода", 10, "chat-a", "all")
-	if len(res) != 0 {
-		t.Fatalf("multiword AND miss: got %d, want 0", len(res))
+	if len(res) != 2 {
+		t.Fatalf("multiword OR partial: got %d, want 2", len(res))
+	}
+	res, _ = ms.searchMessages(
+		ctx, "любимый цвет пользователя Gar", 10, "chat-b", "all",
+	)
+	if len(res) != 1 {
+		t.Fatalf("verbose LLM query: got %d, want 1", len(res))
 	}
 }

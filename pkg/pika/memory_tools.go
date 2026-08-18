@@ -297,31 +297,33 @@ func (ms *MemorySearch) searchMessages(
 	sessionID string,
 	scope string,
 ) ([]rawResult, error) {
+	// OR по словам + ранг по числу совпавших: AND по всем словам давал
+	// ноль на развёрнутых LLM-запросах (бой 19 авг: «любимый цвет
+	// пользователя Gar» не матчил «мой любимый цвет — синий»).
 	words := strings.Fields(query)
 	if len(words) == 0 {
 		return nil, nil
 	}
-	var where []string
-	var args []any
+	conds := make([]string, 0, len(words))
+	args := make([]any, 0, len(words)+2)
+	for _, w := range words {
+		conds = append(conds, "content LIKE ?")
+		args = append(args, "%"+w+"%")
+	}
+	q := `SELECT id, role, content, ts
+		FROM messages
+		WHERE (` + strings.Join(conds, " OR ") + `)`
 	if scope == "session" {
 		if sessionID == "" {
 			return nil, nil
 		}
-		where = append(where, "chat_id = ?")
+		q += ` AND chat_id = ?`
 		args = append(args, sessionID)
 	}
-	for _, w := range words {
-		where = append(where, "content LIKE ?")
-		args = append(args, "%"+w+"%")
-	}
-	args = append(args, limit)
-	// #nosec G202 -- where parts are static strings; values parameterized
-	rows, err := ms.bm.db.QueryContext(ctx,
-		`SELECT id, role, content, ts
-		FROM messages
-		WHERE `+strings.Join(where, " AND ")+`
-		ORDER BY id DESC LIMIT ?`,
-		args...)
+	q += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, limit*4) // перелимит: ранжируем, потом отрезаем
+	// #nosec G202 -- conds are static strings; values parameterized
+	rows, err := ms.bm.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"pika/memory_tools: messages: %w", err,
@@ -329,7 +331,11 @@ func (ms *MemorySearch) searchMessages(
 	}
 	defer rows.Close()
 
-	var out []rawResult
+	type scoredHit struct {
+		res   rawResult
+		score int
+	}
+	var all []scoredHit
 	for rows.Next() {
 		var id int64
 		var role string
@@ -347,17 +353,41 @@ func (ms *MemorySearch) searchMessages(
 			"[%s] %s", role,
 			truncateStr(content.String, 200),
 		)
-		out = append(out, rawResult{
-			Type:      "session",
-			Summary:   summary,
-			Source:    "messages",
-			CreatedAt: parseSQLiteTime(ts),
-			IsFTS:     false,
-			DedupKey:  fmt.Sprintf("messages:%d", id),
-			LayerPrio: prioMessages,
+		s := 0
+		lower := strings.ToLower(content.String)
+		for _, w := range words {
+			if strings.Contains(lower, strings.ToLower(w)) {
+				s++
+			}
+		}
+		all = append(all, scoredHit{
+			res: rawResult{
+				Type:      "session",
+				Summary:   summary,
+				Source:    "messages",
+				CreatedAt: parseSQLiteTime(ts),
+				IsFTS:     false,
+				DedupKey:  fmt.Sprintf("messages:%d", id),
+				LayerPrio: prioMessages,
+			},
+			score: s,
 		})
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// стабильно: равный ранг — свежие первыми (уже id DESC)
+	sort.SliceStable(all, func(i, j int) bool {
+		return all[i].score > all[j].score
+	})
+	out := make([]rawResult, 0, min(len(all), limit))
+	for _, s := range all {
+		out = append(out, s.res)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
 }
 
 // Layer 2: knowledge — FTS5 MATCH.
