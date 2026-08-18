@@ -1,0 +1,449 @@
+{
+  "navigation": {
+    "chat": "Чат",
+    "model_group": "Модели",
+    "models": "Модели",
+    "credentials": "Ключи доступа",
+    "agent_group": "Агент",
+    "hub": "Хаб",
+    "skills": "Навыки",
+    "tools": "Инструменты",
+    "services": "Сервисы",
+    "channels_group": "Каналы",
+    "show_more_channels": "Ещё",
+    "show_less_channels": "Свернуть",
+    "config": "Настройки",
+    "logs": "Логи",
+    "mcp": "MCP",
+    "pika": "Pika",
+    "security": "Безопасность",
+    "subagents": "Субагенты",
+    "agents": "Агенты",
+    "health": "Здоровье",
+    "analytics": "Аналитика"
+  },
+  "launcherLogin": {
+    "title": "Вход",
+    "description": "Введите пароль дашборда, чтобы продолжить.",
+    "passwordLabel": "Пароль",
+    "passwordPlaceholder": "Введите пароль",
+    "submit": "Войти",
+    "errorInvalid": "Неверный пароль. Попробуйте ещё раз.",
+    "errorNetwork": "Ошибка сети. Попробуйте ещё раз."
+  },
+  "launcherSetup": {
+    "title": "Задайте пароль дашборда",
+    "description": "Придумайте пароль для защиты доступа к дашборду. Он понадобится при каждом входе.",
+    "passwordLabel": "Пароль",
+    "passwordPlaceholder": "Минимум 8 символов",
+    "confirmLabel": "Подтвердите пароль",
+    "confirmPlaceholder": "Повторите пароль",
+    "submit": "Установить пароль",
+    "errorMismatch": "Пароли не совпадают.",
+    "errorNetwork": "Ошибка сети. Попробуйте ещё раз."
+  },
+  "common": {
+    "cancel": "Отмена",
+    "save": "Сохранить",
+    "saving": "Сохранение…",
+    "reset": "Сброс",
+    "confirm": "Подтвердить",
+    "create": "Создать",
+    "edit": "Изменить",
+    "saveChangesTitle": "Есть несохранённые изменения",
+    "restartRequiredTitle": "Требуется перезапуск gateway",
+    "restartRequiredDesc": "Конфигурация {{name}} сохранена. Перезапустите gateway, чтобы изменения вступили в силу."
+  },
+  "labels": {
+    "loading": "Загрузка…"
+  },
+  "header": {
+    "logout": {
+      "tooltip": "Выйти",
+      "confirm": "Выйти",
+      "description": "Вы уверены, что хотите выйти из дашборда?"
+    },
+    "gateway": {
+      "stopDialog": {
+        "title": "Остановить Gateway?",
+        "description": "Остановка gateway разорвёт активные чаты и прервёт инференс.",
+        "confirm": "Остановить Gateway"
+      },
+      "action": {
+        "start": "Запустить Gateway",
+        "stop": "Остановить Gateway",
+        "restart": "Перезапустить Gateway"
+      },
+      "status": {
+        "starting": "Запуск Gateway…",
+        "restarting": "Перезапуск Gateway…",
+        "stopping": "Остановка Gateway…"
+      },
+      "restartRequired": "Изменения конфигурации вступят в силу после перезапуска gateway."
+    }
+  },
+  "footer": {
+    "version": "Версия",
+    "commit": "Коммит",
+    "build": "Сборка",
+    "version_unknown": "Неизвестно"
+  },
+  "chat": {
+    "welcome": "Чем могу помочь?",
+    "welcomeDesc": "Спросите про погоду, настройки или любую задачу. Я здесь, чтобы помочь.",
+    "placeholder": "Написать сообщение…",
+    "disabledPlaceholder": {
+      "gatewayUnknown": "Чат недоступен: статус gateway ещё проверяется. Подождите, затем обновите страницу или перезапустите лаунчер.",
+      "gatewayStarting": "Чат недоступен: gateway запускается. Дождитесь окончания запуска и повторите.",
+      "gatewayRestarting": "Чат недоступен: gateway перезапускается. Дождитесь окончания перезапуска.",
+      "gatewayStopping": "Чат недоступен: gateway останавливается. Дождитесь остановки и запустите снова.",
+      "gatewayStopped": "Чат недоступен: gateway не запущен. Нажмите «Запустить Gateway» в верхней панели и повторите.",
+      "gatewayError": "Чат недоступен: gateway в состоянии ошибки. Проверьте логи, затем перезапустите gateway или лаунчер.",
+      "websocketConnecting": "Подключение к чату… Подождите.",
+      "websocketDisconnected": "Чат недоступен: соединение WebSocket разорвано. Проверьте сеть и статус gateway, обновите страницу.",
+      "websocketError": "Чат недоступен: ошибка подключения WebSocket. Проверьте сеть и статус gateway.",
+      "noDefaultModel": "Чат недоступен: не выбрана модель по умолчанию. Задайте её на странице «Модели»."
+    },
+    "newChat": "Новый чат",
+    "notConnected": "Gateway не запущен. Запустите его, чтобы общаться.",
+    "thinking": {
+      "step1": "Думаю…",
+      "step2": "Анализирую запрос…",
+      "step3": "Готовлю ответ…",
+      "step4": "Почти готово…"
+    },
+    "reasoningLabel": "Рассуждение",
+    "toolCallsLabel": "Вызовы инструментов",
+    "toolCallExplanationLabel": "Примечание к вызову",
+    "toolCallFunctionLabel": "Сводка вызова",
+    "showAssistantDetails": "Показать рассуждения и вызовы инструментов",
+    "toolLabel": "Инструмент",
+    "history": "История",
+    "noHistory": "История чатов пока пуста",
+    "historyLoadFailed": "Не удалось загрузить историю чатов",
+    "historyOpenFailed": "Не удалось открыть этот чат",
+    "loadingMore": "Загружаю ещё…",
+    "deleteSession": "Удалить сессию",
+    "messagesCount": "{{count}} сообщ.",
+    "noModel": "Выберите модель",
+    "inputDisabled": {
+      "notConnected": "Gateway не запущен. Запустите его, чтобы общаться.",
+      "noModel": "Не задана модель по умолчанию. Задайте её на странице «Модели»."
+    },
+    "sendMessage": "Отправить",
+    "sendHint": "Enter — отправить\nShift + Enter — новая строка",
+    "contextTitle": "Контекст",
+    "contextDetail": "Подробнее",
+    "attachImage": "Прикрепить изображение",
+    "removeImage": "Удалить изображение",
+    "uploadedImage": "Загруженное изображение",
+    "invalidImage": "«{{name}}» — неподдерживаемый формат изображения.",
+    "imageTooLarge": "«{{name}}» превышает лимит {{size}}.",
+    "imageReadFailed": "Не удалось прочитать «{{name}}».",
+    "empty": {
+      "noConfiguredModel": "Модель не настроена",
+      "noConfiguredModelDescription": "Настройте хотя бы одну AI-модель с API-ключом, чтобы начать общаться.",
+      "goToModels": "Перейти к моделям",
+      "noSelectedModel": "Модель не выбрана",
+      "noSelectedModelDescription": "Модели настроены, но ни одна не выбрана по умолчанию. Выберите модель перед началом чата.",
+      "notRunning": "Gateway не запущен",
+      "notRunningDescription": "Запустите gateway, чтобы начать общаться. Кнопка «Запустить Gateway» в верхней панели."
+    },
+    "modelGroup": {
+      "apikey": "API-ключ",
+      "oauth": "OAuth",
+      "local": "Локальная"
+    }
+  },
+  "models": {
+    "description": "Настройте API-ключи для AI-провайдеров. В чате доступны только настроенные модели.",
+    "defaultChangeSuccess": "Модель по умолчанию обновлена.",
+    "unsavedPrompt": "Изменение ещё не сохранено. Сохраните, чтобы записать его в конфигурацию модели.",
+    "restartHint": "Изменения моделей вступают в силу после перезапуска gateway.",
+    "loadError": "Не удалось загрузить модели",
+    "noDefaultHintPrefix": "Модель по умолчанию не задана. Нажмите",
+    "noDefaultHintSuffix": "чтобы задать.",
+    "status": {
+      "available": "Доступна",
+      "unconfigured": "Не настроена",
+      "unreachable": "Сервис недоступен"
+    },
+    "badge": {
+      "default": "По умолчанию",
+      "virtual": "Виртуальная"
+    },
+    "action": {
+      "edit": "Изменить API-ключ",
+      "setDefault": "Сделать по умолчанию",
+      "delete": "Удалить модель",
+      "setDefaultDisabled": {
+        "setting": "Назначение…",
+        "unavailable": "Недоступную модель нельзя сделать по умолчанию",
+        "isDefault": "Уже модель по умолчанию",
+        "isVirtual": "Виртуальную модель нельзя сделать по умолчанию"
+      },
+      "deleteDisabled": {
+        "isDefault": "Нельзя удалить модель по умолчанию"
+      }
+    },
+    "defaultOnSave": {
+      "label": "Модель по умолчанию",
+      "description": "Автоматически назначить эту модель по умолчанию после сохранения."
+    },
+    "add": {
+      "button": "Добавить модель",
+      "title": "Добавить свою модель",
+      "description": "Добавьте OpenAI-совместимый или нативный эндпоинт модели.",
+      "modelName": "Алиас модели",
+      "modelNamePlaceholder": "напр. my-gpt4",
+      "modelNameHint": "Короткое имя для идентификации модели в разговорах.",
+      "modelId": "Идентификатор модели",
+      "modelIdPlaceholder": "напр. gpt-4o или openai/gpt-4o",
+      "modelIdHint": "Если провайдер не указан, значения вида openai/gpt-4o трактуются в формате провайдер/модель. Если провайдер указан, поле считается каноническим ID модели без разбора префикса.",
+      "errorRequired": "Обязательное поле.",
+      "errorDuplicateModelName": "Такой алиас уже существует. Выберите другое имя.",
+      "saveError": "Не удалось добавить модель",
+      "saveSuccess": "Модель добавлена.",
+      "confirm": "Добавить модель"
+    },
+    "delete": {
+      "title": "Удалить модель?",
+      "description": "«{{name}}» будет безвозвратно удалена из списка моделей.",
+      "confirm": "Удалить"
+    },
+    "advanced": {
+      "toggle": "Расширенные настройки"
+    },
+    "field": {
+      "provider": "Провайдер",
+      "providerPlaceholder": "напр. openai",
+      "providerHint": "Необязательно. Если указан, используется как фактический провайдер, а идентификатор модели считается каноническим ID.",
+      "apiBase": "API Base URL",
+      "apiKey": "API-ключ",
+      "apiKeyPlaceholder": "Введите API-ключ",
+      "apiKeyPlaceholderSet": "Оставьте пустым, чтобы сохранить текущий ключ",
+      "proxy": "HTTP-прокси",
+      "proxyHint": "Необязательно. напр. http://127.0.0.1:7890",
+      "authMethod": "Метод аутентификации",
+      "authMethodHint": "Метод аутентификации: oauth, token. Пусто = API-ключ.",
+      "connectMode": "Режим подключения",
+      "connectModeHint": "Режим подключения CLI-провайдеров: stdio или grpc.",
+      "workspace": "Рабочая папка",
+      "workspaceHint": "Рабочая директория для CLI-провайдеров (напр. GitHub Copilot).",
+      "requestTimeout": "Таймаут запроса (с)",
+      "requestTimeoutHint": "Максимум секунд ожидания ответа. 0 = по умолчанию.",
+      "rpm": "Лимит (RPM)",
+      "rpmHint": "Максимум запросов в минуту. 0 = без лимита.",
+      "thinkingLevel": "Уровень размышлений",
+      "thinkingLevelHint": "Бюджет extended thinking: off, low, medium, high, xhigh, adaptive.",
+      "maxTokensField": "Поле max tokens",
+      "maxTokensFieldHint": "Переопределить имя поля max tokens в запросе, напр. max_completion_tokens.",
+      "extraBody": "Extra Body",
+      "extraBodyHint": "Дополнительные JSON-поля в тело запроса, напр. {\"reasoning_split\": true}.",
+      "customHeaders": "Свои заголовки",
+      "customHeadersHint": "Дополнительные HTTP-заголовки в каждый запрос."
+    },
+    "edit": {
+      "title": "Настройка {{name}}",
+      "apiKeyHint": "Ключ уже задан. Оставьте пустым, чтобы не менять.",
+      "oauthNote": "Этот провайдер использует OAuth — API-ключ не нужен.",
+      "saveError": "Не удалось сохранить",
+      "saveSuccess": "Конфигурация модели сохранена."
+    }
+  },
+  "credentials": {
+    "description": "Управление OAuth и токенами для поддерживаемых провайдеров.",
+    "loading": "Загрузка ключей…",
+    "providers": {
+      "openai": {
+        "description": "Поддерживает вход через браузерный OAuth, device code и токен."
+      },
+      "anthropic": {
+        "description": "Вход по токену для доступа к Claude."
+      },
+      "antigravity": {
+        "description": "Браузерный OAuth для Google Cloud Code Assist."
+      }
+    },
+    "status": {
+      "connected": "Подключено",
+      "needsRefresh": "Нужно обновить",
+      "expired": "Истёк",
+      "notLoggedIn": "Вход не выполнен"
+    },
+    "actions": {
+      "browser": "Браузерный OAuth",
+      "deviceCode": "Device Code",
+      "stopLoading": "Остановить",
+      "saveToken": "Сохранить",
+      "logout": "Выйти"
+    },
+    "logoutDialog": {
+      "title": "Выйти из провайдера?",
+      "description": "Сохранённый ключ для {{provider}} будет удалён."
+    },
+    "fields": {
+      "openaiToken": "Токен OpenAI",
+      "anthropicToken": "Токен Anthropic"
+    },
+    "labels": {
+      "account": "Аккаунт",
+      "email": "Email",
+      "project": "Проект"
+    },
+    "errors": {
+      "loadFailed": "Не удалось загрузить ключи",
+      "flowFailed": "Не удалось проверить поток аутентификации",
+      "loginFailed": "Ошибка входа",
+      "logoutFailed": "Ошибка выхода",
+      "invalidBrowserResponse": "Некорректный ответ браузерного входа",
+      "invalidDeviceResponse": "Некорректный ответ device code",
+      "popupBlocked": "Не удалось открыть новую вкладку. Разрешите всплывающие окна и повторите."
+    },
+    "flow": {
+      "current": "Текущий статус аутентификации",
+      "pending": "Ожидание авторизации…",
+      "success": "Аутентификация успешна",
+      "error": "Ошибка аутентификации",
+      "expired": "Сессия аутентификации истекла"
+    },
+    "device": {
+      "title": "Вход OpenAI по устройству",
+      "description": "Откройте страницу верификации и введите код ниже. Страница обновится автоматически.",
+      "code": "Код пользователя",
+      "url": "URL верификации",
+      "polling": "Опрашиваю статус входа…",
+      "open": "Открыть страницу верификации"
+    }
+  },
+  "channels": {
+    "loadError": "Не удалось загрузить каналы",
+    "name": {
+      "telegram": "Telegram",
+      "discord": "Discord",
+      "slack": "Slack",
+      "feishu": "Feishu",
+      "dingtalk": "DingTalk",
+      "line": "LINE",
+      "qq": "QQ",
+      "onebot": "OneBot",
+      "wecom": "WeCom",
+      "whatsapp": "WhatsApp",
+      "whatsapp_native": "WhatsApp Native",
+      "pico": "Web",
+      "maixcam": "MaixCam",
+      "matrix": "Matrix",
+      "irc": "IRC",
+      "weixin": "WeChat"
+    },
+    "field": {
+      "token": "Токен бота",
+      "tokenPlaceholder": "Введите токен бота",
+      "botToken": "Токен бота",
+      "appToken": "Токен приложения",
+      "appId": "App ID",
+      "appSecret": "App Secret",
+      "verificationToken": "Токен верификации",
+      "encryptKey": "Ключ шифрования",
+      "baseUrl": "API Base URL",
+      "proxy": "HTTP-прокси",
+      "mentionOnly": "Только по упоминанию",
+      "typingEnabled": "Индикатор набора текста",
+      "placeholderEnabled": "Сообщение-заглушка",
+      "placeholderText": "Текст заглушки",
+      "groupTriggerMentionOnly": "В группах только по упоминанию",
+      "groupTriggerPrefixes": "Префиксы-триггеры в группах",
+      "groupTriggerPrefixesPlaceholder": "напр. /, !, ?",
+      "randomReactionEmoji": "Случайная эмодзи-реакция",
+      "randomReactionEmojiPlaceholder": "напр. THUMBSUP, HEART, SMILE",
+      "isLark": "Lark (международный)",
+      "allowFrom": "Разрешённые ID",
+      "allowFromPlaceholder": "напр. 123456, 789012",
+      "allowOrigins": "Разрешённые origins",
+      "allowOriginsPlaceholder": "напр. https://example.com",
+      "removeListItem": "Удалить {{value}}",
+      "secretPlaceholder": "Введите секрет",
+      "secretHintSet": "Значение уже задано. Оставьте пустым, чтобы не менять."
+    },
+    "page": {
+      "notFound": "Канал «{{name}}» не поддерживается.",
+      "saveSuccess": "Конфигурация канала сохранена.",
+      "saveError": "Не удалось сохранить конфигурацию канала",
+      "savePrompt": "Изменение ещё не сохранено. Сохраните, чтобы записать его в конфигурацию канала.",
+      "docLink": "Документация",
+      "enableLabel": "Включить канал",
+      "restartRequiredTitle": "Требуется перезапуск gateway",
+      "restartRequiredDesc": "Конфигурация {{name}} сохранена. Перезапустите gateway, чтобы изменения вступили в силу."
+    },
+    "weixin": {
+      "bindTitle": "Привязка WeChat",
+      "bindDesc": "Отсканируйте QR-код в WeChat, чтобы привязать аккаунт.",
+      "bind": "Привязать WeChat",
+      "rebind": "Перепривязать",
+      "bound": "WeChat привязан",
+      "notBound": "Аккаунт WeChat ещё не привязан.",
+      "generating": "Генерация QR-кода…",
+      "scanHint": "Откройте WeChat и отсканируйте QR-код",
+      "scanned": "Отсканировано — подтвердите в WeChat",
+      "expired": "QR-код истёк",
+      "retry": "Повторить",
+      "refresh": "Обновить QR",
+      "errorGeneric": "Произошла ошибка. Попробуйте ещё раз."
+    },
+    "wecom": {
+      "bindTitle": "Привязка WeCom",
+      "bindDesc": "Отсканируйте QR-код в WeCom, чтобы привязать AI-бота.",
+      "bind": "Привязать WeCom",
+      "rebind": "Перепривязать",
+      "bound": "WeCom привязан",
+      "notBound": "WeCom AI Bot ещё не привязан.",
+      "generating": "Генерация QR-кода…",
+      "scanHint": "Откройте WeCom и отсканируйте QR-код",
+      "scanned": "Отсканировано — подтвердите в WeCom",
+      "expired": "QR-код истёк",
+      "retry": "Повторить",
+      "refresh": "Обновить QR",
+      "errorGeneric": "Произошла ошибка. Попробуйте ещё раз."
+    }
+  },
+  "pages": {
+    "subagents": {
+      "description": "Настройка фоновых пайплайнов Pika: модель, промпт-файл и пороги каждого.",
+      "note_defaults": "Пустые поля наследуют значения по умолчанию. Изменения применяются после перезапуска gateway.",
+      "save_success": "Настройки субагентов сохранены",
+      "save_error": "Не удалось сохранить настройки",
+      "load_error": "Не удалось загрузить настройки",
+      "atomizer": {
+        "name": "Atomizer",
+        "desc": "Дробит диалоги на атомы знаний и пишет их в базу памяти."
+      },
+      "reflexor": {
+        "name": "Reflexor",
+        "desc": "Плановый аналитик: дневные, недельные и месячные обзоры, correction rules."
+      },
+      "mcp_guard": {
+        "name": "MCP Guard",
+        "desc": "Аудит MCP-серверов и инструментов на подозрительность."
+      },
+      "archivist": {
+        "name": "Archivist",
+        "desc": "Писарь памяти: собирает бриф контекста из базы знаний."
+      }
+    },
+    "agents": {
+      "description": "Именованные агенты со своим workspace, моделью и промптом (AGENT.md). Разрешите пира в allow_agents — и модель сможет делегировать ему задачи.",
+      "new": "Новый агент",
+      "create_title": "Новый агент",
+      "created": "Агент создан",
+      "saved": "Агент сохранён",
+      "deleted": "Агент удалён",
+      "restarted": "Gateway перезапущен",
+      "restart_needed": "Изменения списка агентов вступят в силу после перезапуска gateway.",
+      "restart": "Перезапустить gateway",
+      "confirm_delete": "Удалить агента? Файлы workspace сохранятся.",
+      "model_hint": "имя из model_list, пусто = по умолчанию",
+      "desc_hint": "Видно пирам в agent discovery",
+      "load_error": "Не удалось загрузить агентов"
+    }
+  }
+}
