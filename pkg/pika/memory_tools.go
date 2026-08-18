@@ -21,10 +21,6 @@ import (
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
 )
 
-// SessionIDKey is the context key for the current session ID.
-// Used by MemorySearch to scope layer 1 (messages) to current session.
-type SessionIDKey struct{}
-
 // SearchMemoryArgs holds the parsed arguments for search_memory.
 type SearchMemoryArgs struct {
 	Query string `json:"query"`
@@ -131,7 +127,11 @@ func (ms *MemorySearch) Execute(
 	ctx, cancel := context.WithTimeout(ctx, searchTimeout)
 	defer cancel()
 
-	sessionID, _ := ctx.Value(SessionIDKey{}).(string)
+	// D-AUDIT-104: canonical session key из tool ctx (sk_v1_...).
+	// Старый SessionIDKey никем не наполнялся (мёртвая проводка с мая,
+	// писали только тесты) → scope молча был session+пусто → layer 1
+	// был мёртв всегда (бой 19 авг). Ключ удалён из кодовой базы.
+	sessionID := toolshared.ToolSessionKey(ctx)
 
 	results := ms.fanOut(
 		ctx, parsed.Query, parsed.Limit, sessionID,

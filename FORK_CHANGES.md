@@ -1,3 +1,10 @@
+## Волна 73 — Память: мёртвая проводка SessionIDKey демонтирована (D-AUDIT-104 follow-up 2) · 19 авг 2026
+
+- Бой: даже после #116+#120 ноль при scope=all и однословном запросе. Корень (grep в бою): ctx-ключ SessionIDKey, который читал search_memory, не наполнялся НИКЕМ — писали только тесты. Scope резолвился в session с пустым ключом → layer 1 мёртв с рождения.
+- Фикс: ключ удалён полностью; memory search и clarify читают canonical session key через toolshared.ToolSessionKey (боевой канал: pipeline_execute.go). Тесты переведены на WithToolSessionContext; регрессионный TestSearchMemory_UsesToolSessionKey: кросс-чат при all находит факт, дефолт session — нет.
+- Попутный фикс: clarify со мёртвым ключом держал streak-состояние общим на все чаты → теперь per-chat.
+- Гейты: build/vet/gofmt + pkg/pika зелёный; grep SessionIDKey пуст.
+
 ## Волна 72 — Память: OR-ранжирование + ключ scope под canonical session key (D-AUDIT-104 follow-up) · 19 авг 2026
 
 - Бой: /memory all сработала (флаг записан), но цвет не нашёлся. Два корня, оба из боя:

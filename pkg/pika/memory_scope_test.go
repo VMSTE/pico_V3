@@ -2,7 +2,10 @@ package pika
 
 import (
 	"context"
+	"strings"
 	"testing"
+
+	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
 )
 
 // D-AUDIT-104: per-chat memory scope + chat_id scoping + multiword AND.
@@ -72,5 +75,47 @@ func TestSearchMessages_ScopeAndMultiword(t *testing.T) {
 	)
 	if len(res) != 1 {
 		t.Fatalf("verbose LLM query: got %d, want 1", len(res))
+	}
+}
+
+// Execute берёт canonical session key из tool ctx (ToolSessionKey) —
+// в бою SessionIDKey никем не наполнялся (D-AUDIT-104, 19 авг).
+func TestSearchMemory_UsesToolSessionKey(t *testing.T) {
+	bm, ms, cleanup := setupSearchTest(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	if _, err := bm.SaveMessage(ctx, MessageRow{
+		ChatID: "sk_v1_a", PikaSessionID: "t1", Role: "user",
+		Content: "мой любимый цвет — синий", Tokens: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// другой чат разрешил всю базу
+	if err := bm.SetMemoryScope(ctx, "sk_v1_b", "all"); err != nil {
+		t.Fatal(err)
+	}
+
+	toolCtx := toolshared.WithToolSessionContext(
+		context.Background(), "main", "sk_v1_b", nil,
+	)
+	res := ms.Execute(toolCtx, map[string]any{"query": "цвет", "limit": 10})
+	if res == nil || res.IsError {
+		t.Fatalf("Execute: %+v", res)
+	}
+	if !strings.Contains(res.ForLLM, "синий") {
+		t.Fatalf(
+			"scope=all via ToolSessionKey must find cross-chat fact, got: %s",
+			res.ForLLM,
+		)
+	}
+
+	// чат без флага (дефолт session) чужого не видит
+	toolCtx2 := toolshared.WithToolSessionContext(
+		context.Background(), "main", "sk_v1_c", nil,
+	)
+	res2 := ms.Execute(toolCtx2, map[string]any{"query": "цвет", "limit": 10})
+	if res2 != nil && strings.Contains(res2.ForLLM, "синий") {
+		t.Fatalf("default session scope leaked cross-chat: %s", res2.ForLLM)
 	}
 }

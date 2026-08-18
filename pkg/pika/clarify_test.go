@@ -109,10 +109,8 @@ func newTestClarifyWithCfg(
 func ctxWithChat(
 	sessionID, chatID, channel string,
 ) context.Context {
-	ctx := context.WithValue(
-		context.Background(),
-		SessionIDKey{},
-		sessionID,
+	ctx := toolshared.WithToolSessionContext(
+		context.Background(), "main", sessionID, nil,
 	)
 	ctx = toolshared.WithToolInboundContext(ctx, channel, chatID, "", "")
 

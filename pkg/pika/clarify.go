@@ -152,9 +152,9 @@ func (ch *ClarifyHandler) Execute(
 		)
 	}
 
-	sessionID, _ := ctx.Value(
-		SessionIDKey{},
-	).(string)
+	// D-AUDIT-104: canonical session key из tool ctx (SessionIDKey
+	// был мёртвой проводкой → streak-состояние было общим на все чаты).
+	sessionID := toolshared.ToolSessionKey(ctx)
 	state := ch.getOrCreateState(sessionID)
 
 	// Step 2: Streak check — bypass FTS5
