@@ -18,6 +18,7 @@
     "pika": "Pika",
     "security": "Security",
     "subagents": "Subagents",
+    "agents": "Agents",
     "health": "Health",
     "analytics": "Analytics"
   },
