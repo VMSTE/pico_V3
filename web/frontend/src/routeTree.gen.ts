@@ -9,12 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SubagentsRouteImport } from './routes/subagents'
+import { Route as SecurityRouteImport } from './routes/security'
+import { Route as PikaRouteImport } from './routes/pika'
 import { Route as ModelsRouteImport } from './routes/models'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as LauncherSetupRouteImport } from './routes/launcher-setup'
 import { Route as LauncherLoginRouteImport } from './routes/launcher-login'
+import { Route as HealthRouteImport } from './routes/health'
 import { Route as CredentialsRouteImport } from './routes/credentials'
 import { Route as ConfigRouteImport } from './routes/config'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
+import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as AgentRouteImport } from './routes/agent'
 import { Route as ChannelsRouteRouteImport } from './routes/channels/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -24,9 +31,29 @@ import { Route as AgentToolsRouteImport } from './routes/agent/tools'
 import { Route as AgentSkillsRouteImport } from './routes/agent/skills'
 import { Route as AgentHubRouteImport } from './routes/agent/hub'
 
+const SubagentsRoute = SubagentsRouteImport.update({
+  id: '/subagents',
+  path: '/subagents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PikaRoute = PikaRouteImport.update({
+  id: '/pika',
+  path: '/pika',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModelsRoute = ModelsRouteImport.update({
   id: '/models',
   path: '/models',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LogsRoute = LogsRouteImport.update({
@@ -44,6 +71,11 @@ const LauncherLoginRoute = LauncherLoginRouteImport.update({
   path: '/launcher-login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CredentialsRoute = CredentialsRouteImport.update({
   id: '/credentials',
   path: '/credentials',
@@ -52,6 +84,16 @@ const CredentialsRoute = CredentialsRouteImport.update({
 const ConfigRoute = ConfigRouteImport.update({
   id: '/config',
   path: '/config',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentsRoute = AgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentRoute = AgentRouteImport.update({
@@ -99,12 +141,19 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/channels': typeof ChannelsRouteRouteWithChildren
   '/agent': typeof AgentRouteWithChildren
+  '/agents': typeof AgentsRoute
+  '/analytics': typeof AnalyticsRoute
   '/config': typeof ConfigRouteWithChildren
   '/credentials': typeof CredentialsRoute
+  '/health': typeof HealthRoute
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
+  '/mcp': typeof McpRoute
   '/models': typeof ModelsRoute
+  '/pika': typeof PikaRoute
+  '/security': typeof SecurityRoute
+  '/subagents': typeof SubagentsRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/tools': typeof AgentToolsRoute
@@ -115,12 +164,19 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/channels': typeof ChannelsRouteRouteWithChildren
   '/agent': typeof AgentRouteWithChildren
+  '/agents': typeof AgentsRoute
+  '/analytics': typeof AnalyticsRoute
   '/config': typeof ConfigRouteWithChildren
   '/credentials': typeof CredentialsRoute
+  '/health': typeof HealthRoute
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
+  '/mcp': typeof McpRoute
   '/models': typeof ModelsRoute
+  '/pika': typeof PikaRoute
+  '/security': typeof SecurityRoute
+  '/subagents': typeof SubagentsRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/tools': typeof AgentToolsRoute
@@ -132,12 +188,19 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/channels': typeof ChannelsRouteRouteWithChildren
   '/agent': typeof AgentRouteWithChildren
+  '/agents': typeof AgentsRoute
+  '/analytics': typeof AnalyticsRoute
   '/config': typeof ConfigRouteWithChildren
   '/credentials': typeof CredentialsRoute
+  '/health': typeof HealthRoute
   '/launcher-login': typeof LauncherLoginRoute
   '/launcher-setup': typeof LauncherSetupRoute
   '/logs': typeof LogsRoute
+  '/mcp': typeof McpRoute
   '/models': typeof ModelsRoute
+  '/pika': typeof PikaRoute
+  '/security': typeof SecurityRoute
+  '/subagents': typeof SubagentsRoute
   '/agent/hub': typeof AgentHubRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/tools': typeof AgentToolsRoute
@@ -150,12 +213,19 @@ export interface FileRouteTypes {
     | '/'
     | '/channels'
     | '/agent'
+    | '/agents'
+    | '/analytics'
     | '/config'
     | '/credentials'
+    | '/health'
     | '/launcher-login'
     | '/launcher-setup'
     | '/logs'
+    | '/mcp'
     | '/models'
+    | '/pika'
+    | '/security'
+    | '/subagents'
     | '/agent/hub'
     | '/agent/skills'
     | '/agent/tools'
@@ -166,12 +236,19 @@ export interface FileRouteTypes {
     | '/'
     | '/channels'
     | '/agent'
+    | '/agents'
+    | '/analytics'
     | '/config'
     | '/credentials'
+    | '/health'
     | '/launcher-login'
     | '/launcher-setup'
     | '/logs'
+    | '/mcp'
     | '/models'
+    | '/pika'
+    | '/security'
+    | '/subagents'
     | '/agent/hub'
     | '/agent/skills'
     | '/agent/tools'
@@ -182,12 +259,19 @@ export interface FileRouteTypes {
     | '/'
     | '/channels'
     | '/agent'
+    | '/agents'
+    | '/analytics'
     | '/config'
     | '/credentials'
+    | '/health'
     | '/launcher-login'
     | '/launcher-setup'
     | '/logs'
+    | '/mcp'
     | '/models'
+    | '/pika'
+    | '/security'
+    | '/subagents'
     | '/agent/hub'
     | '/agent/skills'
     | '/agent/tools'
@@ -199,21 +283,56 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChannelsRouteRoute: typeof ChannelsRouteRouteWithChildren
   AgentRoute: typeof AgentRouteWithChildren
+  AgentsRoute: typeof AgentsRoute
+  AnalyticsRoute: typeof AnalyticsRoute
   ConfigRoute: typeof ConfigRouteWithChildren
   CredentialsRoute: typeof CredentialsRoute
+  HealthRoute: typeof HealthRoute
   LauncherLoginRoute: typeof LauncherLoginRoute
   LauncherSetupRoute: typeof LauncherSetupRoute
   LogsRoute: typeof LogsRoute
+  McpRoute: typeof McpRoute
   ModelsRoute: typeof ModelsRoute
+  PikaRoute: typeof PikaRoute
+  SecurityRoute: typeof SecurityRoute
+  SubagentsRoute: typeof SubagentsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/subagents': {
+      id: '/subagents'
+      path: '/subagents'
+      fullPath: '/subagents'
+      preLoaderRoute: typeof SubagentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pika': {
+      id: '/pika'
+      path: '/pika'
+      fullPath: '/pika'
+      preLoaderRoute: typeof PikaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/models': {
       id: '/models'
       path: '/models'
       fullPath: '/models'
       preLoaderRoute: typeof ModelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/logs': {
@@ -237,6 +356,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LauncherLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/credentials': {
       id: '/credentials'
       path: '/credentials'
@@ -249,6 +375,20 @@ declare module '@tanstack/react-router' {
       path: '/config'
       fullPath: '/config'
       preLoaderRoute: typeof ConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agents': {
+      id: '/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof AgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agent': {
@@ -351,12 +491,19 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChannelsRouteRoute: ChannelsRouteRouteWithChildren,
   AgentRoute: AgentRouteWithChildren,
+  AgentsRoute: AgentsRoute,
+  AnalyticsRoute: AnalyticsRoute,
   ConfigRoute: ConfigRouteWithChildren,
   CredentialsRoute: CredentialsRoute,
+  HealthRoute: HealthRoute,
   LauncherLoginRoute: LauncherLoginRoute,
   LauncherSetupRoute: LauncherSetupRoute,
   LogsRoute: LogsRoute,
+  McpRoute: McpRoute,
   ModelsRoute: ModelsRoute,
+  PikaRoute: PikaRoute,
+  SecurityRoute: SecurityRoute,
+  SubagentsRoute: SubagentsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

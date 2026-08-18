@@ -93,6 +93,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// MCP servers management (D-AUDIT-84)
 	h.registerMCPRoutes(mux)
 
+	// Named agents CRUD (D-AUDIT-97)
+	h.registerAgentRoutes(mux)
+
 	// Pika telemetry dashboard (D-AUDIT-86)
 	h.registerPikaRoutes(mux)
 

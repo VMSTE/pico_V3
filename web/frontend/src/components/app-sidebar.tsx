@@ -163,6 +163,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             translateTitle: true,
           },
           {
+            title: "navigation.agents",
+            url: "/agents",
+            icon: IconRobot,
+            translateTitle: true,
+          },
+          {
             title: "navigation.mcp",
             url: "/mcp",
             icon: IconPlug,

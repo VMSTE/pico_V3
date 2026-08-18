@@ -1,3 +1,11 @@
+## Волна 65 — Страница «Агенты»: CRUD именованных агентов из морды (D-AUDIT-97) · 18 авг 2026
+
+- Бэкенд web/backend/api/agents.go: GET/POST /api/agents, PUT/DELETE /api/agents/{id} (паттерн D-AUDIT-84 mcp.go). Скаффолд workspace + AGENT.md с frontmatter (name/description читаются discovery из D-AUDIT-96). Защиты: спец-агенты Pika (atomizer/reflexor/mcp_guard/archivist) недоступны (ими управляет /subagents), default-агента нельзя удалить, файлы workspace при удалении сохраняются, установка default снимает флаг с остальных.
+- Фронтенд: страница /agents (список/создание/редактирование/удаление), пункт меню в app-sidebar, локали en/zh, баннер с кнопкой рестарта gateway (POST /api/gateway/restart).
+- Попутно починено: локальная сборка фронта была сломана на main (протухший routeTree.gen.ts + tsc до плагина) — теперь vite-прогон регенерирует дерево до typecheck.
+- Тесты: TestAgentsCRUD (create/list/update/delete, 409 дубль, 400 reserved id, 404 повторное удаление, сохранность AGENT.md).
+- Гейты: BUILD/VET, web/backend тесты, lint (замечания только в старом config.go — не наши), pnpm build с регенерацией routeTree.
+
 ## Волна 64 — Порт мультиагентности из upstream v0.2.9 (D-AUDIT-96) · 14 авг 2026
 
 - Хирургический порт (НЕ merge): delegate tool (синхронное делегирование именованному агенту с ожиданием результата) + agent discovery prompt (пиры в системном промпте через ListSpawnableAgents, фильтр по правам spawn — deny-by-default, спец-агенты Pika не протекают).
