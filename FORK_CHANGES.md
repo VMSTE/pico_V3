@@ -1,3 +1,10 @@
+## Волна 66 — Фикс визарда онбординга: provider + мягкая валидация id (D-AUDIT-99) · 18 авг 2026
+
+- Баг найден в бою (первая локальная установка): визард сохранял model_list-запись без поля provider → ExtractProtocol брал «stepfun» как протокол → «unknown protocol». Теперь визард пишет Provider=provider.Key и в новую, и в существующую запись.
+- pickWizardModel: id не из выдачи /models больше не отвергается жёстко — визард спрашивает «use it anyway? (y/n)» (free-тиры OpenRouter не всегда видны в списке аккаунта).
+- Тесты: 4 кейса pickWizardModel (listed id, unlisted+confirm, unlisted+decline→fallback, выбор номером).
+- Гейты: BUILD/VET, тесты onboard, lint.
+
 ## Волна 65 — Страница «Агенты»: CRUD именованных агентов из морды (D-AUDIT-97) · 18 авг 2026
 
 - Бэкенд web/backend/api/agents.go: GET/POST /api/agents, PUT/DELETE /api/agents/{id} (паттерн D-AUDIT-84 mcp.go). Скаффолд workspace + AGENT.md с frontmatter (name/description читаются discovery из D-AUDIT-96). Защиты: спец-агенты Pika (atomizer/reflexor/mcp_guard/archivist) недоступны (ими управляет /subagents), default-агента нельзя удалить, файлы workspace при удалении сохраняются, установка default снимает флаг с остальных.

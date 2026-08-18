@@ -158,6 +158,7 @@ func maybeRunModelWizard(cfg *config.Config, configPath string, skipModel bool) 
 		}
 		if m.ModelName == provider.Key {
 			m.Model = modelID
+			m.Provider = provider.Key
 			m.APIBase = provider.APIBase
 			m.APIKeys = secureKeys
 			m.Enabled = true
@@ -168,6 +169,7 @@ func maybeRunModelWizard(cfg *config.Config, configPath string, skipModel bool) 
 	if !found {
 		cfg.ModelList = append(cfg.ModelList, &config.ModelConfig{
 			ModelName: provider.Key,
+			Provider:  provider.Key,
 			Model:     modelID,
 			APIBase:   provider.APIBase,
 			APIKeys:   secureKeys,
@@ -254,6 +256,13 @@ func pickWizardModel(reader *bufio.Reader, ids []string) string {
 				return id
 			}
 		}
-		fmt.Println("Not a valid number or model id; try again.")
+		// D-AUDIT-99: provider listings can omit valid ids (e.g. :free tiers
+		// hidden per account). Offer the typed id instead of hard-rejecting.
+		fmt.Printf("%q is not in the provider list. Use it anyway? (y/n): ", text)
+		answer, _ := reader.ReadString('\n')
+		if strings.EqualFold(strings.TrimSpace(answer), "y") {
+			return text
+		}
+		fmt.Println("OK — pick a number from the list or type another id.")
 	}
 }
