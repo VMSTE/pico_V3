@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
 )
 
 func setupSearchTest(t *testing.T) (
@@ -40,7 +42,9 @@ func execSearch(
 	t.Helper()
 	ctx := context.Background()
 	if sessionID != "" {
-		ctx = context.WithValue(ctx, SessionIDKey{}, sessionID)
+		ctx = toolshared.WithToolSessionContext(
+			ctx, "main", sessionID, nil,
+		)
 	}
 	args := map[string]any{
 		"query": query,
