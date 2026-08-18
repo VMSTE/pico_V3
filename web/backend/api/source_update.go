@@ -108,7 +108,7 @@ func (h *Handler) handleUpdateFromSource(
 		return
 	}
 
-	gwMsg := "gateway was not running; start it from the header"
+	var gwMsg string
 	if pid, rErr := h.RestartGateway(); rErr == nil {
 		gwMsg = fmt.Sprintf("gateway restarted (pid %d)", pid)
 	} else {
