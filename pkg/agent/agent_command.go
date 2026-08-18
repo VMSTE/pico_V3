@@ -35,7 +35,7 @@ func (al *AgentLoop) handleCommand(
 	// D-AUDIT-104: /memory — per-chat memory search scope toggle.
 	if cmdName, ok := commands.CommandName(msg.Content); ok &&
 		cmdName == "memory" {
-		return al.applyMemoryScopeCommand(ctx, msg), true
+		return al.applyMemoryScopeCommand(ctx, msg, opts), true
 	}
 
 	if al.cmdRegistry == nil {
@@ -502,9 +502,18 @@ func (al *AgentLoop) clearPendingSkills(sessionKey string) {
 func (al *AgentLoop) applyMemoryScopeCommand(
 	ctx context.Context,
 	msg bus.InboundMessage,
+	opts *processOptions,
 ) string {
 	if al.botmem == nil {
 		return "Memory store is not available."
+	}
+	// Флаг хранится под КАНОНИЧЕСКИМ session key (sk_v1_...) — тем же,
+	// под которым пишутся сообщения и читается scope при поиске.
+	// Бой 19 авг: msg.ChatID = "pico:<uuid>" не совпадал с ним →
+	// флаг писался «мимо» и не читался.
+	chatKey := opts.Dispatch.SessionKey
+	if chatKey == "" {
+		chatKey = msg.ChatID
 	}
 	arg := ""
 	parts := strings.Fields(strings.TrimSpace(msg.Content))
@@ -516,10 +525,10 @@ func (al *AgentLoop) applyMemoryScopeCommand(
 		return fmt.Sprintf(
 			"Memory search scope for this chat: %s "+
 				"(use /memory all or /memory session to change)",
-			al.botmem.GetMemoryScope(ctx, msg.ChatID),
+			al.botmem.GetMemoryScope(ctx, chatKey),
 		)
 	case "all", "session":
-		if err := al.botmem.SetMemoryScope(ctx, msg.ChatID, arg); err != nil {
+		if err := al.botmem.SetMemoryScope(ctx, chatKey, arg); err != nil {
 			return fmt.Sprintf("Failed to save memory scope: %v", err)
 		}
 		return fmt.Sprintf(
