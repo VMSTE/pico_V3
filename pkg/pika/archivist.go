@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -564,6 +565,8 @@ func (a *Archivist) executeSearchContext(
 			)
 			if err == nil {
 				result.Messages = hits
+			} else {
+				log.Printf("WARN pika/archivist: messages search: %v", err)
 			}
 		case "reasoning":
 			kw, err := a.extractReasoningKeywords(ctx)
@@ -670,11 +673,22 @@ func (a *Archivist) searchMessages(
 ) ([]MessageHit, error) {
 	var hits []MessageHit
 
+	// D-AUDIT-104: per-chat memory scope — session mode restricts to the
+	// current chat (chat_id); all mode searches the whole base.
+	scopeWhere := ""
+	var scopeArgs []any
+	if a.mem.GetMemoryScope(ctx, a.currentSessionKey) == "session" &&
+		a.currentSessionKey != "" {
+		scopeWhere = " WHERE chat_id = ?"
+		scopeArgs = append(scopeArgs, a.currentSessionKey)
+	}
+
 	// Guaranteed last N messages (most recent, any session)
+	// #nosec G202 -- scopeWhere is a static string; value parameterized
 	rows, err := a.mem.db.QueryContext(ctx,
-		`SELECT role, content, pika_chat_id
-		FROM messages ORDER BY id DESC LIMIT ?`,
-		lastN)
+		`SELECT role, content, pika_session_id
+		FROM messages`+scopeWhere+` ORDER BY id DESC LIMIT ?`,
+		append(append([]any{}, scopeArgs...), lastN)...)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"pika/archivist: recent msgs: %w", err,
@@ -707,12 +721,18 @@ func (a *Archivist) searchMessages(
 
 	// LIKE search across all sessions
 	if query != "" {
-		likeRows, lErr := a.mem.db.QueryContext(ctx,
-			`SELECT role, content, pika_chat_id
+		likeQ := `SELECT role, content, pika_session_id
 			FROM messages
-			WHERE content LIKE '%' || ? || '%'
-			ORDER BY id DESC LIMIT ?`,
-			query, limit)
+			WHERE content LIKE '%' || ? || '%'`
+		likeArgs := []any{query}
+		if scopeWhere != "" {
+			likeQ += ` AND chat_id = ?`
+			likeArgs = append(likeArgs, a.currentSessionKey)
+		}
+		likeQ += ` ORDER BY id DESC LIMIT ?`
+		likeArgs = append(likeArgs, limit)
+		// #nosec G202 -- static query parts; values parameterized
+		likeRows, lErr := a.mem.db.QueryContext(ctx, likeQ, likeArgs...)
 		if lErr == nil {
 			defer likeRows.Close()
 			for likeRows.Next() {

@@ -32,6 +32,12 @@ func (al *AgentLoop) handleCommand(
 		return reply, handled
 	}
 
+	// D-AUDIT-104: /memory — per-chat memory search scope toggle.
+	if cmdName, ok := commands.CommandName(msg.Content); ok &&
+		cmdName == "memory" {
+		return al.applyMemoryScopeCommand(ctx, msg), true
+	}
+
 	if al.cmdRegistry == nil {
 		return "", false
 	}
@@ -489,4 +495,38 @@ func (al *AgentLoop) clearPendingSkills(sessionKey string) {
 		return
 	}
 	al.pendingSkills.Delete(sessionKey)
+}
+
+// applyMemoryScopeCommand implements /memory [all|session] — per-chat
+// memory search scope (D-AUDIT-104). Stored in bot_memory registry.
+func (al *AgentLoop) applyMemoryScopeCommand(
+	ctx context.Context,
+	msg bus.InboundMessage,
+) string {
+	if al.botmem == nil {
+		return "Memory store is not available."
+	}
+	arg := ""
+	parts := strings.Fields(strings.TrimSpace(msg.Content))
+	if len(parts) > 1 {
+		arg = strings.ToLower(strings.TrimSpace(parts[1]))
+	}
+	switch arg {
+	case "":
+		return fmt.Sprintf(
+			"Memory search scope for this chat: %s "+
+				"(use /memory all or /memory session to change)",
+			al.botmem.GetMemoryScope(ctx, msg.ChatID),
+		)
+	case "all", "session":
+		if err := al.botmem.SetMemoryScope(ctx, msg.ChatID, arg); err != nil {
+			return fmt.Sprintf("Failed to save memory scope: %v", err)
+		}
+		return fmt.Sprintf(
+			"Memory search scope for this chat set to %q.", arg,
+		)
+	default:
+		return "Usage: /memory - show scope; /memory all - whole base; " +
+			"/memory session - only this chat."
+	}
 }

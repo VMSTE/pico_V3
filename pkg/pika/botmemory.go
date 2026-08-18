@@ -581,6 +581,44 @@ func (bm *BotMemory) GetRegistry(ctx context.Context, kind, key string) (*Regist
 	return &r, nil
 }
 
+// memoryScopeKey prefixes per-chat scope keys in the registry.
+// Kind "snapshot": registry CHECK allows only runbook/script/snapshot/
+// correction_rule — no new tables, founder's call (D-AUDIT-104).
+func memoryScopeKey(chatID string) string {
+	return "memory_scope:" + chatID
+}
+
+// GetMemoryScope returns the memory search scope for a chat: "session"
+// (only this chat) or "all" (whole base). Default: "session" — concrete
+// info stays inside its chat until the chat explicitly opts in to "all".
+func (bm *BotMemory) GetMemoryScope(
+	ctx context.Context, chatID string,
+) string {
+	r, err := bm.GetRegistry(ctx, "snapshot", memoryScopeKey(chatID))
+	if err != nil || r == nil {
+		return "session"
+	}
+	if strings.TrimSpace(r.Summary) == "all" {
+		return "all"
+	}
+	return "session"
+}
+
+// SetMemoryScope persists the per-chat memory search scope.
+func (bm *BotMemory) SetMemoryScope(
+	ctx context.Context, chatID, scope string,
+) error {
+	if scope != "all" && scope != "session" {
+		return fmt.Errorf("invalid memory scope %q", scope)
+	}
+	_, err := bm.UpsertRegistry(ctx, RegistryRow{
+		Kind:    "snapshot",
+		Key:     memoryScopeKey(chatID),
+		Summary: scope,
+	})
+	return err
+}
+
 // SearchRegistry returns registry rows matching a kind and key LIKE pattern.
 func (bm *BotMemory) SearchRegistry(ctx context.Context, kind, pat string) ([]RegistryRow, error) {
 	rows, err := bm.db.QueryContext(ctx,
