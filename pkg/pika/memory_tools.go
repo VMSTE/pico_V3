@@ -194,10 +194,11 @@ func (ms *MemorySearch) fanOut(
 
 	g, gCtx := errgroup.WithContext(ctx)
 
-	// Layer 1: messages (current session, SQL LIKE)
+	// Layer 1: messages (per-chat scope, SQL LIKE per word)
 	g.Go(func() error {
+		scope := ms.bm.GetMemoryScope(gCtx, sessionID)
 		res, err := ms.searchMessages(
-			gCtx, query, limit, sessionID,
+			gCtx, query, limit, sessionID, scope,
 		)
 		if err != nil {
 			logLayerWarn("messages", err)
@@ -284,23 +285,43 @@ func (ms *MemorySearch) fanOut(
 	return all
 }
 
-// Layer 1: messages — current session, SQL LIKE.
+// Layer 1: messages — per-chat scope (D-AUDIT-104).
+// session = only current chat (chat_id), all = whole base.
+// NB: scoped by chat_id, not pika_session_id — the latter is turn-level
+// and changes on every rotation, so the old filter matched nothing.
+// Multi-word queries are split and AND-ed (one LIKE never matched).
 func (ms *MemorySearch) searchMessages(
 	ctx context.Context,
 	query string,
 	limit int,
 	sessionID string,
+	scope string,
 ) ([]rawResult, error) {
-	if sessionID == "" {
+	words := strings.Fields(query)
+	if len(words) == 0 {
 		return nil, nil
 	}
-	pat := "%" + query + "%"
+	var where []string
+	var args []any
+	if scope == "session" {
+		if sessionID == "" {
+			return nil, nil
+		}
+		where = append(where, "chat_id = ?")
+		args = append(args, sessionID)
+	}
+	for _, w := range words {
+		where = append(where, "content LIKE ?")
+		args = append(args, "%"+w+"%")
+	}
+	args = append(args, limit)
+	// #nosec G202 -- where parts are static strings; values parameterized
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT id, role, content, ts
 		FROM messages
-		WHERE pika_session_id = ? AND content LIKE ?
+		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY id DESC LIMIT ?`,
-		sessionID, pat, limit)
+		args...)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"pika/memory_tools: messages: %w", err,
