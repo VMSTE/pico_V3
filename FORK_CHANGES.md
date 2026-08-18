@@ -3,6 +3,12 @@
 - Новый web/frontend/src/i18n/locales/ru.json: меню, вход/настройка пароля, чат, модели, ключи, каналы (Telegram и др.), наши страницы (Субагенты, Агенты). Редкие глубокие описания покрыты fallback'ом на en (i18next fallbackLng) — добиваем по факту использования.
 - i18n/index.ts: зарегистрирована локаль ru + dayjs locale ru. Автоопределение языка браузера уже было (LanguageDetector) — русскоязычный браузер переключается сам.
 - Гейты: vite build (регенерация routeTree) + pnpm build с typecheck.
+## Волна 68 — Data race на lastSessionKey в pika-адаптере (D-AUDIT-101) · 18 авг 2026
+
+- Пойман ручным CI (Race+Coverage) на main: TestParallelMessageProcessing_DifferentSessionsProcessedConcurrently — параллельные ходы разных сессий читают/пишут adapter.lastSessionKey без синхронизации. Без -race невидимо.
+- Фикс: RWMutex + геттер/сеттер (setLastSessionKey/sessionKey) в pikaContextManagerAdapter; оба контрибьютора (memory brief, active plan) читают через геттер.
+- Регрессионный тест: конкурентный set/get под -race. Долг: прокинуть sessionKey через PromptBuildRequest (семантика «последний писатель») — отдельная задача.
+- Гейты: BUILD/VET, упавший тест ×5 под race (ok), новый race-тест PASS.
 
 ## Волна 66 — Фикс визарда онбординга: provider + мягкая валидация id (D-AUDIT-99) · 18 авг 2026
 
