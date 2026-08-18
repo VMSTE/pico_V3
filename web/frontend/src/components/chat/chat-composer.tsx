@@ -163,7 +163,7 @@ export function ChatComposer({
         )}
 
         {paletteOpen && (
-          <div className="bg-popover border-border/60 absolute bottom-full right-0 left-0 z-20 mb-2 max-h-64 overflow-y-auto rounded-xl border p-1 shadow-lg">
+          <div className="bg-popover border-border/60 mb-2 max-h-64 overflow-y-auto rounded-xl border p-1 shadow-lg">
             {filteredCommands.map((cmd, i) => (
               <button
                 key={cmd.name}
