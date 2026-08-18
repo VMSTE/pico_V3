@@ -245,11 +245,26 @@ type pikaContextManagerAdapter struct {
 
 	// lastSessionKey is stored during Assemble so that PromptContributors
 	// (which don't receive sessionKey in PromptBuildRequest) can access it.
+	mu             sync.RWMutex // D-AUDIT-101: guards lastSessionKey (parallel turns)
 	lastSessionKey string
 
 	// PIKA-V3: Phase 6
 	topicRegexes     []*regexp.Regexp
 	rotateRegistered sync.Map
+}
+
+// D-AUDIT-101: parallel turns (different sessions) share one adapter —
+// lastSessionKey access must be synchronized (race found by CI -race).
+func (a *pikaContextManagerAdapter) setLastSessionKey(sk string) {
+	a.mu.Lock()
+	a.lastSessionKey = sk
+	a.mu.Unlock()
+}
+
+func (a *pikaContextManagerAdapter) sessionKey() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.lastSessionKey
 }
 
 // Assemble returns history and summary from PikaSessionStore.
@@ -265,7 +280,7 @@ func (a *pikaContextManagerAdapter) Assemble(
 	}
 
 	// Store sessionKey for PromptContributors.
-	a.lastSessionKey = req.SessionKey
+	a.setLastSessionKey(req.SessionKey)
 
 	// PIKA-V3: Phase 6 — lazy-register OnRotate → InvalidateBrief
 	if _, loaded := a.rotateRegistered.LoadOrStore(req.SessionKey, true); !loaded {
@@ -335,7 +350,7 @@ func (c *pikaMemoryBriefContributor) PromptSource() PromptSourceDescriptor {
 func (c *pikaMemoryBriefContributor) ContributePrompt(
 	ctx context.Context, req PromptBuildRequest,
 ) ([]PromptPart, error) {
-	sk := c.adapter.lastSessionKey
+	sk := c.adapter.sessionKey()
 	if sk == "" {
 		return nil, nil
 	}
@@ -458,7 +473,7 @@ func (c *pikaActivePlanContributor) PromptSource() PromptSourceDescriptor {
 func (c *pikaActivePlanContributor) ContributePrompt(
 	ctx context.Context, req PromptBuildRequest,
 ) ([]PromptPart, error) {
-	sk := c.adapter.lastSessionKey
+	sk := c.adapter.sessionKey()
 	if sk == "" {
 		return nil, nil
 	}
