@@ -310,6 +310,7 @@ func (ms *MemorySearch) searchMessages(
 		conds = append(conds, "content LIKE ?")
 		args = append(args, "%"+w+"%")
 	}
+	// #nosec G202 -- conds are static strings; values parameterized
 	q := `SELECT id, role, content, ts
 		FROM messages
 		WHERE (` + strings.Join(conds, " OR ") + `)`
@@ -322,7 +323,6 @@ func (ms *MemorySearch) searchMessages(
 	}
 	q += ` ORDER BY id DESC LIMIT ?`
 	args = append(args, limit*4) // перелимит: ранжируем, потом отрезаем
-	// #nosec G202 -- conds are static strings; values parameterized
 	rows, err := ms.bm.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf(
