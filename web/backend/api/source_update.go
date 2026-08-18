@@ -93,12 +93,10 @@ func (h *Handler) handleUpdateFromSource(
 		}
 	}
 	webChanged := hasChangedPrefix(changed, "web/")
-	frontendChanged := hasChangedPrefix(changed, "web/frontend/")
 
-	if frontendChanged && !run("make", "build-frontend") {
-		fail("frontend build failed")
-		return
-	}
+	// Отдельного шага фронта нет: make build-launcher сам пересобирает
+	// встраиваемый фронт (vite). Цель build-frontend живёт только в
+	// web/Makefile и из корня недоступна — бой 18 авг (500 на кнопке).
 	if !run("make", "build") {
 		fail("core build failed")
 		return
