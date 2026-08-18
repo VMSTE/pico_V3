@@ -1,3 +1,11 @@
+## Волна 70 — Кнопка «Обновить из main» + slash-палитра команд (D-AUDIT-105) · 18 авг 2026
+
+- Повод из боя: founder пересобрал только лаунчер, ядро осталось старым → свежий /memory не сработал; плюс команды надо помнить наизусть.
+- Backend POST /api/update-from-source: findSourceRepoRoot (Makefile+.git вверх от бинаря), git pull --ff-only, make build-frontend (если менялся web/frontend), make build, make build-launcher, RestartGateway. Мьютекс от двойного клика; launcher_restart_required=true если тронут web/ (процесс не может перезапустить сам себя — морда честно просит ручной рестарт). Защита: dashboard auth как у всех API + источник фиксирован (свой репо).
+- Backend GET /api/commands: канонический список из commands.BuiltinDefinitions + /memory (перехват в agent_command, поэтому добавлен вручную). Single source of truth, фронт не хардкодит.
+- Frontend: slash-палитра в ChatComposer (ввод «/» → список, фильтр по префиксу, стрелки/Enter/Tab/клик, Esc закрывает); кнопка обновления в AppHeader (спиннер → диалог с хвостом лога); i18n ru/en/zh.
+- Гейты: gofmt/build/vet + api тесты + pnpm build — зелёные.
+
 ## Волна 69 — Переключатель scope памяти на чат + баг колонки Архивариуса (D-AUDIT-104) · 18 авг 2026
 
 - Бой: тест «цвет» упал — сообщения писались (1138 шт), но читались нулём. Корни: search_memory фильтровал по pika_session_id (turn-level, меняется при ротации → пусто всегда) одним многословным LIKE; Архивариус SELECT'ил несуществующую колонку pika_chat_id → молчаливое падение без лога.

@@ -132,6 +132,13 @@
         "stopping": "Stopping Gateway..."
       },
       "restartRequired": "Configuration changes require a gateway restart to take effect."
+    },
+    "update": {
+      "tooltip": "Update from main: pull + rebuild + restart gateway",
+      "resultOk": "Update finished",
+      "resultError": "Update failed",
+      "launcherRestart": "Launcher code changed — restart it manually: Ctrl+C in its terminal, then ./build/picoclaw-launcher again.",
+      "close": "Close"
     }
   },
   "common": {

@@ -1,5 +1,6 @@
 import {
   IconBook,
+  IconCloudDownload,
   IconLanguage,
   IconLoader2,
   IconLogout,
@@ -15,6 +16,7 @@ import * as React from "react"
 import { useTranslation } from "react-i18next"
 
 import { postLauncherDashboardLogout } from "@/api/launcher-auth"
+import { updateFromSource, type SourceUpdateResult } from "@/api/self-update"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,6 +72,21 @@ export function AppHeader() {
 
   const [showStopDialog, setShowStopDialog] = React.useState(false)
   const [showLogoutDialog, setShowLogoutDialog] = React.useState(false)
+  const [updating, setUpdating] = React.useState(false)
+  const [updateResult, setUpdateResult] =
+    React.useState<SourceUpdateResult | null>(null)
+
+  const handleUpdateFromSource = async () => {
+    if (updating) return
+    setUpdating(true)
+    try {
+      setUpdateResult(await updateFromSource())
+    } catch (err) {
+      setUpdateResult({ status: "error", message: String(err) })
+    } finally {
+      setUpdating(false)
+    }
+  }
 
   const handleLogout = async () => {
     await postLauncherDashboardLogout()
@@ -161,6 +178,35 @@ export function AppHeader() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Source update result (D-AUDIT-105) */}
+      <AlertDialog
+        open={updateResult !== null}
+        onOpenChange={(open) => {
+          if (!open) setUpdateResult(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {updateResult?.status === "ok"
+                ? t("header.update.resultOk")
+                : t("header.update.resultError")}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="max-h-64 overflow-y-auto text-left font-mono text-xs whitespace-pre-wrap">
+              {updateResult?.log || updateResult?.message}
+              {updateResult?.launcher_restart_required
+                ? `\n\n${t("header.update.launcherRestart")}`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>
+              {t("header.update.close")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="text-muted-foreground flex items-center gap-1 text-sm font-medium md:gap-2">
         {restartRequired && (
           <Tooltip delayDuration={700}>
@@ -181,6 +227,27 @@ export function AppHeader() {
             </TooltipContent>
           </Tooltip>
         )}
+
+        {/* Update from source (D-AUDIT-105) */}
+        <Tooltip delayDuration={700}>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-8"
+              onClick={() => void handleUpdateFromSource()}
+              disabled={updating}
+              aria-label={t("header.update.tooltip")}
+            >
+              {updating ? (
+                <IconLoader2 className="size-4 animate-spin" />
+              ) : (
+                <IconCloudDownload className="size-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t("header.update.tooltip")}</TooltipContent>
+        </Tooltip>
 
         {/* Gateway Start/Stop */}
         {isRunning ? (
