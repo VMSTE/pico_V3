@@ -80,6 +80,13 @@
         "stopping": "Остановка Gateway…"
       },
       "restartRequired": "Изменения конфигурации вступят в силу после перезапуска gateway."
+    },
+    "update": {
+      "tooltip": "Обновить из main: pull + пересборка + рестарт gateway",
+      "resultOk": "Обновление завершено",
+      "resultError": "Ошибка обновления",
+      "launcherRestart": "Изменился код лаунчера — перезапустите его вручную: Ctrl+C в его терминале, затем снова ./build/picoclaw-launcher.",
+      "close": "Закрыть"
     }
   },
   "footer": {

@@ -108,6 +108,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Self-update endpoint (requires dashboard auth)
 	h.registerUpdateRoutes(mux)
 
+	// Source self-update + slash-command list (D-AUDIT-105)
+	h.registerSourceUpdateRoutes(mux)
+	h.registerCommandRoutes(mux)
+
 	// Runtime build/version metadata
 	h.registerVersionRoutes(mux)
 

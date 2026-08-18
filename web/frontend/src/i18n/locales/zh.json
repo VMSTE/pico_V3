@@ -132,6 +132,13 @@
         "stopping": "服务停止中..."
       },
       "restartRequired": "配置变更后需要重启服务才能生效。"
+    },
+    "update": {
+      "tooltip": "从 main 更新：拉取 + 重新构建 + 重启 gateway",
+      "resultOk": "更新完成",
+      "resultError": "更新失败",
+      "launcherRestart": "启动器代码已变更，请手动重启启动器。",
+      "close": "关闭"
     }
   },
   "common": {

@@ -1,4 +1,5 @@
 import { IconArrowUp, IconPhotoPlus, IconX } from "@tabler/icons-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import TextareaAutosize from "react-textarea-autosize"
@@ -10,6 +11,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { fetchCommands, type CommandInfo } from "@/api/self-update"
 import { cn } from "@/lib/utils"
 import type { ChatAttachment, ContextUsage } from "@/store/chat"
 
@@ -58,8 +60,73 @@ export function ChatComposer({
       : t(`chat.disabledPlaceholder.${inputDisabledReason}`)
   const placeholder = disabledMessage ?? t("chat.placeholder")
 
+  // D-AUDIT-105: slash-command palette
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [commands, setCommands] = useState<CommandInfo[]>([])
+  const [paletteDismissed, setPaletteDismissed] = useState(false)
+  const [highlight, setHighlight] = useState(0)
+
+  useEffect(() => {
+    fetchCommands()
+      .then(setCommands)
+      .catch(() => {})
+  }, [])
+
+  const slashQuery =
+    input.startsWith("/") && !input.includes(" ") ? input.slice(1) : null
+  const filteredCommands = useMemo(() => {
+    if (slashQuery === null) return []
+    const q = slashQuery.toLowerCase()
+    return commands.filter((c) => c.name.toLowerCase().startsWith(q))
+  }, [commands, slashQuery])
+  const paletteOpen =
+    canInput &&
+    slashQuery !== null &&
+    !paletteDismissed &&
+    filteredCommands.length > 0
+
+  useEffect(() => {
+    setHighlight(0)
+  }, [slashQuery])
+  useEffect(() => {
+    if (slashQuery === null) setPaletteDismissed(false)
+  }, [slashQuery])
+
+  const pickCommand = (cmd?: CommandInfo) => {
+    if (!cmd) return
+    onInputChange(`/${cmd.name} `)
+    setPaletteDismissed(true)
+    textareaRef.current?.focus()
+  }
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
+    if (paletteOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setHighlight((h) => (h + 1) % filteredCommands.length)
+        return
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setHighlight(
+          (h) => (h - 1 + filteredCommands.length) % filteredCommands.length,
+        )
+        return
+      }
+      if (e.key === "Escape") {
+        e.preventDefault()
+        setPaletteDismissed(true)
+        return
+      }
+      if ((e.key === "Enter" && !e.shiftKey) || e.key === "Tab") {
+        e.preventDefault()
+        pickCommand(
+          filteredCommands[Math.min(highlight, filteredCommands.length - 1)],
+        )
+        return
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       onSend()
@@ -95,7 +162,35 @@ export function ChatComposer({
           </div>
         )}
 
+        {paletteOpen && (
+          <div className="bg-popover border-border/60 absolute bottom-full right-0 left-0 z-20 mb-2 max-h-64 overflow-y-auto rounded-xl border p-1 shadow-lg">
+            {filteredCommands.map((cmd, i) => (
+              <button
+                key={cmd.name}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  pickCommand(cmd)
+                }}
+                onMouseEnter={() => setHighlight(i)}
+                className={cn(
+                  "flex w-full items-baseline gap-2 rounded-lg px-3 py-2 text-left",
+                  i === highlight && "bg-accent",
+                )}
+              >
+                <span className="text-foreground font-mono text-sm">
+                  /{cmd.name}
+                </span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {cmd.description}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <TextareaAutosize
+          ref={textareaRef}
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
