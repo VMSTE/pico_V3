@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -329,48 +330,46 @@ func queryPikaAgents(ctx context.Context, db *sql.DB) []pikaAgentStats {
 
 // PIKA-V3 (D-AUDIT-108): медиана response_ms по группе.
 // column — только внутренние константы ("component", "task_tag"), never user input.
-// Медиана: сортировка по response_ms, элемент с индексом n/2 (upper median),
-// тот же offset-приём, что и P95.
+// Один запрос: значения приходят отсортированными по группе; медиана =
+// элемент с индексом n/2 (upper median), семантика как у offset-приёма P95.
+// Группы в ответе отсортированы по убыванию числа сэмплов.
 func queryPikaMedians(ctx context.Context, db *sql.DB, column string) []pikaMedianStats {
-	keyRows, err := db.QueryContext(ctx,
-		`SELECT `+column+`, COUNT(*) FROM request_log
+	rows, err := db.QueryContext(ctx,
+		`SELECT `+column+`, response_ms FROM request_log
 		 WHERE response_ms > 0 AND `+column+` IS NOT NULL AND `+column+` != ''
-		 GROUP BY `+column+`
-		 ORDER BY COUNT(*) DESC
-		 LIMIT 50`)
+		 ORDER BY `+column+`, response_ms`)
 	if err != nil {
 		return nil
 	}
-	type keyCount struct {
-		key string
-		n   int64
-	}
-	var keys []keyCount
-	for keyRows.Next() {
-		var kc keyCount
-		if sErr := keyRows.Scan(&kc.key, &kc.n); sErr != nil {
+	defer rows.Close()
+
+	var order []string
+	vals := map[string][]int64{}
+	for rows.Next() {
+		var k string
+		var ms int64
+		if sErr := rows.Scan(&k, &ms); sErr != nil {
 			continue
 		}
-		keys = append(keys, kc)
+		if _, seen := vals[k]; !seen {
+			order = append(order, k)
+		}
+		vals[k] = append(vals[k], ms)
 	}
-	keyRows.Close()
-	if len(keys) == 0 {
+	if rErr := rows.Err(); rErr != nil {
 		return nil
 	}
 
-	out := make([]pikaMedianStats, 0, len(keys))
-	for _, kc := range keys {
-		var ms int64
-		mErr := db.QueryRowContext(ctx,
-			`SELECT response_ms FROM request_log
-			 WHERE response_ms > 0 AND `+column+` = ?
-			 ORDER BY response_ms
-			 LIMIT 1 OFFSET ?`, kc.key, kc.n/2).Scan(&ms)
-		if mErr != nil {
-			continue
-		}
-		out = append(out, pikaMedianStats{Key: kc.key, Samples: kc.n, MedianMs: ms})
+	out := make([]pikaMedianStats, 0, len(vals))
+	for _, k := range order {
+		v := vals[k]
+		out = append(out, pikaMedianStats{
+			Key:      k,
+			Samples:  int64(len(v)),
+			MedianMs: v[len(v)/2],
+		})
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Samples > out[j].Samples })
 	return out
 }
 
