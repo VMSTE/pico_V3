@@ -474,7 +474,7 @@ CREATE TABLE IF NOT EXISTS daily_metrics (
 // PIKA-V3 (D-AUDIT-108): migrationV4 — request_log.agent_id.
 // Стабильная идентичность агента: "main" / именованный агент (delegate target).
 // Одноразовые spawn-субагенты пишут "" — дашборд группирует их отдельно.
-// Старые строки получают '' (legacy). Колонка добавочная — откат тривиален.
+// Старые строки получают ” (legacy). Колонка добавочная — откат тривиален.
 const migrationV4 = `
 ALTER TABLE request_log ADD COLUMN agent_id TEXT NOT NULL DEFAULT '';
 CREATE INDEX idx_reqlog_agent ON request_log(agent_id, ts);

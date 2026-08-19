@@ -85,10 +85,10 @@ type RegistryRow struct {
 
 // RequestLogRow represents a row in the request_log table.
 type RequestLogRow struct {
-	ChatID             string          `json:"chat_id,omitempty"`
-	MsgIndex           *int            `json:"msg_index,omitempty"`
-	Direction          string          `json:"direction"`
-	Component          string          `json:"component"`
+	ChatID    string `json:"chat_id,omitempty"`
+	MsgIndex  *int   `json:"msg_index,omitempty"`
+	Direction string `json:"direction"`
+	Component string `json:"component"`
 	// PIKA-V3 (D-AUDIT-108): стабильная идентичность агента
 	// ("main"/именованный; "" = одноразовый spawn).
 	AgentID            string          `json:"agent_id,omitempty"`
