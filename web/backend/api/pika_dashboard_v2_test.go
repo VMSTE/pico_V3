@@ -31,7 +31,7 @@ func setupPikaV2TestDB(t *testing.T) *sql.DB {
 		tool_calls_requested INTEGER NOT NULL DEFAULT 0,
 		tool_calls_success INTEGER NOT NULL DEFAULT 0,
 		tool_calls_failed INTEGER NOT NULL DEFAULT 0,
-		error TEXT NOT NULL DEFAULT '',
+		error TEXT,  -- nullable, как в проде (migrationV1): strOrNil пишет NULL
 		response_ms INTEGER NOT NULL DEFAULT 0,
 		task_tag TEXT
 	)`
