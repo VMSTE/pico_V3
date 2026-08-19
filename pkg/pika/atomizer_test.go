@@ -557,9 +557,9 @@ func TestDefaultAtomizerConfig(t *testing.T) {
 	if !cfg.Enabled {
 		t.Error("should be enabled by default")
 	}
-	if cfg.TriggerTokens != 800000 {
+	if cfg.TriggerTokens != 100000 {
 		t.Errorf(
-			"TriggerTokens = %d, want 800000",
+			"TriggerTokens = %d, want 100000",
 			cfg.TriggerTokens,
 		)
 	}
