@@ -461,6 +461,16 @@
       "model_hint": "имя из model_list, пусто = по умолчанию",
       "desc_hint": "Видно пирам в agent discovery",
       "load_error": "Не удалось загрузить агентов"
+    },
+    "pika": {
+      "agents_title": "Агенты",
+      "agent": "Агент",
+      "ephemeral_label": "одноразовые / legacy",
+      "median_by_component": "Медиана времени ответа по компонентам",
+      "median_by_task_tag": "Медиана времени ответа по типам задач",
+      "median_ms": "Медиана",
+      "samples": "Сэмплов",
+      "methodology_title": "Как это считается"
     }
   }
 }

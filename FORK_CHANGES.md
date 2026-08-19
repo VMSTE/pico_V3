@@ -1,3 +1,11 @@
+## Волна 80 — Дашборд v2 UI: таблица агентов + медианы + «Как считается» (D-AUDIT-108, PR 3) · 19 авг 2026
+- **ТЗ:** D-AUDIT-108 — страница /pika: таблица Agents (main / именованные / ephemeral+legacy), медианы по компонентам и типам задач, блок методологии (приходит с бэкенда), колонка agent в ленте запросов
+- **Files:**
+  - `web/frontend/src/api/pika.ts` — MODIFIED: PikaAgentStats/PikaMedianStats, поля v2 в PikaOverview, agent_id в PikaRequestRow
+  - `web/frontend/src/components/pika/pika-page.tsx` — MODIFIED: секции Agents/Medians/Methodology, колонка agent в ленте, компонент MedianTable
+  - `web/frontend/src/i18n/locales/en.json` `zh.json` — MODIFIED: 8 новых ключей pages.pika.*; `ru.json` — создана секция pages.pika (была на fallback)
+- **Breaking:** None — секции скрыты при отсутствии полей (legacy API)
+
 ## Волна 79 — Дашборд v2 API: agents + медианы + methodology (D-AUDIT-108, PR 2) · 19 авг 2026
 - **ТЗ:** D-AUDIT-108 — /api/pika/overview отдаёт разрез agents[] (по agent_id), медианы по component и task_tag, блок methodology; /api/pika/requests отдаёт agent_id
 - **Files:**

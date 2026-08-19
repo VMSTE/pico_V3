@@ -592,7 +592,15 @@
       "col_tokens": "Tokens",
       "col_ms": "Latency",
       "col_error": "Error",
-      "load_error": "Failed to load telemetry"
+      "load_error": "Failed to load telemetry",
+      "agents_title": "Agents",
+      "agent": "Agent",
+      "ephemeral_label": "ephemeral / legacy",
+      "median_by_component": "Median response time by component",
+      "median_by_task_tag": "Median response time by task type",
+      "median_ms": "Median",
+      "samples": "Samples",
+      "methodology_title": "How this is calculated"
     },
     "mcp": {
       "description": "Connect MCP servers to give the agent extra tools. Secrets are stored in the config file and never shown here.",

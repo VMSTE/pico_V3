@@ -15,6 +15,23 @@ export interface PikaComponentStats {
   avg_ms: number
 }
 
+// PIKA-V3 (D-AUDIT-108): разрез по стабильным идентичностям агентов.
+// agent_id пустой = одноразовый spawn или legacy-строки до миграции v4.
+export interface PikaAgentStats {
+  agent_id: string
+  requests: number
+  tokens: number
+  errors: number
+  avg_ms: number
+}
+
+// PIKA-V3 (D-AUDIT-108): медиана response_ms по группе (component / task_tag).
+export interface PikaMedianStats {
+  key: string
+  samples: number
+  median_ms: number
+}
+
 export interface PikaOverview {
   available: boolean
   db_path?: string
@@ -23,11 +40,17 @@ export interface PikaOverview {
   totals: PikaPeriodStats
   p95_ms: number
   components: PikaComponentStats[]
+  // PIKA-V3 (D-AUDIT-108): поля дашборда v2 (отсутствуют на legacy-БД)
+  agents?: PikaAgentStats[]
+  medians_by_component?: PikaMedianStats[]
+  medians_by_task_tag?: PikaMedianStats[]
+  methodology?: string[]
 }
 
 export interface PikaRequestRow {
   ts: string
   component: string
+  agent_id?: string
   model: string
   task_tag: string
   prompt_tokens: number
