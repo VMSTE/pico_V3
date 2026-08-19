@@ -1,3 +1,10 @@
+## Волна 81 — Фикс пустой ленты Recent requests: NULL-safe scan error (D-AUDIT-86 latent bug) · 19 авг 2026
+- **Баг:** strOrNil пишет пустой error как NULL; скан NULL в string в queryPikaRequests молча выкидывал строку — лента показывала только записи с ошибками. При нуле ошибок — пустая таблица. Найден в бою на /pika после D-AUDIT-108
+- **Files:**
+  - `web/backend/api/pika_dashboard.go` — MODIFIED: COALESCE(error,'') в SELECT ленты
+  - `web/backend/api/pika_dashboard_v2_test.go` — MODIFIED: тестовые данные пишут NULL в error (как прод), лента обязана вернуть все строки
+- **Breaking:** None
+
 ## Волна 80 — Дашборд v2 UI: таблица агентов + медианы + «Как считается» (D-AUDIT-108, PR 3) · 19 авг 2026
 - **ТЗ:** D-AUDIT-108 — страница /pika: таблица Agents (main / именованные / ephemeral+legacy), медианы по компонентам и типам задач, блок методологии (приходит с бэкенда), колонка agent в ленте запросов
 - **Files:**

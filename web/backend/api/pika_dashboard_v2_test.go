@@ -31,7 +31,7 @@ func setupPikaV2TestDB(t *testing.T) *sql.DB {
 		tool_calls_requested INTEGER NOT NULL DEFAULT 0,
 		tool_calls_success INTEGER NOT NULL DEFAULT 0,
 		tool_calls_failed INTEGER NOT NULL DEFAULT 0,
-		error TEXT NOT NULL DEFAULT '',
+		error TEXT,  -- nullable, как в проде (migrationV1): strOrNil пишет NULL
 		response_ms INTEGER NOT NULL DEFAULT 0,
 		task_tag TEXT
 	)`
@@ -56,11 +56,18 @@ func setupPikaV2TestDB(t *testing.T) *sql.DB {
 		{"archivarius", "", 300, 20, "", 500, ""},
 	}
 	for _, r := range rows {
+		// PIKA-V3: прод пишет error через strOrNil — пустая строка = NULL.
+		// Лента обязана переживать NULL (баг D-AUDIT-86: скан NULL в string
+		// молча выкидывал строку из Recent requests).
+		var errVal any
+		if r.errStr != "" {
+			errVal = r.errStr
+		}
 		if _, err := db.Exec(
 			`INSERT INTO request_log
 			 (component, agent_id, prompt_tokens, completion_tokens, error, response_ms, task_tag)
 			 VALUES (?,?,?,?,?,?,?)`,
-			r.component, r.agentID, r.prompt, r.comp, r.errStr, r.ms, r.tag,
+			r.component, r.agentID, r.prompt, r.comp, errVal, r.ms, r.tag,
 		); err != nil {
 			t.Fatalf("insert: %v", err)
 		}

@@ -384,7 +384,7 @@ func queryPikaRequests(ctx context.Context, db *sql.DB, limit int) []pikaRequest
 	}
 	rows, err := db.QueryContext(ctx,
 		`SELECT ts, component, model, COALESCE(task_tag,''),
-		        prompt_tokens, completion_tokens, response_ms, error,
+		        prompt_tokens, completion_tokens, response_ms, COALESCE(error,''),
 		        tool_calls_requested, tool_calls_success, tool_calls_failed`+agentCol+`
 		 FROM request_log
 		 ORDER BY id DESC
