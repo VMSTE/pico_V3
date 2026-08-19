@@ -147,7 +147,8 @@
       "resultOk": "Update finished",
       "resultError": "Update failed",
       "launcherRestart": "Launcher code changed — restart it manually: Ctrl+C in its terminal, then ./build/picoclaw-launcher again.",
-      "close": "Close"
+      "close": "Close",
+      "relaunching": "Launcher is restarting itself. The page will reload in a few seconds and ask you to sign in again."
     }
   },
   "common": {

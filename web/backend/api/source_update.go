@@ -9,15 +9,20 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 var sourceUpdateMu sync.Mutex
+
+// selfRelaunchFn is indirected so tests can stub process re-exec.
+var selfRelaunchFn = selfRelaunch
 
 type sourceUpdateResponse struct {
 	Status                  string `json:"status"`
 	Message                 string `json:"message,omitempty"`
 	Log                     string `json:"log,omitempty"`
 	LauncherRestartRequired bool   `json:"launcher_restart_required"`
+	Relaunching             bool   `json:"relaunching,omitempty"`
 }
 
 // registerSourceUpdateRoutes registers self-update from a git checkout
@@ -28,8 +33,9 @@ func (h *Handler) registerSourceUpdateRoutes(mux *http.ServeMux) {
 
 // handleUpdateFromSource pulls main, rebuilds core + launcher (and the
 // frontend bundle when web/frontend changed), then restarts the gateway.
-// The running launcher process cannot restart itself — when its own code
-// changed we report launcher_restart_required so the UI can ask the user.
+// When web/ (launcher code or embedded frontend) changed, the launcher
+// re-execs itself into the freshly built binary (D-AUDIT-110, POSIX); on
+// Windows we report launcher_restart_required for a manual restart.
 func (h *Handler) handleUpdateFromSource(
 	w http.ResponseWriter, r *http.Request,
 ) {
@@ -114,11 +120,24 @@ func (h *Handler) handleUpdateFromSource(
 	}
 	fmt.Fprintf(&log, "%s\n", gwMsg)
 
+	relaunching := false
+	if webChanged && selfRelaunchSupported() {
+		// D-AUDIT-110: relaunch the launcher itself via exec. The delay lets
+		// this HTTP response reach the UI first; the new process image keeps
+		// the same PID/terminal and attaches to the gateway restarted above.
+		relaunching = true
+		go func() {
+			time.Sleep(1500 * time.Millisecond)
+			selfRelaunchFn()
+		}()
+	}
+
 	_ = json.NewEncoder(w).Encode(sourceUpdateResponse{
 		Status:                  "ok",
 		Message:                 gwMsg,
 		Log:                     tailLog(log.String(), 4000),
-		LauncherRestartRequired: webChanged,
+		LauncherRestartRequired: webChanged && !relaunching,
+		Relaunching:             relaunching,
 	})
 }
 

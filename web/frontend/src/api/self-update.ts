@@ -16,6 +16,8 @@ export interface SourceUpdateResult {
   message?: string
   log?: string
   launcher_restart_required?: boolean
+  /** D-AUDIT-110: launcher is re-execing itself; page reload will follow. */
+  relaunching?: boolean
 }
 
 export async function updateFromSource(): Promise<SourceUpdateResult> {

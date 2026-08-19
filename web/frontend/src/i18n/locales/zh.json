@@ -147,7 +147,8 @@
       "resultOk": "更新完成",
       "resultError": "更新失败",
       "launcherRestart": "启动器代码已变更，请手动重启启动器。",
-      "close": "关闭"
+      "close": "关闭",
+      "relaunching": "启动器正在自动重启。页面将在几秒后刷新并要求重新登录。"
     }
   },
   "common": {

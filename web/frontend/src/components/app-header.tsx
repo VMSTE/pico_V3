@@ -80,7 +80,13 @@ export function AppHeader() {
     if (updating) return
     setUpdating(true)
     try {
-      setUpdateResult(await updateFromSource())
+      const result = await updateFromSource()
+      setUpdateResult(result)
+      if (result.relaunching) {
+        // D-AUDIT-110: the launcher re-execs itself; dashboard sessions are
+        // in-memory, so reload (to the login screen) once it is back.
+        globalThis.setTimeout(() => globalThis.location.reload(), 8000)
+      }
     } catch (err) {
       setUpdateResult({ status: "error", message: String(err) })
     } finally {
@@ -196,6 +202,9 @@ export function AppHeader() {
               {updateResult?.log || updateResult?.message}
               {updateResult?.launcher_restart_required
                 ? `\n\n${t("header.update.launcherRestart")}`
+                : ""}
+              {updateResult?.relaunching
+                ? `\n\n${t("header.update.relaunching")}`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
