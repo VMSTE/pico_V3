@@ -5,6 +5,17 @@
   - `web/backend/api/pika_dashboard_v2_test.go` — MODIFIED: тестовые данные пишут NULL в error (как прод), лента обязана вернуть все строки
 - **Breaking:** None
 
+## Волна 82 — Проводка спец-агентов: алиасы моделей + телеметрия ошибок · 20 авг 2026
+
+- **Бой 19 авг:** после настройки /subagents (`model: background`) все вызовы спутников упали: `400 «background is not a valid model ID»`. Корень: спутники передавали сырой алиас model_name в API — резолва алиас→model ID (как у main-агента) на пути спутников не было.
+- **context_pika.go**: NEW resolveSatelliteModelID (GetModelConfig → providers.ExtractProtocol → model ID); применён при сборке конфигов archivist / atomizer / reflexor / mcp_guard.
+- **mcp_guard_gate.go**: стартовый аудит читает resolved-конфиг mcp_guard из agents.list (раньше — DefaultMCPGuardConfig: настройки со страницы /subagents игнорировались).
+- **telemetry.go**: NEW RecordSatelliteLLMFailure — падающий вызов спутника пишется в request_log (error + response_ms). Слепая зона дашборда закрыта: 43 падения Архивариуса 19 авг не оставили ни строки.
+- **archivist.go**: телеметрия build_prompt в request_log (успех + ошибка) — раньше Архивариус писался только в trace_spans.
+- **atomizer.go / reflector.go**: запись ошибок LLM-вызовов (успехи писались с D-AUDIT-82).
+- **Тест**: TestRecordSatelliteLLMFailure.
+- **Ограничение (задокументировано):** все спутники делят один провайдер (запись `background` в model_list) — алиасы спутников должны указывать на тот же API-базис.
+
 ## Волна 80 — Дашборд v2 UI: таблица агентов + медианы + «Как считается» (D-AUDIT-108, PR 3) · 19 авг 2026
 - **ТЗ:** D-AUDIT-108 — страница /pika: таблица Agents (main / именованные / ephemeral+legacy), медианы по компонентам и типам задач, блок методологии (приходит с бэкенда), колонка agent в ленте запросов
 - **Files:**

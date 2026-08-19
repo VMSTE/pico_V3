@@ -315,6 +315,9 @@ func (a *Atomizer) callLLM(
 		ctx, msgs, nil, a.cfg.Model, nil,
 	)
 	if err != nil {
+		RecordSatelliteLLMFailure(
+			ctx, a.mem, "atomizer", "atomize", sessionID, a.cfg.Model, err, llmStart,
+		)
 		return "", fmt.Errorf("LLM call: %w", err)
 	}
 	RecordSatelliteLLM(ctx, a.mem, "atomizer", "atomize", sessionID, a.cfg.Model, resp, llmStart)

@@ -216,6 +216,33 @@ func RecordSatelliteLLM(
 	})
 }
 
+// RecordSatelliteLLMFailure пишет упавший LLM-вызов спутника в request_log
+// (волна 82, бой 19 авг): раньше ошибки спутников не попадали в ленту,
+// т.к. RecordSatelliteLLM требует resp != nil. Fire-and-forget.
+func RecordSatelliteLLMFailure(
+	ctx context.Context,
+	bm *BotMemory,
+	component, direction, sessionKey, model string,
+	callErr error,
+	start time.Time,
+) {
+	if bm == nil || callErr == nil {
+		return
+	}
+	responseMs := 0
+	if !start.IsZero() {
+		responseMs = int(time.Since(start).Milliseconds())
+	}
+	_, _ = bm.InsertRequestLog(ctx, RequestLogRow{
+		ChatID:     sessionKey,
+		Direction:  direction,
+		Component:  component,
+		Model:      model,
+		ResponseMs: responseMs,
+		Error:      truncateStr(callErr.Error(), 500),
+	})
+}
+
 // RecordToolCall records a tool call result into the sliding
 // window and evaluates system health.
 // Called from pipeline_tool.go AFTER each tool invocation.
