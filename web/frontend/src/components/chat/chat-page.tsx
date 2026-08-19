@@ -122,8 +122,11 @@ export function ChatPage() {
     isTyping,
     activeSessionId,
     contextUsage,
+    viewOnly,
     sendMessage,
     switchSession,
+    viewSession,
+    exitViewOnly,
     newChat,
   } = usePicoChat()
 
@@ -152,8 +155,12 @@ export function ChatPage() {
     loadError,
     loadErrorMessage,
     observerRef,
+    searchQuery,
+    setSearchQuery,
     loadSessions,
     handleDeleteSession,
+    handleDeleteSessions,
+    handleRenameSession,
   } = useSessionHistory({
     activeSessionId,
     onDeletedActiveSession: newChat,
@@ -305,8 +312,18 @@ export function ChatPage() {
               void loadSessions(true)
             }
           }}
-          onSwitchSession={switchSession}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onSwitchSession={(id, resumable) => {
+            if (resumable) {
+              switchSession(id)
+            } else {
+              viewSession(id)
+            }
+          }}
           onDeleteSession={handleDeleteSession}
+          onDeleteSessions={handleDeleteSessions}
+          onRenameSession={handleRenameSession}
         />
       </PageHeader>
 
@@ -364,22 +381,40 @@ export function ChatPage() {
         onChange={handleImageSelection}
       />
 
-      <ChatComposer
-        input={input}
-        attachments={attachments}
-        onInputChange={setInput}
-        onAddImages={handleAddImages}
-        onRemoveAttachment={handleRemoveAttachment}
-        onSend={handleSend}
-        onContextDetail={() => {
-          if (sendMessage({ content: "/context", attachments: [] })) {
-            setInput("")
-          }
-        }}
-        inputDisabledReason={inputDisabledReason}
-        canSend={canSubmit}
-        contextUsage={contextUsage}
-      />
+      {viewOnly ? (
+        <div className="border-border/60 border-t px-4 py-3 md:px-8 lg:px-24 xl:px-48">
+          <div className="mx-auto flex w-full max-w-250 items-center justify-between gap-3">
+            <span className="text-muted-foreground text-sm">
+              {t("chat.viewOnlyBanner")}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-9 shrink-0"
+              onClick={exitViewOnly}
+            >
+              {t("chat.backToChat")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <ChatComposer
+          input={input}
+          attachments={attachments}
+          onInputChange={setInput}
+          onAddImages={handleAddImages}
+          onRemoveAttachment={handleRemoveAttachment}
+          onSend={handleSend}
+          onContextDetail={() => {
+            if (sendMessage({ content: "/context", attachments: [] })) {
+              setInput("")
+            }
+          }}
+          inputDisabledReason={inputDisabledReason}
+          canSend={canSubmit}
+          contextUsage={contextUsage}
+        />
+      )}
     </div>
   )
 }

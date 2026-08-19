@@ -160,7 +160,16 @@
       "apikey": "API-ключ",
       "oauth": "OAuth",
       "local": "Локальная"
-    }
+    },
+    "historySearch": "Поиск по чатам…",
+    "selectedCount": "Выбрано: {{count}}",
+    "deleteSelected": "Удалить из списка",
+    "renameSession": "Переименовать",
+    "saveRename": "Сохранить",
+    "cancelRename": "Отмена",
+    "readOnly": "просмотр",
+    "viewOnlyBanner": "Старый чат — только просмотр. Сообщения доступны поиску по памяти.",
+    "backToChat": "Вернуться к текущему чату"
   },
   "models": {
     "description": "Настройте API-ключи для AI-провайдеров. В чате доступны только настроенные модели.",

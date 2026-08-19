@@ -392,6 +392,7 @@ export async function switchChatSession(sessionId: string) {
       messages: historyMessages,
       isTyping: false,
       hasHydratedActiveSession: true,
+      viewOnly: false,
       contextUsage: undefined,
     })
 
@@ -416,6 +417,7 @@ export async function newChatSession() {
     messages: [],
     isTyping: false,
     hasHydratedActiveSession: true,
+    viewOnly: false,
     contextUsage: undefined,
   })
 
@@ -476,4 +478,45 @@ export function teardownChatStore() {
   unsubscribeGateway = null
   initialized = false
   disconnectChat()
+}
+
+/**
+ * D-AUDIT-109: open a non-resumable (legacy/unmapped) chat in read-only
+ * mode. The WS session is NOT switched: reconnecting with a canonical
+ * sk_v1_ key would fork a brand-new empty chat. History is just displayed.
+ */
+export async function viewChatSession(sessionId: string) {
+  try {
+    const historyMessages = await loadSessionMessages(sessionId)
+    disconnectChatInternal({ clearDesiredConnection: false })
+    updateChatStore({
+      messages: historyMessages,
+      isTyping: false,
+      viewOnly: true,
+    })
+  } catch (error) {
+    console.error("Failed to load session history:", error)
+    toast.error(i18n.t("chat.historyOpenFailed"))
+  }
+}
+
+/** Exit the read-only history view and restore the active session. */
+export async function exitViewOnlySession() {
+  updateChatStore({ viewOnly: false })
+  try {
+    const historyMessages = await loadSessionMessages(activeSessionIdRef)
+    updateChatStore({
+      messages: historyMessages,
+      isTyping: false,
+      hasHydratedActiveSession: true,
+    })
+  } catch (error) {
+    // A brand-new active chat has no server history (404) — show it empty.
+    console.error("Failed to restore active session:", error)
+    updateChatStore({ messages: [] })
+  }
+  if (store.get(gatewayAtom).status === "running") {
+    shouldMaintainConnection = true
+    await connectChat()
+  }
 }

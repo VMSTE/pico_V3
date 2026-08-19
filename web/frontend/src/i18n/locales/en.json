@@ -107,7 +107,16 @@
       "apikey": "API Key",
       "oauth": "OAuth",
       "local": "Local"
-    }
+    },
+    "historySearch": "Search chats…",
+    "selectedCount": "Selected: {{count}}",
+    "deleteSelected": "Remove from list",
+    "renameSession": "Rename",
+    "saveRename": "Save",
+    "cancelRename": "Cancel",
+    "readOnly": "read-only",
+    "viewOnlyBanner": "Legacy chat — read-only view. Messages remain searchable.",
+    "backToChat": "Back to current chat"
   },
   "header": {
     "logout": {
