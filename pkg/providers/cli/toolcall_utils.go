@@ -55,6 +55,15 @@ func buildCLIToolsPrompt(tools []ToolDefinition) string {
 func NormalizeToolCall(tc ToolCall) ToolCall {
 	normalized := tc
 
+	// Волна 84 (бой 20 авг): type — обязательное поле tool_call по
+	// OpenAI-спеке; парсер ответа его не копирует, и без него
+	// OpenRouter/Gemini отклоняет эхо tool_calls во втором заходе
+	// tool-loop'а: 400 «assistant message produced no valid function
+	// calls but is followed by tool result messages».
+	if normalized.Type == "" {
+		normalized.Type = "function"
+	}
+
 	if normalized.ThoughtSignature == "" &&
 		normalized.ExtraContent != nil &&
 		normalized.ExtraContent.Google != nil {
