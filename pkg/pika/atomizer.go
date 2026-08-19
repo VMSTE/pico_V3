@@ -32,7 +32,7 @@ type AtomizerConfig struct {
 func DefaultAtomizerConfig() AtomizerConfig {
 	return AtomizerConfig{
 		Enabled:        true,
-		TriggerTokens:  800000,
+		TriggerTokens:  100000,
 		ChunkMaxTokens: 200000,
 		PromptFile:     "/workspace/prompts/atomizer.md",
 		MaxRetries:     2,
@@ -94,7 +94,7 @@ func NewAtomizer(
 	cfg AtomizerConfig,
 ) *Atomizer {
 	if cfg.TriggerTokens <= 0 {
-		cfg.TriggerTokens = 800000
+		cfg.TriggerTokens = 100000
 	}
 	if cfg.ChunkMaxTokens <= 0 {
 		cfg.ChunkMaxTokens = 200000
