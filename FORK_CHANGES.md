@@ -5,6 +5,12 @@
   - `web/backend/api/pika_dashboard_v2_test.go` — MODIFIED: тестовые данные пишут NULL в error (как прод), лента обязана вернуть все строки
 - **Breaking:** None
 
+## Волна 84 — NormalizeToolCall: backfill type=function (бой 20 авг) · 20 авг 2026
+
+- **Бой:** после волны 83 ошибка Архивариуса сохранилась — тот же 400 «no valid function calls». Корень глубже: парсер ответа (providers/common) не копирует `Type` из wire-ответа, NormalizeToolCall его не восстанавливал → эхо tool_calls уходило без обязательного `type:"function"` → OpenRouter/Gemini отклонял второй заход tool-loop'а.
+- **toolcall_utils.go:** NormalizeToolCall выставляет `Type="function"`, если пусто (явный type не затирается). Одна точка — лечит всех вызывающих (main/toolloop проставляли type руками).
+- **Тесты:** TestNormalizeToolCall_BackfillsTypeFunction (providers) + ассерт Type в TestArchivist_BuildPrompt_NormalizesToolCalls.
+
 ## Волна 83 — Архивариус: нормализация tool calls (Gemini thought signature) · 20 авг 2026
 
 - **Бой 20 авг:** после волны 82 ошибки стали видимы в /pika — красная строка: `400 «Tool-call assistant message produced no valid function calls but is followed by tool result messages»`. Падал второй заход tool-loop'а Архивариуса на gemini-2.5-flash.

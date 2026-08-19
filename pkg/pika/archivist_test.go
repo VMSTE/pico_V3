@@ -460,6 +460,10 @@ func TestArchivist_BuildPrompt_NormalizesToolCalls(t *testing.T) {
 	if tc.Function == nil || tc.Function.ThoughtSignature != "sig-1" {
 		t.Errorf("ThoughtSignature lost in echo: %+v", tc)
 	}
+	// Волна 84: type:"function" обязателен на проводе.
+	if tc.Type != "function" {
+		t.Errorf("Type not backfilled on echo: %+v", tc)
+	}
 	if toolResult == nil || strings.Contains(toolResult.Content, "unknown tool") {
 		t.Errorf("tool result wrong: %+v", toolResult)
 	}
