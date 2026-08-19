@@ -18,16 +18,12 @@ import (
 // compile-time interface check
 var _ session.MetadataAwareSessionStore = (*PikaSessionStore)(nil)
 
-// Registry key prefixes for chat history metadata (all kind="snapshot").
-const (
-	chatScopeKeyPrefix  = "chat_scope:"
-	chatTitleKeyPrefix  = "chat_title:"
-	chatHiddenKeyPrefix = "chat_hidden:"
-)
+// Registry key prefix for chat scope metadata (kind="snapshot").
+// chat_title:/chat_hidden: rows are written by the web backend
+// (web/backend/api/session.go) with its own constants — no new tables.
+const chatScopeKeyPrefix = "chat_scope:"
 
 func chatScopeKey(sessionKey string) string { return chatScopeKeyPrefix + sessionKey }
-func chatTitleKey(chatID string) string     { return chatTitleKeyPrefix + chatID }
-func chatHiddenKey(chatID string) string    { return chatHiddenKeyPrefix + chatID }
 
 // EnsureSessionMetadata persists the session scope into the registry.
 // Summary = raw chat id (e.g. "pico:<uuid>"), Data = full scope JSON.

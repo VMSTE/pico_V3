@@ -221,6 +221,11 @@ func (h *Handler) handleListSessions(w http.ResponseWriter, r *http.Request) {
 			Resumable:    resumable,
 		})
 	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to scan sessions: %v", err),
+			http.StatusInternalServerError)
+		return
+	}
 	writePikaJSON(w, items)
 }
 
@@ -266,6 +271,7 @@ func (h *Handler) handleGetSession(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 	msgs := []sessionChatMessage{}
 	for rows.Next() {
 		var m sessionChatMessage
@@ -274,7 +280,11 @@ func (h *Handler) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		}
 		msgs = append(msgs, m)
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to scan session: %v", err),
+			http.StatusInternalServerError)
+		return
+	}
 	if len(msgs) == 0 {
 		http.NotFound(w, r)
 		return
