@@ -36,19 +36,58 @@ type pikaComponentStats struct {
 	AvgMs     float64 `json:"avg_ms"`
 }
 
+// PIKA-V3 (D-AUDIT-108): разрез по стабильным идентичностям агентов.
+// agent_id: "main" / именованный delegate-таргет; "" = одноразовый spawn
+// или строки до миграции v4 (legacy) — фронт показывает как «ephemeral/legacy».
+type pikaAgentStats struct {
+	AgentID  string  `json:"agent_id"`
+	Requests int64   `json:"requests"`
+	Tokens   int64   `json:"tokens"`
+	Errors   int64   `json:"errors"`
+	AvgMs    float64 `json:"avg_ms"`
+}
+
+// PIKA-V3 (D-AUDIT-108): медиана response_ms по группе (component / task_tag).
+type pikaMedianStats struct {
+	Key      string `json:"key"`
+	Samples  int64  `json:"samples"`
+	MedianMs int64  `json:"median_ms"`
+}
+
+// PIKA-V3 (D-AUDIT-108): прозрачная методология — что и как считается.
+// Отдаётся в /api/pika/overview, фронт показывает блоком «Как считается».
+var pikaMethodology = []string{
+	"Источник данных: таблица request_log в bot_memory.db (read-only, mode=ro).",
+	"Токены = prompt_tokens + completion_tokens.",
+	"Ошибка = непустое поле error; error% = errors / requests * 100.",
+	"«Сегодня» = строки с ts >= date('now') (UTC).",
+	"P95 и медианы: строки с response_ms > 0, сортировка по response_ms, " +
+		"элемент с индексом floor(p * n); для медианы p=0.5 (upper median).",
+	"component: main = основной агент; subturn = суб-агенты; " +
+		"archivarius/atomizer/reflexor/mcp_guard = спутники (RecordSatelliteLLM).",
+	"agent_id: main или именованный агент (delegate). Пустое = " +
+		"одноразовый spawn или legacy-строки до миграции v4.",
+	"Спутники не имеют agent_id — их идентичность = component.",
+}
+
 type pikaOverview struct {
-	Available  bool                 `json:"available"`
-	DBPath     string               `json:"db_path,omitempty"`
-	Note       string               `json:"note,omitempty"`
-	Today      pikaPeriodStats      `json:"today"`
-	Totals     pikaPeriodStats      `json:"totals"`
-	P95Ms      int64                `json:"p95_ms"`
-	Components []pikaComponentStats `json:"components"`
+	Available          bool                 `json:"available"`
+	DBPath             string               `json:"db_path,omitempty"`
+	Note               string               `json:"note,omitempty"`
+	Today              pikaPeriodStats      `json:"today"`
+	Totals             pikaPeriodStats      `json:"totals"`
+	P95Ms              int64                `json:"p95_ms"`
+	Components         []pikaComponentStats `json:"components"`
+	Agents             []pikaAgentStats     `json:"agents,omitempty"`
+	MediansByComponent []pikaMedianStats    `json:"medians_by_component,omitempty"`
+	MediansByTaskTag   []pikaMedianStats    `json:"medians_by_task_tag,omitempty"`
+	Methodology        []string             `json:"methodology,omitempty"`
 }
 
 type pikaRequestRow struct {
 	TS                 string `json:"ts"`
 	Component          string `json:"component"`
+	AgentID            string `json:"agent_id,omitempty"`
 	Model              string `json:"model"`
 	TaskTag            string `json:"task_tag"`
 	PromptTokens       int64  `json:"prompt_tokens"`
@@ -131,6 +170,14 @@ func (h *Handler) handlePikaOverview(w http.ResponseWriter, r *http.Request) {
 	ov.Totals = queryPikaPeriodStats(ctx, db, "")
 	ov.P95Ms = queryPikaP95(ctx, db)
 	ov.Components = queryPikaComponents(ctx, db)
+	// PIKA-V3 (D-AUDIT-108): agents разрез только если миграция v4 применена;
+	// медианы и методология работают на любой схеме.
+	if pikaHasAgentIDColumn(ctx, db) {
+		ov.Agents = queryPikaAgents(ctx, db)
+	}
+	ov.MediansByComponent = queryPikaMedians(ctx, db, "component")
+	ov.MediansByTaskTag = queryPikaMedians(ctx, db, "task_tag")
+	ov.Methodology = pikaMethodology
 	writePikaJSON(w, ov)
 }
 
@@ -238,11 +285,108 @@ func queryPikaComponents(ctx context.Context, db *sql.DB) []pikaComponentStats {
 	return out
 }
 
+// PIKA-V3 (D-AUDIT-108): колонка agent_id появилась в миграции v4.
+// Лаунчер может быть новее gateway/БД — на старой схеме уходим в legacy-режим.
+func pikaHasAgentIDColumn(ctx context.Context, db *sql.DB) bool {
+	var n int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM pragma_table_info('request_log') WHERE name='agent_id'`,
+	).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
+// PIKA-V3 (D-AUDIT-108): разрез по agent_id. Вызывать только после
+// pikaHasAgentIDColumn — на legacy-БД колонки нет.
+func queryPikaAgents(ctx context.Context, db *sql.DB) []pikaAgentStats {
+	rows, err := db.QueryContext(ctx,
+		`SELECT agent_id, COUNT(*),
+		        COALESCE(SUM(prompt_tokens+completion_tokens),0),
+		        COALESCE(SUM(CASE WHEN error != '' THEN 1 ELSE 0 END),0),
+		        COALESCE(AVG(NULLIF(response_ms,0)),0)
+		 FROM request_log
+		 GROUP BY agent_id
+		 ORDER BY COUNT(*) DESC`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var out []pikaAgentStats
+	for rows.Next() {
+		var a pikaAgentStats
+		if sErr := rows.Scan(&a.AgentID, &a.Requests, &a.Tokens, &a.Errors, &a.AvgMs); sErr != nil {
+			continue
+		}
+		out = append(out, a)
+	}
+	if rErr := rows.Err(); rErr != nil {
+		return nil
+	}
+	return out
+}
+
+// PIKA-V3 (D-AUDIT-108): медиана response_ms по группе.
+// column — только внутренние константы ("component", "task_tag"), never user input.
+// Медиана: сортировка по response_ms, элемент с индексом n/2 (upper median),
+// тот же offset-приём, что и P95.
+func queryPikaMedians(ctx context.Context, db *sql.DB, column string) []pikaMedianStats {
+	keyRows, err := db.QueryContext(ctx,
+		`SELECT `+column+`, COUNT(*) FROM request_log
+		 WHERE response_ms > 0 AND `+column+` IS NOT NULL AND `+column+` != ''
+		 GROUP BY `+column+`
+		 ORDER BY COUNT(*) DESC
+		 LIMIT 50`)
+	if err != nil {
+		return nil
+	}
+	type keyCount struct {
+		key string
+		n   int64
+	}
+	var keys []keyCount
+	for keyRows.Next() {
+		var kc keyCount
+		if sErr := keyRows.Scan(&kc.key, &kc.n); sErr != nil {
+			continue
+		}
+		keys = append(keys, kc)
+	}
+	keyRows.Close()
+	if len(keys) == 0 {
+		return nil
+	}
+
+	out := make([]pikaMedianStats, 0, len(keys))
+	for _, kc := range keys {
+		var ms int64
+		mErr := db.QueryRowContext(ctx,
+			`SELECT response_ms FROM request_log
+			 WHERE response_ms > 0 AND `+column+` = ?
+			 ORDER BY response_ms
+			 LIMIT 1 OFFSET ?`, kc.key, kc.n/2).Scan(&ms)
+		if mErr != nil {
+			continue
+		}
+		out = append(out, pikaMedianStats{Key: kc.key, Samples: kc.n, MedianMs: ms})
+	}
+	return out
+}
+
 func queryPikaRequests(ctx context.Context, db *sql.DB, limit int) []pikaRequestRow {
+	// PIKA-V3 (D-AUDIT-108): agent_id есть только после миграции v4 —
+	// на старой БД лента работает без него, а не падает.
+	withAgentID := pikaHasAgentIDColumn(ctx, db)
+
+	agentCol := ""
+	if withAgentID {
+		agentCol = ", agent_id"
+	}
 	rows, err := db.QueryContext(ctx,
 		`SELECT ts, component, model, COALESCE(task_tag,''),
 		        prompt_tokens, completion_tokens, response_ms, error,
-		        tool_calls_requested, tool_calls_success, tool_calls_failed
+		        tool_calls_requested, tool_calls_success, tool_calls_failed`+agentCol+`
 		 FROM request_log
 		 ORDER BY id DESC
 		 LIMIT ?`, limit)
@@ -254,11 +398,22 @@ func queryPikaRequests(ctx context.Context, db *sql.DB, limit int) []pikaRequest
 	out := make([]pikaRequestRow, 0, limit)
 	for rows.Next() {
 		var r pikaRequestRow
-		if sErr := rows.Scan(
-			&r.TS, &r.Component, &r.Model, &r.TaskTag,
-			&r.PromptTokens, &r.CompletionTokens, &r.ResponseMs, &r.Error,
-			&r.ToolCallsRequested, &r.ToolCallsSuccess, &r.ToolCallsFailed,
-		); sErr != nil {
+		var sErr error
+		if withAgentID {
+			sErr = rows.Scan(
+				&r.TS, &r.Component, &r.Model, &r.TaskTag,
+				&r.PromptTokens, &r.CompletionTokens, &r.ResponseMs, &r.Error,
+				&r.ToolCallsRequested, &r.ToolCallsSuccess, &r.ToolCallsFailed,
+				&r.AgentID,
+			)
+		} else {
+			sErr = rows.Scan(
+				&r.TS, &r.Component, &r.Model, &r.TaskTag,
+				&r.PromptTokens, &r.CompletionTokens, &r.ResponseMs, &r.Error,
+				&r.ToolCallsRequested, &r.ToolCallsSuccess, &r.ToolCallsFailed,
+			)
+		}
+		if sErr != nil {
 			continue
 		}
 		out = append(out, r)
