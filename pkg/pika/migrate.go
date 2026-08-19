@@ -59,6 +59,7 @@ func Migrate(dbPath string) (*sql.DB, error) {
 	migrations := []migration{
 		{version: 1, description: "unified v3 — initial schema", ddl: migrationV1},
 		{version: 2, description: "rename session_id->chat_id, turn_id->pika_session_id", ddl: migrationV2},
+		{version: 3, description: "messages_fts — FTS5+BM25 message search (D-AUDIT-106)", ddl: migrationV3},
 	}
 
 	for _, m := range migrations {
@@ -564,4 +565,33 @@ CREATE INDEX idx_spans_chat ON trace_spans(chat_id, pika_session_id);
 -- atom_usage
 DROP INDEX IF EXISTS idx_ausage_trace;
 CREATE INDEX idx_ausage_trace ON atom_usage(trace_id, pika_session_id);
+`
+
+// PIKA-V3: migrationV3 — messages_fts для поиска с BM25 (D-AUDIT-106).
+// LIKE+счётчик слов топил факты в свежем шуме; BM25/IDF: редкое слово
+// («синий» в 1 документе) весит больше повторяющегося шума.
+// Паттерн = knowledge_fts: external content + триггеры + rebuild-бэкфилл.
+const migrationV3 = `
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    content,
+    content = messages,
+    content_rowid = id
+);
+
+CREATE TRIGGER messages_fts_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+
+CREATE TRIGGER messages_fts_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content)
+    VALUES ('delete', old.id, old.content);
+END;
+
+CREATE TRIGGER messages_fts_au AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content)
+    VALUES ('delete', old.id, old.content);
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+
+INSERT INTO messages_fts(messages_fts) VALUES('rebuild');
 `

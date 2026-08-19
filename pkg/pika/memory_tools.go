@@ -297,55 +297,47 @@ func (ms *MemorySearch) searchMessages(
 	sessionID string,
 	scope string,
 ) ([]rawResult, error) {
-	// OR по словам + ранг по числу совпавших: AND по всем словам давал
-	// ноль на развёрнутых LLM-запросах (бой 19 авг: «любимый цвет
-	// пользователя Gar» не матчил «мой любимый цвет — синий»).
-	words := strings.Fields(query)
-	if len(words) == 0 {
-		return nil, nil
-	}
-	conds := make([]string, 0, len(words))
-	args := make([]any, 0, len(words)+2)
-	for _, w := range words {
-		conds = append(conds, "content LIKE ?")
-		args = append(args, "%"+w+"%")
-	}
-	// #nosec G202 -- conds are static strings; values parameterized
-	q := `SELECT id, role, content, ts
-		FROM messages
-		WHERE (` + strings.Join(conds, " OR ") + `)`
+	// D-AUDIT-106: FTS5 + BM25 (индустриальный стандарт) вместо
+	// LIKE+счётчика слов: IDF взвешивает редкие слова выше шума.
+	// Scope session — фильтр chat_id (D-AUDIT-104); all — вся база.
+	fq := buildFTSQuery(query) // слова через OR, каждое в кавычках
+	var args []any
+	// #nosec G202 -- WHERE из статических фрагментов; значения параметризованы
+	q := `SELECT m.id, m.role, m.content, m.ts,
+		bm25(messages_fts) AS score
+		FROM messages_fts f
+		JOIN messages m ON m.id = f.rowid
+		WHERE messages_fts MATCH ?`
+	args = append(args, fq)
 	if scope == "session" {
 		if sessionID == "" {
 			return nil, nil
 		}
-		q += ` AND chat_id = ?`
+		q += ` AND m.chat_id = ?`
 		args = append(args, sessionID)
 	}
-	q += ` ORDER BY id DESC LIMIT ?`
-	args = append(args, limit*4) // перелимит: ранжируем, потом отрезаем
+	q += ` ORDER BY score LIMIT ?` // bm25: меньше = лучше
+	args = append(args, limit)
 	rows, err := ms.bm.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"pika/memory_tools: messages: %w", err,
+			"pika/memory_tools: messages fts: %w", err,
 		)
 	}
 	defer rows.Close()
 
-	type scoredHit struct {
-		res   rawResult
-		score int
-	}
-	var all []scoredHit
+	var out []rawResult
 	for rows.Next() {
 		var id int64
 		var role string
 		var content sql.NullString
 		var ts string
+		var bm25Score float64
 		if scanErr := rows.Scan(
-			&id, &role, &content, &ts,
+			&id, &role, &content, &ts, &bm25Score,
 		); scanErr != nil {
 			return nil, fmt.Errorf(
-				"pika/memory_tools: messages scan: %w", scanErr,
+				"pika/memory_tools: messages fts scan: %w", scanErr,
 			)
 		}
 		// truncateStr is defined in archivist.go (same package)
@@ -353,41 +345,18 @@ func (ms *MemorySearch) searchMessages(
 			"[%s] %s", role,
 			truncateStr(content.String, 200),
 		)
-		s := 0
-		lower := strings.ToLower(content.String)
-		for _, w := range words {
-			if strings.Contains(lower, strings.ToLower(w)) {
-				s++
-			}
-		}
-		all = append(all, scoredHit{
-			res: rawResult{
-				Type:      "session",
-				Summary:   summary,
-				Source:    "messages",
-				CreatedAt: parseSQLiteTime(ts),
-				IsFTS:     false,
-				DedupKey:  fmt.Sprintf("messages:%d", id),
-				LayerPrio: prioMessages,
-			},
-			score: s,
+		out = append(out, rawResult{
+			Type:      "session",
+			Summary:   summary,
+			Source:    "messages",
+			CreatedAt: parseSQLiteTime(ts),
+			RawBM25:   bm25Score,
+			IsFTS:     true,
+			DedupKey:  fmt.Sprintf("messages:%d", id),
+			LayerPrio: prioMessages,
 		})
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	// стабильно: равный ранг — свежие первыми (уже id DESC)
-	sort.SliceStable(all, func(i, j int) bool {
-		return all[i].score > all[j].score
-	})
-	out := make([]rawResult, 0, min(len(all), limit))
-	for _, s := range all {
-		out = append(out, s.res)
-		if len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
+	return out, rows.Err()
 }
 
 // Layer 2: knowledge — FTS5 MATCH.

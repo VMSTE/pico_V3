@@ -23,14 +23,14 @@ func TestMigrateNewDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 2 {
-		t.Fatalf("expected version 2, got %d", ver)
+	if ver != 3 {
+		t.Fatalf("expected version 3, got %d", ver)
 	}
 
 	// Check key tables exist
 	expected := map[string]bool{
 		"messages": false, "events": false, "knowledge_atoms": false,
-		"knowledge_fts": false, "messages_archive": false,
+		"knowledge_fts": false, "messages_fts": false, "messages_archive": false,
 		"events_archive": false, "events_archive_fts": false,
 		"registry": false, "request_log": false, "reasoning_log": false,
 		"reasoning_log_archive": false, "trace_spans": false,
@@ -96,8 +96,8 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 2 {
-		t.Fatalf("expected version 2 after second Migrate, got %d", ver)
+	if ver != 3 {
+		t.Fatalf("expected version 3 after second Migrate, got %d", ver)
 	}
 }
 
