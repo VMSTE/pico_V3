@@ -60,6 +60,7 @@ func Migrate(dbPath string) (*sql.DB, error) {
 		{version: 1, description: "unified v3 — initial schema", ddl: migrationV1},
 		{version: 2, description: "rename session_id->chat_id, turn_id->pika_session_id", ddl: migrationV2},
 		{version: 3, description: "messages_fts — FTS5+BM25 message search (D-AUDIT-106)", ddl: migrationV3},
+		{version: 4, description: "request_log.agent_id — named agent identity (D-AUDIT-108)", ddl: migrationV4},
 	}
 
 	for _, m := range migrations {
@@ -468,6 +469,15 @@ CREATE TABLE IF NOT EXISTS daily_metrics (
     p95_latency_ms           INTEGER,
     p99_latency_ms           INTEGER
 );
+`
+
+// PIKA-V3 (D-AUDIT-108): migrationV4 — request_log.agent_id.
+// Стабильная идентичность агента: "main" / именованный агент (delegate target).
+// Одноразовые spawn-субагенты пишут "" — дашборд группирует их отдельно.
+// Старые строки получают ” (legacy). Колонка добавочная — откат тривиален.
+const migrationV4 = `
+ALTER TABLE request_log ADD COLUMN agent_id TEXT NOT NULL DEFAULT '';
+CREATE INDEX idx_reqlog_agent ON request_log(agent_id, ts);
 `
 
 // PIKA-V3: migrationV2 — rename session_id->chat_id, turn_id->pika_session_id (TEXT).

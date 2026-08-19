@@ -529,6 +529,7 @@ func TestInsertRequestLog(t *testing.T) {
 		MsgIndex:           &mi,
 		Direction:          "chat",
 		Component:          "main",
+		AgentID:            "researcher",
 		Model:              "step-3.5-flash",
 		PromptTokens:       100,
 		CompletionTokens:   50,
@@ -550,13 +551,13 @@ func TestInsertRequestLog(t *testing.T) {
 		t.Error("expected non-zero id")
 	}
 	// Verify row exists
-	var model string
+	var model, agentID string
 	var cost float64
 	err = bm.db.QueryRow(
-		`SELECT model, cost_usd
+		`SELECT model, cost_usd, agent_id
 		FROM request_log WHERE id=?`,
 		id,
-	).Scan(&model, &cost)
+	).Scan(&model, &cost, &agentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -565,6 +566,9 @@ func TestInsertRequestLog(t *testing.T) {
 	}
 	if cost != 0.002 {
 		t.Errorf("cost = %f, want 0.002", cost)
+	}
+	if agentID != "researcher" {
+		t.Errorf("agent_id = %q, want researcher", agentID)
 	}
 }
 
