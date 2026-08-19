@@ -1,3 +1,10 @@
+## Волна 79 — Дашборд v2 API: agents + медианы + methodology (D-AUDIT-108, PR 2) · 19 авг 2026
+- **ТЗ:** D-AUDIT-108 — /api/pika/overview отдаёт разрез agents[] (по agent_id), медианы по component и task_tag, блок methodology; /api/pika/requests отдаёт agent_id
+- **Files:**
+  - `web/backend/api/pika_dashboard.go` — MODIFIED: pikaAgentStats/pikaMedianStats/pikaMethodology, queryPikaAgents, queryPikaMedians (upper median, offset n/2), pikaHasAgentIDColumn + legacy-фолбэк для БД без миграции v4, agent_id в ленте запросов
+  - `web/backend/api/pika_dashboard_v2_test.go` — NEW: agents/медианы/legacy-фолбэк
+- **Breaking:** None — новые JSON-поля omitempty, старый фронт игнорирует; legacy-БД работает как раньше
+
 ## Волна 78 — request_log.agent_id + component=subturn (D-AUDIT-108, PR 1: данные) · 19 авг 2026
 - **ТЗ:** D-AUDIT-108 (дашборд телеметрии v2) — шаг данных: без идентичности агента в request_log разрез «по агентам» невозможен
 - **Files:**
