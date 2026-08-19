@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import { type SessionSummary, deleteSession, getSessions } from "@/api/sessions"
+import {
+  type SessionSummary,
+  deleteSession,
+  getSessions,
+  renameSession,
+} from "@/api/sessions"
 
 const LIMIT = 20
 
@@ -21,6 +26,7 @@ export function useSessionHistory({
   const [hasMore, setHasMore] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
 
   const loadSessions = useCallback(
     async (reset = true) => {
@@ -32,7 +38,7 @@ export function useSessionHistory({
           setOffset(0)
         }
 
-        const data = await getSessions(currentOffset, LIMIT)
+        const data = await getSessions(currentOffset, LIMIT, searchQuery)
         setLoadError(false)
 
         if (data.length < LIMIT) {
@@ -60,8 +66,19 @@ export function useSessionHistory({
         setIsLoadingMore(false)
       }
     },
-    [offset],
+    [offset, searchQuery],
   )
+
+  // Reload from scratch when the search query changes (skip first render —
+  // the menu loads sessions on open).
+  const isFirstSearchRender = useRef(true)
+  useEffect(() => {
+    if (isFirstSearchRender.current) {
+      isFirstSearchRender.current = false
+      return
+    }
+    void loadSessions(true)
+  }, [searchQuery, loadSessions])
 
   useEffect(() => {
     if (!observerRef.current || !hasMore || isLoadingMore || loadError) return
@@ -106,13 +123,50 @@ export function useSessionHistory({
     [activeSessionId, onDeletedActiveSession, sessions],
   )
 
+  // D-AUDIT-109: bulk hide — founder's requirement (select many, remove at
+  // once). Hide-only: messages stay in bot_memory.db.
+  const handleDeleteSessions = useCallback(
+    async (ids: string[]) => {
+      const results = await Promise.allSettled(
+        ids.map((id) => deleteSession(id)),
+      )
+      const removed = new Set(
+        ids.filter((_, index) => results[index].status === "fulfilled"),
+      )
+      setSessions((prev) => prev.filter((s) => !removed.has(s.id)))
+      setOffset((prev) => Math.max(prev - removed.size, 0))
+      if (removed.has(activeSessionId)) {
+        onDeletedActiveSession()
+      }
+    },
+    [activeSessionId, onDeletedActiveSession],
+  )
+
+  const handleRenameSession = useCallback(
+    async (id: string, title: string) => {
+      try {
+        await renameSession(id, title)
+        setSessions((prev) =>
+          prev.map((s) => (s.id === id ? { ...s, title } : s)),
+        )
+      } catch (err) {
+        console.error("Failed to rename session:", err)
+      }
+    },
+    [],
+  )
+
   return {
     sessions,
     hasMore,
     loadError,
     loadErrorMessage: t("chat.historyLoadFailed"),
     observerRef,
+    searchQuery,
+    setSearchQuery,
     loadSessions,
     handleDeleteSession,
+    handleDeleteSessions,
+    handleRenameSession,
   }
 }

@@ -107,7 +107,16 @@
       "apikey": "API Key",
       "oauth": "OAuth",
       "local": "本地模型"
-    }
+    },
+    "historySearch": "搜索聊天…",
+    "selectedCount": "已选：{{count}}",
+    "deleteSelected": "从列表中移除",
+    "renameSession": "重命名",
+    "saveRename": "保存",
+    "cancelRename": "取消",
+    "readOnly": "只读",
+    "viewOnlyBanner": "旧会话——只读视图。消息仍可被记忆搜索。",
+    "backToChat": "返回当前会话"
   },
   "header": {
     "logout": {

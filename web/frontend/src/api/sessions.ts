@@ -7,6 +7,8 @@ export interface SessionSummary {
   message_count: number
   created: string
   updated: string
+  /** D-AUDIT-109: true when the chat can be resumed (pico mapping known). */
+  resumable: boolean
 }
 
 export interface SessionDetail {
@@ -42,11 +44,15 @@ export interface SessionDetail {
 export async function getSessions(
   offset: number = 0,
   limit: number = 20,
+  q: string = "",
 ): Promise<SessionSummary[]> {
   const params = new URLSearchParams({
     offset: offset.toString(),
     limit: limit.toString(),
   })
+  if (q.trim()) {
+    params.set("q", q.trim())
+  }
 
   const res = await launcherFetch(`/api/sessions?${params.toString()}`)
   if (!res.ok) {
@@ -63,11 +69,22 @@ export async function getSessionHistory(id: string): Promise<SessionDetail> {
   return res.json()
 }
 
+export async function renameSession(id: string, title: string): Promise<void> {
+  const res = await launcherFetch(`/api/sessions/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to rename session: ${res.status}`)
+  }
+}
+
 export async function deleteSession(id: string): Promise<void> {
   const res = await launcherFetch(`/api/sessions/${encodeURIComponent(id)}`, {
     method: "DELETE",
   })
   if (!res.ok) {
-    throw new Error(`Failed to delete session ${id}: ${res.status}`)
+    throw new Error(`Failed to delete session: ${res.status}`)
   }
 }

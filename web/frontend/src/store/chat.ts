@@ -60,6 +60,8 @@ export interface ChatStoreState {
   isTyping: boolean
   activeSessionId: string
   hasHydratedActiveSession: boolean
+  /** D-AUDIT-109: read-only view of a legacy chat. */
+  viewOnly: boolean
   contextUsage?: ContextUsage
 }
 
@@ -74,6 +76,7 @@ const DEFAULT_CHAT_STATE: ChatStoreState = {
   isTyping: false,
   activeSessionId: getInitialActiveSessionId(),
   hasHydratedActiveSession: false,
+  viewOnly: false,
 }
 
 export const chatAtom = atom<ChatStoreState>(DEFAULT_CHAT_STATE)

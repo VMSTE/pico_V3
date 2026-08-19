@@ -2,9 +2,11 @@ import dayjs from "dayjs"
 import { useAtomValue } from "jotai"
 
 import {
+  exitViewOnlySession,
   newChatSession,
   sendChatMessage,
   switchChatSession,
+  viewChatSession,
 } from "@/features/chat/controller"
 import { chatAtom } from "@/store/chat"
 
@@ -55,8 +57,14 @@ export function formatMessageTime(dateRaw: number | string | Date): string {
 }
 
 export function usePicoChat() {
-  const { messages, connectionState, isTyping, activeSessionId, contextUsage } =
-    useAtomValue(chatAtom)
+  const {
+    messages,
+    connectionState,
+    isTyping,
+    activeSessionId,
+    contextUsage,
+    viewOnly,
+  } = useAtomValue(chatAtom)
 
   return {
     messages,
@@ -64,8 +72,11 @@ export function usePicoChat() {
     isTyping,
     activeSessionId,
     contextUsage,
+    viewOnly,
     sendMessage: sendChatMessage,
     switchSession: switchChatSession,
+    viewSession: viewChatSession,
+    exitViewOnly: exitViewOnlySession,
     newChat: newChatSession,
   }
 }
