@@ -1,3 +1,15 @@
+## Волна 78 — request_log.agent_id + component=subturn (D-AUDIT-108, PR 1: данные) · 19 авг 2026
+- **ТЗ:** D-AUDIT-108 (дашборд телеметрии v2) — шаг данных: без идентичности агента в request_log разрез «по агентам» невозможен
+- **Files:**
+  - `pkg/pika/migrate.go` — MODIFIED: migration v4 — request_log.agent_id TEXT NOT NULL DEFAULT '' + idx_reqlog_agent(agent_id, ts)
+  - `pkg/pika/botmemory.go` — MODIFIED: RequestLogRow.AgentID + колонка в InsertRequestLog (plain string, колонка NOT NULL)
+  - `pkg/pika/telemetry.go` — MODIFIED: RecordLLMParams.AgentID → RecordLLMCall
+  - `pkg/agent/subturn.go` — MODIFIED: childTS.agentID = cfg.TargetAgentID (delegate → именованный; одноразовый spawn → "")
+  - `pkg/agent/pipeline_llm.go` — MODIFIED: component="subturn" при ts.depth>0 (восстановление проводки, потерянной после волны 49) + AgentID: ts.agentID
+  - тесты: migrate_test.go (v4 + TestMigrateV4AgentIDColumn), botmemory_test.go, telemetry_test.go
+- **Breaking:** None — колонка добавочная, старые строки = '' (legacy). Откат тривиален
+- **Примечание:** события SubTurnSpawn/End для ephemeral spawn теперь эмитят AgentID="" (было: ID родителя)
+
 ## Волна 77 — Самоперезапуск лаунчера по кнопке обновления (D-AUDIT-110) · 19 авг 2026
 
 - Бой 19.08: после кнопки «Обновить из main» морда оставалась старой — кнопка рестартовала только gateway, а процесс лаунчера требовал ручного pkill. Теперь при изменениях в web/ лаунчер сам заменяет свой процессный образ свежим бинарником (syscall.Exec, selfrelaunch_unix.go): тот же PID/терминал, новый процесс подхватывает уже перезапущенный gateway по PID-файлу. HTTP-ответ уходит в UI до перезапуска (горутина с паузой 1.5с).

@@ -416,11 +416,19 @@ func (p *Pipeline) CallLLM(
 			}
 		}
 		chainPos := iteration
+		// PIKA-V3 (D-AUDIT-108): component=subturn для суб-агентов
+		// (восстановление проводки, потерянной после волны 49),
+		// agent_id — стабильная идентичность (main/именованный; "" = ephemeral).
+		component := "main"
+		if ts.depth > 0 {
+			component = "subturn"
+		}
 		ts.lastRequestLogID = al.telemetry.RecordLLMCall(turnCtx, pika.RecordLLMParams{
 			ChatID:             ts.sessionKey,
 			Model:              exec.llmModel,
 			Direction:          "chat",
-			Component:          "main",
+			Component:          component,
+			AgentID:            ts.agentID,
 			TokensIn:           tokIn,
 			TokensOut:          tokOut,
 			Status:             "ok",

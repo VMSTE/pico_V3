@@ -89,6 +89,9 @@ type RequestLogRow struct {
 	MsgIndex           *int            `json:"msg_index,omitempty"`
 	Direction          string          `json:"direction"`
 	Component          string          `json:"component"`
+	// PIKA-V3 (D-AUDIT-108): стабильная идентичность агента
+	// ("main"/именованный; "" = одноразовый spawn).
+	AgentID            string          `json:"agent_id,omitempty"`
 	Model              string          `json:"model"`
 	PromptTokens       int             `json:"prompt_tokens"`
 	CompletionTokens   int             `json:"completion_tokens"`
@@ -669,12 +672,12 @@ func (bm *BotMemory) UpdateRegistryLastUsed(ctx context.Context, kind, key strin
 func (bm *BotMemory) InsertRequestLog(ctx context.Context, r RequestLogRow) (int64, error) {
 	res, err := bm.db.ExecContext(ctx,
 		`INSERT INTO request_log
-		(chat_id,msg_index,direction,component,model,
+		(chat_id,msg_index,direction,component,agent_id,model,
 		prompt_tokens,completion_tokens,cached_tokens,reasoning_tokens,estimated_tokens,
 		tool_calls_requested,tool_calls_success,tool_calls_failed,tool_names,
 		cost_usd,error,retry_count,response_ms,task_tag,chain_id,chain_position,plan_detected)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		strOrNil(r.ChatID), r.MsgIndex, r.Direction, r.Component, r.Model,
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		strOrNil(r.ChatID), r.MsgIndex, r.Direction, r.Component, r.AgentID, r.Model,
 		r.PromptTokens, r.CompletionTokens, r.CachedTokens, r.ReasoningTokens, r.EstimatedTokens,
 		r.ToolCallsRequested, r.ToolCallsSuccess, r.ToolCallsFailed, jsonArg(r.ToolNames),
 		r.CostUSD, strOrNil(r.Error), r.RetryCount, r.ResponseMs,

@@ -375,6 +375,10 @@ func spawnSubTurn(
 	childTS.cancelFunc = cancel
 	childTS.critical = cfg.Critical
 	childTS.depth = parentTS.depth + 1
+	// PIKA-V3 (D-AUDIT-108): agent_id в телеметрии — только стабильные
+	// идентичности. Delegate (TargetAgentID задан) → именованный агент;
+	// одноразовый spawn → "" (дашборд группирует как ephemeral subturn).
+	childTS.agentID = cfg.TargetAgentID
 	childTS.parentTurnID = parentTS.turnID
 	childTS.parentTurnState = parentTS
 	childTS.pendingResults = make(chan *tools.ToolResult, 16)

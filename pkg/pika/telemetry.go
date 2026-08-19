@@ -52,6 +52,10 @@ type RecordLLMParams struct {
 	TaskTag       string
 	ChainID       string
 	ChainPosition *int
+
+	// PIKA-V3 (D-AUDIT-108): стабильная идентичность агента
+	// ("main" / именованный delegate-таргет; "" = одноразовый spawn).
+	AgentID string
 }
 
 // TelemetryConfig holds configuration for the Telemetry subsystem.
@@ -153,6 +157,7 @@ func (t *Telemetry) RecordLLMCall(
 		ChatID:             p.ChatID,
 		Direction:          p.Direction,
 		Component:          p.Component,
+		AgentID:            p.AgentID,
 		Model:              p.Model,
 		PromptTokens:       p.TokensIn,
 		CompletionTokens:   p.TokensOut,

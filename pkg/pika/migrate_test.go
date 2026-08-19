@@ -23,8 +23,8 @@ func TestMigrateNewDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 3 {
-		t.Fatalf("expected version 3, got %d", ver)
+	if ver != 4 {
+		t.Fatalf("expected version 4, got %d", ver)
 	}
 
 	// Check key tables exist
@@ -96,8 +96,8 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 3 {
-		t.Fatalf("expected version 3 after second Migrate, got %d", ver)
+	if ver != 4 {
+		t.Fatalf("expected version 4 after second Migrate, got %d", ver)
 	}
 }
 
@@ -161,4 +161,21 @@ func TestFTS5Works(t *testing.T) {
 
 	// Cleanup: remove temp files
 	_ = os.RemoveAll(dir)
+}
+
+// PIKA-V3 (D-AUDIT-108): request_log.agent_id существует после миграции.
+func TestMigrateV4AgentIDColumn(t *testing.T) {
+	db, err := Migrate(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	defer db.Close()
+
+	var name string
+	err = db.QueryRow(
+		`SELECT name FROM pragma_table_info('request_log') WHERE name='agent_id'`,
+	).Scan(&name)
+	if err != nil {
+		t.Fatalf("agent_id column missing in request_log: %v", err)
+	}
 }

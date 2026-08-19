@@ -339,6 +339,7 @@ func TestRecordLLMCall_FullFields(t *testing.T) {
 		Model:              "main",
 		Direction:          "chat",
 		Component:          "main",
+		AgentID:            "researcher",
 		TokensIn:           100,
 		TokensOut:          50,
 		ToolCallsRequested: 2,
@@ -347,11 +348,11 @@ func TestRecordLLMCall_FullFields(t *testing.T) {
 	})
 
 	var requested, reasoning int
-	var names string
+	var names, agentID string
 	if err := bm.db.QueryRow(
-		`SELECT tool_calls_requested, reasoning_tokens, COALESCE(tool_names,'')
+		`SELECT tool_calls_requested, reasoning_tokens, COALESCE(tool_names,''), agent_id
 		FROM request_log`,
-	).Scan(&requested, &reasoning, &names); err != nil {
+	).Scan(&requested, &reasoning, &names, &agentID); err != nil {
 		t.Fatal(err)
 	}
 	if requested != 2 {
@@ -362,6 +363,9 @@ func TestRecordLLMCall_FullFields(t *testing.T) {
 	}
 	if names != `["exec","compose"]` {
 		t.Errorf("tool_names = %q, want exec+compose JSON", names)
+	}
+	if agentID != "researcher" {
+		t.Errorf("agent_id = %q, want researcher", agentID)
 	}
 }
 
