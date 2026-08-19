@@ -5,6 +5,14 @@
   - `web/backend/api/pika_dashboard_v2_test.go` — MODIFIED: тестовые данные пишут NULL в error (как прод), лента обязана вернуть все строки
 - **Breaking:** None
 
+## Волна 83 — Архивариус: нормализация tool calls (Gemini thought signature) · 20 авг 2026
+
+- **Бой 20 авг:** после волны 82 ошибки стали видимы в /pika — красная строка: `400 «Tool-call assistant message produced no valid function calls but is followed by tool result messages»`. Падал второй заход tool-loop'а Архивариуса на gemini-2.5-flash.
+- **Корень:** openai_compat парсит tool calls ответа во internal top-level поля (`json:"-"`), `Function` остаётся nil. Цикл эхоил сырые ToolCalls → на проводе assistant-сообщение без function payload. Плюс терялась ThoughtSignature (обязательна для gemini thinking).
+- **archivist.go:** `NormalizeToolCall` перед эхом assistant-сообщения (тот же паттерн, что в main pipeline_llm.go и tools/toolloop.go); fnName читается из нормализованного вызова.
+- **Тест** TestArchivist_BuildPrompt_NormalizesToolCalls: tool call без Function → второй запрос несёт валидный function call с подписью, tool result не «unknown tool».
+- Атомизатор / Рефлексор / MCP Guard не затронуты — зовут LLM без tools.
+
 ## Волна 82 — Проводка спец-агентов: алиасы моделей + телеметрия ошибок · 20 авг 2026
 
 - **Бой 19 авг:** после настройки /subagents (`model: background`) все вызовы спутников упали: `400 «background is not a valid model ID»`. Корень: спутники передавали сырой алиас model_name в API — резолва алиас→model ID (как у main-агента) на пути спутников не было.

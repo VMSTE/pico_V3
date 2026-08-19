@@ -473,14 +473,26 @@ func (a *Archivist) runAgenticLoop(
 			return parseArchivistOutput(resp.Content)
 		}
 
+		// Волна 83 (бой 20 авг): нормализация как в main/toolloop.
+		// Провайдер парсит tool calls в internal top-level поля
+		// (json:"-"), Function остаётся nil → на провод уходило
+		// assistant-сообщение без function payload и Gemini отклонял
+		// второй заход: 400 «no valid function calls». NormalizeToolCall
+		// восстанавливает Function и ThoughtSignature (обязательна для
+		// gemini-2.5 thinking).
+		normalizedCalls := make([]providers.ToolCall, 0, len(resp.ToolCalls))
+		for _, tc := range resp.ToolCalls {
+			normalizedCalls = append(normalizedCalls, providers.NormalizeToolCall(tc))
+		}
+
 		// Add assistant message with tool calls
 		msgs = append(msgs, providers.Message{
 			Role:      "assistant",
 			Content:   resp.Content,
-			ToolCalls: resp.ToolCalls,
+			ToolCalls: normalizedCalls,
 		})
 
-		for _, tc := range resp.ToolCalls {
+		for _, tc := range normalizedCalls {
 			toolCallCount++
 			if toolCallCount > a.cfg.MaxToolCalls {
 				return nil, fmt.Errorf(
@@ -490,10 +502,11 @@ func (a *Archivist) runAgenticLoop(
 				)
 			}
 
-			fnName := ""
+			// Волна 83: имя из нормализованного вызова (Function мог
+			// быть nil в сыром ответе — fnName терялся).
+			fnName := tc.Name
 			fnArgs := ""
 			if tc.Function != nil {
-				fnName = tc.Function.Name
 				fnArgs = tc.Function.Arguments
 			}
 
