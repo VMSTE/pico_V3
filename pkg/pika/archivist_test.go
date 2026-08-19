@@ -393,3 +393,74 @@ func TestEstimateTokens(t *testing.T) {
 		t.Error("8 chars != 2 tokens")
 	}
 }
+
+// Волна 83 (бой 20 авг): tool call от провайдера может прийти без
+// Function-структуры (только internal top-level Name/Arguments,
+// ThoughtSignature в ExtraContent). Цикл обязан нормализовать — иначе
+// Gemini отклоняет второй запрос: 400 «assistant message produced no
+// valid function calls but is followed by tool result messages».
+func TestArchivist_BuildPrompt_NormalizesToolCalls(t *testing.T) {
+	toolCallResp := &providers.LLMResponse{
+		ToolCalls: []providers.ToolCall{
+			{
+				ID:               "call_1",
+				Name:             "search_context",
+				Arguments:        map[string]any{"query": "test", "polarity": "negative"},
+				ThoughtSignature: "sig-1",
+				ExtraContent: &providers.ExtraContent{
+					Google: &providers.GoogleExtra{ThoughtSignature: "sig-1"},
+				},
+			},
+		},
+	}
+	finalResp := &providers.LLMResponse{
+		Content: `{
+			"focus": {"task": "test task", "step": null, "mode": "routine", "blocked": null, "constraints": [], "decisions": []},
+			"memory_brief": {"avoid": [], "constraints": [], "prefer": [], "context": []},
+			"recommended_tools": [], "recommended_skills": []
+		}`,
+	}
+	prov := newMockProvider(toolCallResp, finalResp)
+	a, cleanup := newTestArchivist(t, prov)
+	defer cleanup()
+
+	result, err := a.BuildPrompt(
+		context.Background(),
+		ArchivistInput{SessionKey: "test-session", Message: "deploy nginx"},
+	)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+	if result == nil || result.Focus.Task != "test task" {
+		t.Fatalf("result = %+v", result)
+	}
+
+	prov.mu.Lock()
+	defer prov.mu.Unlock()
+	if len(prov.calls) != 2 {
+		t.Fatalf("LLM calls = %d, want 2 (tool loop)", len(prov.calls))
+	}
+	var assistant, toolResult *providers.Message
+	msgs := prov.calls[1]
+	for i := range msgs {
+		switch msgs[i].Role {
+		case "assistant":
+			assistant = &msgs[i]
+		case "tool":
+			toolResult = &msgs[i]
+		}
+	}
+	if assistant == nil || len(assistant.ToolCalls) != 1 {
+		t.Fatalf("assistant message with tool call not echoed: %+v", msgs)
+	}
+	tc := assistant.ToolCalls[0]
+	if tc.Function == nil || tc.Function.Name != "search_context" {
+		t.Errorf("Function not backfilled: %+v", tc)
+	}
+	if tc.Function == nil || tc.Function.ThoughtSignature != "sig-1" {
+		t.Errorf("ThoughtSignature lost in echo: %+v", tc)
+	}
+	if toolResult == nil || strings.Contains(toolResult.Content, "unknown tool") {
+		t.Errorf("tool result wrong: %+v", toolResult)
+	}
+}
