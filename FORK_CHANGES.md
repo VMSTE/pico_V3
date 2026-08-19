@@ -5,6 +5,12 @@
   - `web/backend/api/pika_dashboard_v2_test.go` — MODIFIED: тестовые данные пишут NULL в error (как прод), лента обязана вернуть все строки
 - **Breaking:** None
 
+## Волна 85 — HandleErrorResponse: полное тело ошибки провайдера · 20 авг 2026
+
+- **Бой 20 авг:** три волны фиксов tool-loop Архивариуса шли вслепую — `HandleErrorResponse` читал 256 байт тела и показывал 128 символов, причина 400 от OpenRouter обрезалась на середине («The c...»).
+- **common.go:** LimitReader 256→8192, ResponsePreview 128→4096 для JSON-ошибок. HTML-путь (WrapHTMLResponseError) не тронут.
+- **Тест** TestHandleErrorResponse_LongJSONBodyPreserved: длинное JSON-тело ошибки доезжает без обрезки.
+
 ## Волна 84 — NormalizeToolCall: backfill type=function (бой 20 авг) · 20 авг 2026
 
 - **Бой:** после волны 83 ошибка Архивариуса сохранилась — тот же 400 «no valid function calls». Корень глубже: парсер ответа (providers/common) не копирует `Type` из wire-ответа, NormalizeToolCall его не восстанавливал → эхо tool_calls уходило без обязательного `type:"function"` → OpenRouter/Gemini отклонял второй заход tool-loop'а.

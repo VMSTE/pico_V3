@@ -800,3 +800,31 @@ func TestParseResponse_WithFunctionThoughtSignature(t *testing.T) {
 		)
 	}
 }
+
+// Волна 85 (бой 20 авг): тело ошибки провайдера доезжает целиком —
+// раньше превью 128 символов обрезало причину 400-х на середине.
+func TestHandleErrorResponse_LongJSONBodyPreserved(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"` +
+			"Tool-call assistant message invalid. " +
+			string(make([]byte, 0)) +
+			`The call_id field is required for each tool call and must match."` +
+			`,"code":400,"metadata":{"raw":"detail"}}`))
+	}))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatalf("http.Get() error = %v", err)
+	}
+	defer resp.Body.Close()
+	err = HandleErrorResponse(resp, server.URL)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "call_id field is required") {
+		t.Fatalf("error body truncated, got: %v", err)
+	}
+}
