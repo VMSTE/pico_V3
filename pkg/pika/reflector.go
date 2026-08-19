@@ -475,6 +475,9 @@ func (r *ReflectorPipeline) callLLM(
 		ctx, msgs, nil, r.cfg.Model, nil,
 	)
 	if err != nil {
+		RecordSatelliteLLMFailure(
+			ctx, r.mem, "reflexor", "review", "", r.cfg.Model, err, llmStart,
+		)
 		return "", fmt.Errorf("LLM call: %w", err)
 	}
 	RecordSatelliteLLM(ctx, r.mem, "reflexor", "review", "", r.cfg.Model, resp, llmStart)

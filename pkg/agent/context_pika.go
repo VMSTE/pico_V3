@@ -74,9 +74,11 @@ func pikaContextManagerFactory(
 			)
 
 			// PIKA-V3: Create Archivist with diagnostics (TZ-v2-9b).
+			archCfg := mapArchivistConfig(al.cfg.ResolveAgentConfig("archivist"))
+			archCfg.Model = resolveSatelliteModelID(al.cfg, archCfg.Model)
 			realArch := pika.NewArchivist(
 				botmem, archProvider, trail, meta,
-				mapArchivistConfig(al.cfg.ResolveAgentConfig("archivist")),
+				archCfg,
 			)
 			realArch.SetDiagnostics(al.diag)
 			arch = realArch
@@ -84,24 +86,30 @@ func pikaContextManagerFactory(
 
 			// PIKA-V3: Create Atomizer pipeline (TZ-v2-9b).
 			atomGen := pika.NewAtomIDGenerator(botmem)
+			atomCfg := mapAtomizerConfig(al.cfg.ResolveAgentConfig("atomizer"))
+			atomCfg.Model = resolveSatelliteModelID(al.cfg, atomCfg.Model)
 			al.atomizer = pika.NewAtomizer(
 				botmem, atomGen, archProvider, al.telemetry,
-				mapAtomizerConfig(al.cfg.ResolveAgentConfig("atomizer")),
+				atomCfg,
 			)
 			al.atomizer.SetDiagnostics(al.diag)
 			logger.InfoCF("pika", "Atomizer wired (TZ-v2-9b)", nil)
 
 			// PIKA-V3: Create Reflector pipeline for cron-driven reflection (TZ-v2-9b).
+			reflCfg := mapReflectorConfig(al.cfg.ResolveAgentConfig("reflexor"))
+			reflCfg.Model = resolveSatelliteModelID(al.cfg, reflCfg.Model)
 			al.reflector = pika.NewReflectorPipeline(
 				botmem, atomGen, archProvider, al.telemetry,
-				mapReflectorConfig(al.cfg.ResolveAgentConfig("reflexor")),
+				reflCfg,
 			)
 			al.reflector.SetDiagnostics(al.diag)
 			logger.InfoCF("pika", "Reflector wired (TZ-v2-9b)", nil)
 
 			// PIKA-V3: Create MCPSecurity pipeline (TZ-v2-9b).
+			guardCfg := mapMCPGuardConfig(al.cfg.ResolveAgentConfig("mcp_guard"))
+			guardCfg.Model = resolveSatelliteModelID(al.cfg, guardCfg.Model)
 			al.mcpSecurity = pika.NewMCPSecurityPipeline(
-				mapMCPGuardConfig(al.cfg.ResolveAgentConfig("mcp_guard")), mapMCPServerPolicies(al.cfg), al.telemetry,
+				guardCfg, mapMCPServerPolicies(al.cfg), al.telemetry,
 			)
 			al.mcpSecurity.SetDiagnostics(al.diag)
 			logger.InfoCF("pika", "MCPSecurity wired (TZ-v2-9b)", nil)
@@ -233,6 +241,25 @@ func resolveArchivistProvider(
 		return nil
 	}
 	return p
+}
+
+// resolveSatelliteModelID разрешает алиас модели (model_name из model_list)
+// в реальный model ID для API — как это делает main-агент. Без этого спутники
+// отправляли провайдеру сырой алиас («background is not a valid model ID»,
+// бой 19 авг). Пустой/неизвестный — возвращаем как есть.
+func resolveSatelliteModelID(cfg *config.Config, modelName string) string {
+	if cfg == nil || strings.TrimSpace(modelName) == "" {
+		return modelName
+	}
+	mc, err := cfg.GetModelConfig(modelName)
+	if err != nil || mc == nil {
+		return modelName
+	}
+	_, modelID := providers.ExtractProtocol(mc)
+	if strings.TrimSpace(modelID) == "" {
+		return modelName
+	}
+	return modelID
 }
 
 // ---------------------------------------------------------------------------

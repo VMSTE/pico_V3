@@ -88,6 +88,13 @@ func (al *AgentLoop) guardAuditMCPTools(
 	ctx context.Context, serverName string, tools []mcpToolSummary,
 ) map[string]bool {
 	guardCfg := pika.DefaultMCPGuardConfig()
+	// Волна 82 (бой 19 авг): честный конфиг mcp_guard из agents.list
+	// (модель, startup_audit_enabled и пр.) вместо дефолтного —
+	// настройки со страницы /subagents раньше игнорировались.
+	if al.cfg != nil {
+		guardCfg = mapMCPGuardConfig(al.cfg.ResolveAgentConfig("mcp_guard"))
+		guardCfg.Model = resolveSatelliteModelID(al.cfg, guardCfg.Model)
+	}
 	if !guardCfg.Enabled || !guardCfg.StartupAuditEnabled {
 		return nil
 	}

@@ -426,6 +426,13 @@ func (a *Archivist) buildUserMessage(
 	return sb.String()
 }
 
+// sessionKeyForTelemetry — снапшот текущей сессии для телеметрии (волна 82).
+func (a *Archivist) sessionKeyForTelemetry() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.currentSessionKey
+}
+
 // runAgenticLoop: prompt -> LLM -> tool_calls -> execute -> LLM -> JSON.
 func (a *Archivist) runAgenticLoop(
 	ctx context.Context,
@@ -441,14 +448,25 @@ func (a *Archivist) runAgenticLoop(
 	toolCallCount := 0
 
 	for {
+		// D-AUDIT-82/волна 82: телеметрия спутника в request_log
+		// (успех и ошибка — раньше Архивариус не писался вообще).
+		llmStart := time.Now()
 		resp, err := a.provider.Chat(
 			ctx, msgs, tools, model, nil,
 		)
 		if err != nil {
+			RecordSatelliteLLMFailure(
+				ctx, a.mem, "archivarius", "build_prompt",
+				a.sessionKeyForTelemetry(), model, err, llmStart,
+			)
 			return nil, fmt.Errorf(
 				"pika/archivist: LLM call: %w", err,
 			)
 		}
+		RecordSatelliteLLM(
+			ctx, a.mem, "archivarius", "build_prompt",
+			a.sessionKeyForTelemetry(), model, resp, llmStart,
+		)
 
 		// No tool calls -> parse final JSON response
 		if len(resp.ToolCalls) == 0 {

@@ -2,6 +2,8 @@ package pika
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -394,5 +396,34 @@ func TestRecordLLMCall_TaskChain(t *testing.T) {
 	}
 	if tag != "deploy" || chain != "chain-1" || gotPos != 2 {
 		t.Errorf("got tag=%q chain=%q pos=%d, want deploy/chain-1/2", tag, chain, gotPos)
+	}
+}
+
+// Волна 82 (бой 19 авг): упавший вызов спутника пишется в request_log —
+// раньше 43 падения Архивариуса не оставили ни одной строки.
+func TestRecordSatelliteLLMFailure(t *testing.T) {
+	bm := setupTelemetryDB(t)
+
+	RecordSatelliteLLMFailure(
+		context.Background(), bm, "archivarius", "build_prompt",
+		"s1", "google/gemini-2.5-flash",
+		fmt.Errorf("API request failed: Status: 400"), time.Now(),
+	)
+
+	var component, model, errText string
+	var respMs int
+	if err := bm.db.QueryRow(
+		`SELECT component, model, COALESCE(error,''), response_ms FROM request_log`,
+	).Scan(&component, &model, &errText, &respMs); err != nil {
+		t.Fatal(err)
+	}
+	if component != "archivarius" {
+		t.Errorf("component = %q, want archivarius", component)
+	}
+	if model != "google/gemini-2.5-flash" {
+		t.Errorf("model = %q", model)
+	}
+	if !strings.Contains(errText, "Status: 400") {
+		t.Errorf("error = %q, want provider status", errText)
 	}
 }
