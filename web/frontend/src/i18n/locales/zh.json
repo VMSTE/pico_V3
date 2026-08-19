@@ -592,7 +592,15 @@
       "col_tokens": "Tokens",
       "col_ms": "延迟",
       "col_error": "错误",
-      "load_error": "加载遥测数据失败"
+      "load_error": "加载遥测数据失败",
+      "agents_title": "代理",
+      "agent": "代理",
+      "ephemeral_label": "临时 / 旧数据",
+      "median_by_component": "按组件的响应时间中位数",
+      "median_by_task_tag": "按任务类型的响应时间中位数",
+      "median_ms": "中位数",
+      "samples": "样本数",
+      "methodology_title": "计算方式"
     },
     "mcp": {
       "description": "连接 MCP 服务器，为智能体提供额外工具。密钥保存在配置文件中，此处不会显示。",

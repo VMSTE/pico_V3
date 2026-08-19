@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 
 import { getPikaOverview, getPikaRequests } from "@/api/pika"
+import type { PikaMedianStats } from "@/api/pika"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 
@@ -161,6 +162,69 @@ export function PikaPage() {
               </div>
             </div>
 
+            {/* PIKA-V3 (D-AUDIT-108): разрез по агентам (main / именованные /
+                ephemeral+legacy). Скрыт на БД без миграции v4. */}
+            {(ov.agents ?? []).length > 0 && (
+              <div>
+                <h2 className="mb-2 text-sm font-semibold">
+                  {t("pages.pika.agents_title")}
+                </h2>
+                <div className="border-border/60 overflow-x-auto rounded-xl border">
+                  <table className="w-full">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className={thClass}>{t("pages.pika.agent")}</th>
+                        <th className={thClass}>{t("pages.pika.requests")}</th>
+                        <th className={thClass}>{t("pages.pika.tokens")}</th>
+                        <th className={thClass}>{t("pages.pika.errors")}</th>
+                        <th className={thClass}>{t("pages.pika.avg_ms")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(ov.agents ?? []).map((a) => (
+                        <tr
+                          key={a.agent_id || "__empty"}
+                          className="border-border/40 border-t"
+                        >
+                          <td className={tdClass + " font-mono"}>
+                            {a.agent_id || t("pages.pika.ephemeral_label")}
+                          </td>
+                          <td className={tdClass}>{formatNumber(a.requests)}</td>
+                          <td className={tdClass}>{formatNumber(a.tokens)}</td>
+                          <td
+                            className={
+                              tdClass +
+                              (a.errors > 0 ? " text-destructive" : "")
+                            }
+                          >
+                            {a.errors}
+                          </td>
+                          <td className={tdClass}>{formatMs(a.avg_ms)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* PIKA-V3 (D-AUDIT-108): медианы по компонентам и типам задач */}
+            {((ov.medians_by_component ?? []).length > 0 ||
+              (ov.medians_by_task_tag ?? []).length > 0) && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <MedianTable
+                  title={t("pages.pika.median_by_component")}
+                  keyLabel={t("pages.pika.component")}
+                  rows={ov.medians_by_component ?? []}
+                />
+                <MedianTable
+                  title={t("pages.pika.median_by_task_tag")}
+                  keyLabel={t("pages.pika.col_task")}
+                  rows={ov.medians_by_task_tag ?? []}
+                />
+              </div>
+            )}
+
             <div>
               <h2 className="mb-2 text-sm font-semibold">
                 {t("pages.pika.recent_title")}
@@ -171,6 +235,7 @@ export function PikaPage() {
                     <tr>
                       <th className={thClass}>{t("pages.pika.col_time")}</th>
                       <th className={thClass}>{t("pages.pika.component")}</th>
+                      <th className={thClass}>{t("pages.pika.agent")}</th>
                       <th className={thClass}>{t("pages.pika.col_model")}</th>
                       <th className={thClass}>{t("pages.pika.col_task")}</th>
                       <th className={thClass}>{t("pages.pika.col_tokens")}</th>
@@ -189,6 +254,9 @@ export function PikaPage() {
                         </td>
                         <td className={tdClass + " font-mono text-xs"}>
                           {r.component}
+                        </td>
+                        <td className={tdClass + " font-mono text-xs"}>
+                          {r.agent_id || "—"}
                         </td>
                         <td className={tdClass + " text-xs"}>{r.model}</td>
                         <td className={tdClass + " text-xs"}>
@@ -213,6 +281,23 @@ export function PikaPage() {
                 </table>
               </div>
             </div>
+
+            {/* PIKA-V3 (D-AUDIT-108): прозрачная методология — что и как
+                считается (приходит с бэкенда, всегда актуальна коду) */}
+            {(ov.methodology ?? []).length > 0 && (
+              <div>
+                <h2 className="mb-2 text-sm font-semibold">
+                  {t("pages.pika.methodology_title")}
+                </h2>
+                <div className="border-border/60 bg-muted/10 rounded-xl border p-4">
+                  <ul className="text-muted-foreground list-inside list-disc space-y-1 text-xs">
+                    {(ov.methodology ?? []).map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -234,6 +319,45 @@ function StatCard({
       <div className="text-muted-foreground text-xs">{label}</div>
       <div className="mt-1 text-2xl font-semibold">{value}</div>
       <div className="text-muted-foreground mt-1 text-xs">{sub}</div>
+    </div>
+  )
+}
+
+// PIKA-V3 (D-AUDIT-108): таблица медиан (компоненты / типы задач).
+function MedianTable({
+  title,
+  keyLabel,
+  rows,
+}: {
+  title: string
+  keyLabel: string
+  rows: PikaMedianStats[]
+}) {
+  const { t } = useTranslation()
+  if (rows.length === 0) return null
+  return (
+    <div>
+      <h2 className="mb-2 text-sm font-semibold">{title}</h2>
+      <div className="border-border/60 overflow-x-auto rounded-xl border">
+        <table className="w-full">
+          <thead className="bg-muted/40">
+            <tr>
+              <th className={thClass}>{keyLabel}</th>
+              <th className={thClass}>{t("pages.pika.median_ms")}</th>
+              <th className={thClass}>{t("pages.pika.samples")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((m) => (
+              <tr key={m.key} className="border-border/40 border-t">
+                <td className={tdClass + " font-mono"}>{m.key}</td>
+                <td className={tdClass}>{formatMs(m.median_ms)}</td>
+                <td className={tdClass}>{formatNumber(m.samples)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
