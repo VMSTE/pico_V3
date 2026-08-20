@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -823,12 +824,13 @@ func (a *Archivist) searchMessages(
 	for rows.Next() {
 		var role string
 		var content sql.NullString
-		var turn int
+		var turnRaw sql.NullString
 		if err := rows.Scan(
-			&role, &content, &turn,
+			&role, &content, &turnRaw,
 		); err != nil {
 			continue
 		}
+		turn := parseTurnID(turnRaw)
 		c := content.String
 		key := fmt.Sprintf("%s:%d", role, turn)
 		seen[key] = true
@@ -863,6 +865,9 @@ func (a *Archivist) searchMessages(
 			ftsArgs = append(ftsArgs, limit*4)
 			// #nosec G202 -- статические фрагменты; значения параметризованы
 			rows2, err2 := a.mem.db.QueryContext(ctx, ftsQ, ftsArgs...)
+			if err2 != nil {
+				log.Printf("WARN pika/archivist: messages FTS: %v (q=%q)", err2, fq)
+			}
 			if err2 == nil {
 				defer rows2.Close()
 				// Волна 90: дедуп эха по содержимому — N копий вопроса
@@ -871,10 +876,11 @@ func (a *Archivist) searchMessages(
 				for rows2.Next() {
 					var role string
 					var content sql.NullString
-					var turn int
-					if err := rows2.Scan(&role, &content, &turn); err != nil {
+					var turnRaw sql.NullString
+					if err := rows2.Scan(&role, &content, &turnRaw); err != nil {
 						continue
 					}
+					turn := parseTurnID(turnRaw)
 					key := fmt.Sprintf("%s:%d", role, turn)
 					if seen[key] {
 						continue
@@ -1155,3 +1161,20 @@ Rules:
 - Negative-first: AVOID section has highest priority.
 - Keep brief concise: soft limit ~5000 tokens.
 `
+
+// parseTurnID (волна 93, бой 20 авг 21:26): pika_session_id в проде —
+// TEXT вида "sk_v1_...:<unix>" / "session-1:<unix>", не число. Scan
+// в int молча убивал КАЖДУЮ строку выдачи (бой: 4 поиска x 0 при живом
+// факте в базе; Архивариус не вернул ни одного сообщения за всю жизнь).
+// Берём хвост после последнего ':'; не распарсилось — 0.
+func parseTurnID(raw sql.NullString) int {
+	if !raw.Valid {
+		return 0
+	}
+	s := raw.String
+	if i := strings.LastIndex(s, ":"); i >= 0 {
+		s = s[i+1:]
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(s))
+	return n
+}

@@ -1156,3 +1156,10 @@ Each entry maps to a single wave/phase and its merged PR.
 - **pipeline_setup.go:** InsertPromptSnapshot переподключён к живому пути — старый писатель был в if-ветке «PikaContextManager вернул SystemPrompt», обесточенной с Phase B (Assemble всегда возвращает пустой). Теперь каждый запрос пишет слепок: хеш, превью, core/brief токены (brief_tokens=0 = брифа не было).
 - **Тесты:** TestSetSpanPreviews, TestArchivist_SpanPreviews (дочерний спан с запросом + превью брифа на родителе).
 - Диагностика любого ответа теперь: prompt_snapshots (что видела модель) → спан archivist (что собрал бриф) → дочерние спаны (что ответила база).
+
+## Волна 93 — Архивариус: Scan pika_session_id в int убивал всю выдачу · 20 авг 2026
+
+- **Бой 20 авг 21:26 (подсветка волны 92 поймала корень):** Архивариус честно искал веером 4 запроса при scope=all (флаг на месте, ключ верный) — и получил messages=0 при живом факте. Корень: searchMessages сканировал pika_session_id в int, а в проде там TEXT "sk_v1_...:<unix>" — Scan падал на каждой строке, continue глотал молча. Архивариус не вернул ни одного сообщения за всю жизнь; тесты не ловили — везде числовые "1".
+- **archivist.go:** NEW parseTurnID (хвост после последнего ':' → int, иначе 0); обе ветки (last-N и FTS) сканируют в sql.NullString; FTS-ошибка err2 больше не проглатывается молча (WARN-лог).
+- **Тест:** TestArchivist_SearchMessages_NonNumericSessionID — на старом коде падает.
+- Цепочка доказательств: trace_spans (4 поиска x 0) → registry (флаг all под верным ключом) → messages (нечисловые id) → код (Scan в int + continue). Ноль догадок — работала подсветка волны 92.
