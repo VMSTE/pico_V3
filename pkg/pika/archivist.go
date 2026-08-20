@@ -797,6 +797,7 @@ func (a *Archivist) searchMessages(
 						Turn:    turn,
 					})
 				}
+				_ = rows2.Err()
 			}
 		}
 	}
