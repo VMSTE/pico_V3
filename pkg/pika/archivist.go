@@ -40,7 +40,8 @@ func DefaultArchivistConfig() ArchivistConfig {
 	return ArchivistConfig{
 		PromptFile: "/workspace/prompts/archivist_build.md",
 		// Волна 86: веер из 3-5 параллельных запросов (мульти-запрос).
-		MaxToolCalls:         8,
+		// Волна 87: 16 — два полных веера + запас; превышение мягкое.
+		MaxToolCalls:         16,
 		BuildPromptTimeoutMs: 30000,
 		MemoryBriefSoftLimit: 5000,
 		MemoryBriefHardLimit: 6000,
@@ -473,6 +474,13 @@ func (a *Archivist) runAgenticLoop(
 		if len(resp.ToolCalls) == 0 {
 			return parseArchivistOutput(resp.Content)
 		}
+		// Волна 87: модель проигнорировала tools=nil после мягкого
+		// потолка — не крутим цикл бесконечно.
+		if tools == nil {
+			return nil, fmt.Errorf(
+				"pika/archivist: soft cap: model kept calling tools",
+			)
+		}
 
 		// Волна 83 (бой 20 авг): нормализация как в main/toolloop.
 		// Провайдер парсит tool calls в internal top-level поля
@@ -493,14 +501,15 @@ func (a *Archivist) runAgenticLoop(
 			ToolCalls: normalizedCalls,
 		})
 
+		// Волна 87 (бой 20 авг): мягкий потолок — превышение лимита
+		// больше не роняет весь BuildPrompt (бриф исчезал из системного
+		// промта, main-модель отвечала вслепую). Недопущенным вызовам
+		// отвечаем notice, финальная итерация идёт без инструментов.
+		capExceeded := false
 		for _, tc := range normalizedCalls {
 			toolCallCount++
 			if toolCallCount > a.cfg.MaxToolCalls {
-				return nil, fmt.Errorf(
-					"pika/archivist: max tool calls "+
-						"exceeded (%d)",
-					a.cfg.MaxToolCalls,
-				)
+				capExceeded = true
 			}
 
 			// Волна 83: имя из нормализованного вызова (Function мог
@@ -512,7 +521,9 @@ func (a *Archivist) runAgenticLoop(
 			}
 
 			var toolResult string
-			if fnName == "search_context" {
+			if capExceeded {
+				toolResult = `{"notice":"tool call limit reached; use collected results and produce final JSON"}`
+			} else if fnName == "search_context" {
 				toolResult = a.handleSearchContext(
 					ctx, fnArgs, isRotation,
 				)
@@ -528,6 +539,11 @@ func (a *Archivist) runAgenticLoop(
 				Content:    toolResult,
 				ToolCallID: tc.ID,
 			})
+		}
+		if capExceeded {
+			// Следующая (финальная) итерация — без инструментов:
+			// модель обязана выдать JSON из собранного.
+			tools = nil
 		}
 	}
 }

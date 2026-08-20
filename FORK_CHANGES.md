@@ -1118,3 +1118,9 @@ Each entry maps to a single wave/phase and its merged PR.
 - **workspace/prompts/archivist_build.md:** секция МУЛЬТИ-ЗАПРОС — 3–5 параллельных search_context за шаг (дословно/фраза/полная фраза/HyDE-ответ/синонимы).
 - **Тесты:** TestAtomizerResponse_SourceTurnsNumbers, TestArchivist_SearchMessages_FTS (капс+многословность), TestSearchMessages_DedupIdentical.
 - Индустриальный ресерч 20.08 (Generative Agents / MemGPT / Zep / Mem0 / Hindsight): дистилляция > сырой поиск; вопрос↔факт асимметрия лечится HyDE и слоем фактов; MMR против эха. Эмбеддинги — осознанно не нужны (решение founder'а).
+
+## Волна 87 — Архивариус: мягкий потолок лимита вызовов · 20 авг 2026
+
+- **Бой 20 авг:** веер мульти-запросов уперся в потолок 8, hard error «max tool calls exceeded» ронял весь BuildPrompt → MEMORY BRIEF исчезал из системного промта, main-модель отвечала вслепую (повторный промах с цветом).
+- **archivist.go:** мягкий потолок — недопущенные вызовы получают `{"notice": ...}`, финальная итерация без инструментов (модель обязана выдать JSON из собранного); страж от бесконечного цикла, если модель игнорирует tools=nil. Дефолт MaxToolCalls 8→16 (два полных веера).
+- **Тесты:** TestArchivist_SoftCap_ProducesBrief (бриф собирается несмотря на превышение), TestArchivist_SoftCap_ModelIgnoresNilTools; устаревший TestArchivist_MaxToolCallsExceeded заменён.
