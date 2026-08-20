@@ -1108,3 +1108,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/agent/agent_mcp_test.go` — MOD: 3 использования hasManager → getManager()
 - **Breaking:** None для рантайма
 - **Verified:** deadcode по pkg/agent = 0 (было 25 на снимке e7587d4); сборка/vet/тесты зелёные
+
+## Волна 86 — Память: оживление Атомизатора + единый стандарт поиска · 20 авг 2026
+
+- **Бой 20 авг (разбор «Пика не помнит цвет»):** факт живой в messages (id 1119), но недостижим. Корни: (1) Атомизатор за всю историю не завершил ни прогона — LLM вернул `source_turns` числами, strict unmarshal убил прогон (0 атомов, 0 архива); (2) searchMessages Архивариуса — однофразный LIKE; (3) searchKnowledge — сырой multiword в FTS MATCH (=AND, слишком строго); (4) эхо-камера: 8 копий вопроса + собственный tool-вывод в выдаче (role=tool индексировался).
+- **atomizer.go:** NEW TurnIDList — толерантный UnmarshalJSON (числа и строки).
+- **archivist.go:** searchMessages на messages_fts (buildFTSQuery + bm25); searchKnowledge через buildFTSQuery; дефолт MaxToolCalls 4→8 (веер запросов).
+- **memory_tools.go:** role='tool' вне выдачи + дедуп почти-дублей (нормализация регистра/пробелов).
+- **workspace/prompts/archivist_build.md:** секция МУЛЬТИ-ЗАПРОС — 3–5 параллельных search_context за шаг (дословно/фраза/полная фраза/HyDE-ответ/синонимы).
+- **Тесты:** TestAtomizerResponse_SourceTurnsNumbers, TestArchivist_SearchMessages_FTS (капс+многословность), TestSearchMessages_DedupIdentical.
+- Индустриальный ресерч 20.08 (Generative Agents / MemGPT / Zep / Mem0 / Hindsight): дистилляция > сырой поиск; вопрос↔факт асимметрия лечится HyDE и слоем фактов; MMR против эха. Эмбеддинги — осознанно не нужны (решение founder'а).

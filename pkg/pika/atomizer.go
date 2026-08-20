@@ -42,14 +42,42 @@ func DefaultAtomizerConfig() AtomizerConfig {
 
 // --- LLM Output Types ---
 
+// TurnIDList — список turn id, толерантный к LLM-вариациям: принимает
+// и строки ("1"), и числа (1). Бой 20 авг: strict unmarshal чисел убил
+// единственный прогон Атомизатора — 0 атомов за всю историю.
+type TurnIDList []string
+
+func (l *TurnIDList) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	out := make([]string, 0, len(raw))
+	for _, r := range raw {
+		var s string
+		if err := json.Unmarshal(r, &s); err == nil {
+			out = append(out, s)
+			continue
+		}
+		var n json.Number
+		if err := json.Unmarshal(r, &n); err == nil {
+			out = append(out, n.String())
+			continue
+		}
+		return fmt.Errorf("source_turns: unsupported element %s", string(r))
+	}
+	*l = out
+	return nil
+}
+
 // AtomLLMOutput represents a single knowledge atom from LLM.
 type AtomLLMOutput struct {
-	Category    string   `json:"category"`
-	Summary     string   `json:"summary"`
-	Detail      string   `json:"detail,omitempty"`
-	Polarity    string   `json:"polarity"`
-	Confidence  float64  `json:"confidence"`
-	SourceTurns []string `json:"source_turns"`
+	Category    string     `json:"category"`
+	Summary     string     `json:"summary"`
+	Detail      string     `json:"detail,omitempty"`
+	Polarity    string     `json:"polarity"`
+	Confidence  float64    `json:"confidence"`
+	SourceTurns TurnIDList `json:"source_turns"`
 }
 
 // atomizerLLMResponse is the full structured output from LLM.

@@ -468,3 +468,46 @@ func TestArchivist_BuildPrompt_NormalizesToolCalls(t *testing.T) {
 		t.Errorf("tool result wrong: %+v", toolResult)
 	}
 }
+
+// Волна 86 (бой 20 авг): капс-факт («СИНИЙ») находится по «синий»,
+// многословный запрос с лишними словами находит факт.
+func TestArchivist_SearchMessages_FTS(t *testing.T) {
+	a, cleanup := newTestArchivist(t, newMockProvider())
+	defer cleanup()
+	ctx := context.Background()
+
+	if _, err := a.mem.SaveMessage(ctx, MessageRow{
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
+		Content: "привет, это тест. мой любимый цвет СИНИЙ", Tokens: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.mem.SaveMessage(ctx, MessageRow{
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
+		Content: "погода завтра дождь", Tokens: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	hasFact := func(hits []MessageHit) bool {
+		for _, h := range hits {
+			if strings.Contains(h.Content, "СИНИЙ") {
+				return true
+			}
+		}
+		return false
+	}
+
+	hits, err := a.searchMessages(ctx, "любимый цвет пользователя Gar", 10, 5)
+	if err != nil {
+		t.Fatalf("searchMessages: %v", err)
+	}
+	if !hasFact(hits) {
+		t.Fatalf("verbose query: fact not found in %d hits", len(hits))
+	}
+
+	hits2, _ := a.searchMessages(ctx, "синий", 10, 5)
+	if !hasFact(hits2) {
+		t.Fatal("caps fact not found by lowercase query")
+	}
+}
