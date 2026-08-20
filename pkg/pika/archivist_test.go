@@ -552,3 +552,29 @@ func TestArchivist_SearchMessages_FTS(t *testing.T) {
 		t.Fatal("caps fact not found by lowercase query")
 	}
 }
+
+// Волна 90 (бой 20 авг): финал прозой вместо JSON — цикл вталкивает
+// nudge и получает JSON со второй попытки, бриф не падает.
+func TestArchivist_NoJSONRetry(t *testing.T) {
+	prose := &providers.LLMResponse{Content: "Нашёл несколько записей в памяти, сейчас оформлю."}
+	final := &providers.LLMResponse{
+		Content: `{"focus":{"task":"t","step":null,"mode":"routine","blocked":null,"constraints":[],"decisions":[]},"memory_brief":{"avoid":[],"constraints":[],"prefer":[],"context":["любимый цвет — синий"]},"recommended_tools":[],"recommended_skills":[]}`,
+	}
+	prov := newMockProvider(prose, final)
+	a, cleanup := newTestArchivist(t, prov)
+	defer cleanup()
+
+	result, err := a.BuildPrompt(
+		context.Background(),
+		ArchivistInput{SessionKey: "s1", Message: "какой мой любимый цвет?"},
+	)
+	if err != nil {
+		t.Fatalf("no-JSON retry must recover: %v", err)
+	}
+	if len(result.Brief.Context) != 1 {
+		t.Fatalf("brief context = %v", result.Brief.Context)
+	}
+	if prov.callCount() != 2 {
+		t.Errorf("LLM calls = %d, want 2 (prose + nudge retry)", prov.callCount())
+	}
+}

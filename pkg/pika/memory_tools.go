@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"golang.org/x/sync/errgroup"
 
@@ -319,8 +320,14 @@ func (ms *MemorySearch) searchMessages(
 		q += ` AND m.chat_id = ?`
 		args = append(args, sessionID)
 	}
-	q += ` ORDER BY score LIMIT ?` // bm25: меньше = лучше
-	args = append(args, limit)
+	// Волна 90 (бой 20 авг): over-fetch x4 + tie-break по id.
+	// LIMIT отсекал в SQL ДО дедупа: топ-10 заполняли 10 копий эха
+	// со скором -8.62, факт с ответом не выезжал из SQL вообще.
+	// Теперь SQL тянет с запасом, дедуп ниже схлопывает дубли,
+	// и слоты достаются разным сообщениям. Финальный срез до limit —
+	// в Execute после скоринга, как и было.
+	q += ` ORDER BY score, m.id LIMIT ?` // bm25: меньше = лучше
+	args = append(args, limit*4)
 	rows, err := ms.bm.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -346,7 +353,7 @@ func (ms *MemorySearch) searchMessages(
 				"pika/memory_tools: messages fts scan: %w", scanErr,
 			)
 		}
-		norm := strings.ToLower(strings.Join(strings.Fields(content.String), " "))
+		norm := normalizeContentKey(content.String)
 		if seenContent[norm] {
 			continue
 		}
@@ -861,4 +868,21 @@ func logLayerWarn(layer string, err error) {
 		"WARN pika/memory_tools: layer %s failed: %v",
 		layer, err,
 	)
+}
+
+// normalizeContentKey — ключ дедупа (волна 90, бой 20 авг): регистр,
+// пунктуация и пробелы не делают сообщения разными («цвет?» ≡ «цвет»).
+// Индустриальный паттерн: нормализация + хеш перед фильтром near-дублей.
+func normalizeContentKey(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r):
+			b.WriteRune(r)
+		case unicode.IsSpace(r):
+			b.WriteByte(' ')
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
 }

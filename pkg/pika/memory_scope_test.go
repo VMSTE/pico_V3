@@ -141,3 +141,68 @@ func TestSearchMessages_DedupIdentical(t *testing.T) {
 		t.Fatalf("dedup: got %d results, want 1", len(res))
 	}
 }
+
+// Волна 90 (бой 20 авг): 12 копий эха + факт, лимит 10. Без over-fetch
+// SQL отдавал бы 10 копий эха, дедуп схлопывал бы их в 1, а факт не
+// доезжал. Теперь: 1 эхо + 1 факт.
+func TestSearchMessages_OverfetchSurfacesFact(t *testing.T) {
+	bm, ms, cleanup := setupSearchTest(t)
+	defer cleanup()
+	ctx := context.Background()
+	for i := 0; i < 12; i++ {
+		if _, err := bm.SaveMessage(ctx, MessageRow{
+			ChatID: "s1", PikaSessionID: "1", Role: "user",
+			Content: "какой мой любимый цвет?", Tokens: 5,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := bm.SaveMessage(ctx, MessageRow{
+		ChatID: "s1", PikaSessionID: "1", Role: "user",
+		Content: "привет, это тест. мой любимый цвет СИНИЙ", Tokens: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := ms.searchMessages(ctx, "любимый цвет", 10, "s1", "all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res) != 2 {
+		t.Fatalf("over-fetch+dedup: got %d results, want 2 (1 echo + 1 fact)", len(res))
+	}
+	found := false
+	for _, r := range res {
+		if strings.Contains(r.Summary, "СИНИЙ") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("fact with the answer not surfaced")
+	}
+}
+
+// Волна 90: «цвет?» и «цвет» — одно сообщение для дедупа.
+func TestSearchMessages_DedupPunctuation(t *testing.T) {
+	bm, ms, cleanup := setupSearchTest(t)
+	defer cleanup()
+	ctx := context.Background()
+	for _, c := range []string{
+		"какой мой любимый цвет?",
+		"какой мой любимый цвет",
+		"Какой мой любимый цвет?!",
+	} {
+		if _, err := bm.SaveMessage(ctx, MessageRow{
+			ChatID: "s1", PikaSessionID: "1", Role: "user",
+			Content: c, Tokens: 5,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := ms.searchMessages(ctx, "цвет", 10, "s1", "all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res) != 1 {
+		t.Fatalf("dedup punctuation: got %d results, want 1", len(res))
+	}
+}

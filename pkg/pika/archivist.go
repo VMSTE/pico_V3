@@ -448,6 +448,11 @@ func (a *Archivist) runAgenticLoop(
 	tools := []providers.ToolDefinition{searchContextToolDef}
 	model := a.cfg.Model
 	toolCallCount := 0
+	// Волна 90 (бой 20 авг): промт ссылается на response_schema API,
+	// но схема в Chat не передаётся — финал может прийти прозой
+	// («no JSON in response»). Даём до 2 nudge-попыток, прежде чем
+	// ронять бриф.
+	noJSONRetries := 0
 
 	for {
 		// D-AUDIT-82/волна 82: телеметрия спутника в request_log
@@ -472,7 +477,28 @@ func (a *Archivist) runAgenticLoop(
 
 		// No tool calls -> parse final JSON response
 		if len(resp.ToolCalls) == 0 {
-			return parseArchivistOutput(resp.Content)
+			out, pErr := parseArchivistOutput(resp.Content)
+			if pErr == nil {
+				return out, nil
+			}
+			noJSONRetries++
+			if noJSONRetries > 2 {
+				return nil, fmt.Errorf(
+					"pika/archivist: no JSON after %d retries: %w",
+					noJSONRetries-1, pErr,
+				)
+			}
+			msgs = append(msgs,
+				providers.Message{Role: "assistant", Content: resp.Content},
+				providers.Message{
+					Role: "user",
+					Content: "Ответь ТОЛЬКО одним JSON-объектом по схеме " +
+						"из системного промта (focus, memory_brief, " +
+						"recommended_tools, recommended_skills). " +
+						"Без текста до и после.",
+				},
+			)
+			continue
 		}
 		// Волна 87: модель проигнорировала tools=nil после мягкого
 		// потолка — не крутим цикл бесконечно.
@@ -797,12 +823,16 @@ func (a *Archivist) searchMessages(
 				ftsQ += ` AND m.chat_id = ?`
 				ftsArgs = append(ftsArgs, a.currentSessionKey)
 			}
-			ftsQ += ` ORDER BY bm25(messages_fts) LIMIT ?`
-			ftsArgs = append(ftsArgs, limit)
+			// Волна 90: over-fetch x4 + tie-break, как в search_memory.
+			ftsQ += ` ORDER BY bm25(messages_fts), m.id LIMIT ?`
+			ftsArgs = append(ftsArgs, limit*4)
 			// #nosec G202 -- статические фрагменты; значения параметризованы
 			rows2, err2 := a.mem.db.QueryContext(ctx, ftsQ, ftsArgs...)
 			if err2 == nil {
 				defer rows2.Close()
+				// Волна 90: дедуп эха по содержимому — N копий вопроса
+				// схлопываются в одну строку, слоты достаются фактам.
+				seenContent := make(map[string]bool)
 				for rows2.Next() {
 					var role string
 					var content sql.NullString
@@ -815,6 +845,11 @@ func (a *Archivist) searchMessages(
 						continue
 					}
 					seen[key] = true
+					ck := normalizeContentKey(content.String)
+					if seenContent[ck] {
+						continue
+					}
+					seenContent[ck] = true
 					hits = append(hits, MessageHit{
 						Role:    role,
 						Content: truncateStr(content.String, 500),
