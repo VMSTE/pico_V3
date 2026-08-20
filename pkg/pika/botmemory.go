@@ -1223,3 +1223,19 @@ func (bm *BotMemory) GetRecentFailEvents(
 	}
 	return out, rows.Err()
 }
+
+// SetSpanPreviews (волна 92, бой 20 авг): input_preview/output_preview
+// существовали в DDL, но ни один писатель их не заполнял — мёртвый
+// канал. Теперь превью входа/выхода спана читаются sqlite-запросом.
+func (bm *BotMemory) SetSpanPreviews(
+	ctx context.Context, spanID, inputPreview, outputPreview string,
+) error {
+	_, err := bm.db.ExecContext(ctx,
+		`UPDATE trace_spans SET input_preview=?, output_preview=?
+		WHERE span_id=?`,
+		strOrNil(inputPreview), strOrNil(outputPreview), spanID)
+	if err != nil {
+		return fmt.Errorf("pika/botmemory: span previews: %w", err)
+	}
+	return nil
+}

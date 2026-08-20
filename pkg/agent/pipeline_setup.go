@@ -124,6 +124,34 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 			promptBuildRequestForTurn(ts, history, summary, ts.userMessage, ts.media),
 		)
 		messages = resolveMediaRefs(messages, p.MediaStore, maxMediaSize)
+
+		// Волна 92 (бой 20 авг): снапшот промта на ЖИВОМ пути.
+		// После Phase B Assemble всегда возвращает пустой SystemPrompt,
+		// поэтому старый писатель в if-ветке обесточен (prompt_snapshots=0
+		// за всю историю). Пишем ВСЁ, включая отсутствие брифа:
+		// brief_tokens=0 — факт «брифа не было», а не догадка.
+		if bm := p.al.botmem; bm != nil && len(messages) > 0 &&
+			messages[0].Role == "system" {
+			sp := messages[0].Content
+			snapTS := time.Now()
+			snapID := fmt.Sprintf("psnap_%d", snapTS.UnixNano())
+			trID := fmt.Sprintf("ptrace_%d", snapTS.UnixNano())
+			tid, _ := bm.GetMaxPikaSessionID(ctx, ts.sessionKey)
+			h := sha256.Sum256([]byte(sp))
+			preview := sp
+			if len(preview) > 200 {
+				preview = preview[:200]
+			}
+			briefTok := 0
+			if idx := strings.Index(sp, "--- MEMORY BRIEF ---"); idx >= 0 {
+				briefTok = (len(sp) - idx) / 4
+			}
+			_ = bm.InsertPromptSnapshot(ctx, snapID, trID, ts.sessionKey,
+				tid, "", "", "",
+				map[string]int{"core": len(sp) / 4, "brief": briefTok},
+				hex.EncodeToString(h[:]), preview,
+				int(time.Since(assembleStart).Milliseconds()))
+		}
 	}
 
 	if !ts.opts.NoHistory {
