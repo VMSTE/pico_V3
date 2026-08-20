@@ -315,3 +315,25 @@ func TestResolveGatewayBinaryForVersionInfoPrefersGatewayCommandPath(t *testing.
 		t.Fatalf("exec path = %q, want %q", got, "/tmp/picoclaw-from-gateway")
 	}
 }
+
+// Волна 89: stale — коммит ядра отличается от коммита лаунчера;
+// «dev»/пустые значения флаг не поднимают (нет ложных тревог).
+func TestIsStaleBuild(t *testing.T) {
+	cases := []struct {
+		gw, ln string
+		want   bool
+	}{
+		{"d3a4a370", "d3a4a370", false},
+		{"d3a4a370", "1b7506e3", true},
+		{"dev", "d3a4a370", false},
+		{"", "d3a4a370", false},
+		{"d3a4a370", "", false},
+		{" dev ", " dev ", false},
+	}
+	for _, c := range cases {
+		if got := isStaleBuild(c.gw, c.ln); got != c.want {
+			t.Errorf("isStaleBuild(%q,%q) = %v, want %v",
+				c.gw, c.ln, got, c.want)
+		}
+	}
+}

@@ -1,4 +1,5 @@
 import {
+  IconAlertTriangle,
   IconBook,
   IconCloudDownload,
   IconLanguage,
@@ -17,6 +18,10 @@ import { useTranslation } from "react-i18next"
 
 import { postLauncherDashboardLogout } from "@/api/launcher-auth"
 import { updateFromSource, type SourceUpdateResult } from "@/api/self-update"
+import {
+  getSystemVersionInfo,
+  type SystemVersionInfo,
+} from "@/api/system"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,6 +74,22 @@ export function AppHeader() {
     !isStopping &&
     canStart &&
     (gwState === "stopped" || gwState === "error")
+
+  // Волна 89 (бой 20 авг): чип сборки — какой коммит реально
+  // обслуживает диалоги; красный, когда ядро старее лаунчера.
+  const [buildInfo, setBuildInfo] =
+    React.useState<SystemVersionInfo | null>(null)
+  React.useEffect(() => {
+    let cancelled = false
+    getSystemVersionInfo()
+      .then((info) => {
+        if (!cancelled) setBuildInfo(info)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [gwState])
 
   const [showStopDialog, setShowStopDialog] = React.useState(false)
   const [showLogoutDialog, setShowLogoutDialog] = React.useState(false)
@@ -233,6 +254,34 @@ export function AppHeader() {
             </TooltipTrigger>
             <TooltipContent>
               {t("header.gateway.restartRequired")}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {/* Build info chip (волна 89) */}
+        {buildInfo?.git_commit && (
+          <Tooltip delayDuration={700}>
+            <TooltipTrigger asChild>
+              <span
+                className={`hidden items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[11px] md:inline-flex ${
+                  buildInfo.stale
+                    ? "border-destructive/40 bg-destructive/10 text-destructive"
+                    : "border-border/60 text-muted-foreground"
+                }`}
+              >
+                {buildInfo.stale && (
+                  <IconAlertTriangle className="size-3" />
+                )}
+                {buildInfo.git_commit.slice(0, 8)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {buildInfo.stale
+                ? t("header.build.stale", "ядро старее лаунчера → make build")
+                : t("header.build.ok", "ядро: {{commit}} · собрано {{time}}", {
+                    commit: buildInfo.git_commit,
+                    time: buildInfo.build_time ?? "?",
+                  })}
             </TooltipContent>
           </Tooltip>
         )}

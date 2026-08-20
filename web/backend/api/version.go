@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -22,6 +23,16 @@ type systemVersionResponse struct {
 	GitCommit string `json:"git_commit,omitempty"`
 	BuildTime string `json:"build_time,omitempty"`
 	GoVersion string `json:"go_version"`
+
+	// Волна 89 (бой 20 авг): сведения о сборке — ядро vs лаунчер.
+	// Весь день диалоги обслуживал старый build/picoclaw, а морда была
+	// свежей — ничто это не показывало. stale=true, когда коммит ядра
+	// отличается от коммита лаунчера.
+	LauncherCommit     string `json:"launcher_commit,omitempty"`
+	LauncherBuildTime  string `json:"launcher_build_time,omitempty"`
+	GatewayBinaryPath  string `json:"gateway_binary_path,omitempty"`
+	GatewayBinaryMtime string `json:"gateway_binary_mtime,omitempty"`
+	Stale              bool   `json:"stale,omitempty"`
 }
 
 type cachedSystemVersion struct {
@@ -65,6 +76,22 @@ func (h *Handler) registerVersionRoutes(mux *http.ServeMux) {
 // handleGetVersion returns runtime version information for web clients.
 func (h *Handler) handleGetVersion(w http.ResponseWriter, r *http.Request) {
 	versionInfo := h.resolveSystemVersionInfo(r.Context())
+
+	// Волна 89: докидываем данные лаунчера и флаг stale ПОСЛЕ кэша —
+	// они дешёвые и должны быть свежими на каждый запрос.
+	versionInfo.LauncherCommit = config.GitCommit
+	launcherBuildTime, _ := config.FormatBuildInfo()
+	versionInfo.LauncherBuildTime = launcherBuildTime
+	if p := strings.TrimSpace(findPicoclawBinaryForInfo()); p != "" {
+		versionInfo.GatewayBinaryPath = p
+		if fi, err := os.Stat(p); err == nil {
+			versionInfo.GatewayBinaryMtime = fi.ModTime().
+				UTC().Format(time.RFC3339)
+		}
+	}
+	versionInfo.Stale = isStaleBuild(
+		versionInfo.GitCommit, config.GitCommit,
+	)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(versionInfo); err != nil {
@@ -254,6 +281,17 @@ func (c *systemVersionCache) resetForTest() {
 		close(c.inflightCh)
 		c.inflightCh = nil
 	}
+}
+
+// isStaleBuild: ядро протухло, когда его коммит известен и отличается
+// от коммита лаунчера (оба — не «dev» и не пустые).
+func isStaleBuild(gatewayCommit, launcherCommit string) bool {
+	g := strings.TrimSpace(gatewayCommit)
+	l := strings.TrimSpace(launcherCommit)
+	if g == "" || l == "" || g == "dev" || l == "dev" {
+		return false
+	}
+	return g != l
 }
 
 // executePicoclawVersion runs the version subcommand against the

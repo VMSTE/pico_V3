@@ -18,6 +18,11 @@ export interface SystemVersionInfo {
   git_commit?: string
   build_time?: string
   go_version: string
+  launcher_commit?: string
+  launcher_build_time?: string
+  gateway_binary_path?: string
+  gateway_binary_mtime?: string
+  stale?: boolean
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
