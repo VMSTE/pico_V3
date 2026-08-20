@@ -33,9 +33,9 @@ func (h *Handler) registerSourceUpdateRoutes(mux *http.ServeMux) {
 
 // handleUpdateFromSource pulls main, rebuilds core + launcher (and the
 // frontend bundle when web/frontend changed), then restarts the gateway.
-// When web/ (launcher code or embedded frontend) changed, the launcher
-// re-execs itself into the freshly built binary (D-AUDIT-110, POSIX); on
-// Windows we report launcher_restart_required for a manual restart.
+// После успешного обновления лаунчер ВСЕГДА re-exec'ится в свежий бинарь
+// (D-AUDIT-110, POSIX; волна 95 — не только при изменениях web/, см. ниже);
+// on Windows we report launcher_restart_required for a manual restart.
 func (h *Handler) handleUpdateFromSource(
 	w http.ResponseWriter, r *http.Request,
 ) {
@@ -120,11 +120,19 @@ func (h *Handler) handleUpdateFromSource(
 	}
 	fmt.Fprintf(&log, "%s\n", gwMsg)
 
+	fmt.Fprintf(&log, "changed files since %s:\n%s\nweb changed: %v\n",
+		before, changed, webChanged)
+
 	relaunching := false
-	if webChanged && selfRelaunchSupported() {
-		// D-AUDIT-110: relaunch the launcher itself via exec. The delay lets
-		// this HTTP response reach the UI first; the new process image keeps
-		// the same PID/terminal and attaches to the gateway restarted above.
+	if selfRelaunchSupported() {
+		// Волна 95 (бой 21 авг 01:05): relaunch ВСЕГДА, не только при
+		// изменениях web/. Иначе после core-only обновления процесс
+		// лаунчера оставался старым → чип версии ложно краснел (ядро на
+		// диске новое ≠ процесс лаунчера старый → stale). Кнопка
+		// «Обновить из main» по ожиданию founder'а = полный рестарт.
+		// D-AUDIT-110: re-exec via exec. The delay lets this HTTP response
+		// reach the UI first; the new process image keeps the same
+		// PID/terminal and attaches to the gateway restarted above.
 		relaunching = true
 		go func() {
 			time.Sleep(1500 * time.Millisecond)
@@ -136,7 +144,7 @@ func (h *Handler) handleUpdateFromSource(
 		Status:                  "ok",
 		Message:                 gwMsg,
 		Log:                     tailLog(log.String(), 4000),
-		LauncherRestartRequired: webChanged && !relaunching,
+		LauncherRestartRequired: !relaunching,
 		Relaunching:             relaunching,
 	})
 }
