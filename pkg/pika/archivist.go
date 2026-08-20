@@ -570,6 +570,14 @@ func (a *Archivist) handleSearchContext(
 		)
 	}
 
+	// Волна 88 (бой 20 авг): телеметрия фан-аута — сколько хитов дал
+	// каждый аспект. Видно в /logs; без этого было неотличимо
+	// «модель не искала» от «база не нашла».
+	log.Printf(
+		"INFO pika/archivist: search_context q=%q knowledge=%d messages=%d tools=%d prefs=%d",
+		params.Query, len(result.Knowledge), len(result.Messages),
+		len(result.CorrelatedTools), len(result.ToolPrefs),
+	)
 	data, _ := json.Marshal(result)
 	return string(data)
 }
