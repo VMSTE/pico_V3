@@ -5,6 +5,9 @@ package pika
 import (
 	"database/sql"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -12,6 +15,25 @@ import (
 // Migrate opens (or creates) the SQLite database at dbPath, applies PRAGMAs,
 // and runs all pending migrations. Returns the open *sql.DB handle.
 func Migrate(dbPath string) (*sql.DB, error) {
+	// Волна 94 (бой 20 авг): страж протечки — тестовый бинарь никогда
+	// не пишет в боевую базу. Поймано данными: go test ./pkg/... положил
+	// строки test-model в request_log и снапшоты в prompt_snapshots
+	// боевого ~/.picoclaw/... Под тестами путь на .picoclaw
+	// перенаправляется во временный файл; WARN виден в выводе тестов.
+	// Суффикс ".test" у os.Args[0] — признак тестового бинаря (без
+	// импорта testing в продакшн-код).
+	if strings.HasSuffix(os.Args[0], ".test") &&
+		strings.Contains(dbPath, ".picoclaw") {
+		f, ferr := os.CreateTemp("", "pika-test-*.db")
+		if ferr == nil {
+			_ = f.Close()
+			log.Printf(
+				"WARN pika/migrate: test binary redirected off prod path %s -> %s",
+				dbPath, f.Name(),
+			)
+			dbPath = f.Name()
+		}
+	}
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("pika/migrate: open %s: %w", dbPath, err)

@@ -1163,3 +1163,10 @@ Each entry maps to a single wave/phase and its merged PR.
 - **archivist.go:** NEW parseTurnID (хвост после последнего ':' → int, иначе 0); обе ветки (last-N и FTS) сканируют в sql.NullString; FTS-ошибка err2 больше не проглатывается молча (WARN-лог).
 - **Тест:** TestArchivist_SearchMessages_NonNumericSessionID — на старом коде падает.
 - Цепочка доказательств: trace_spans (4 поиска x 0) → registry (флаг all под верным ключом) → messages (нечисловые id) → код (Scan в int + continue). Ноль догадок — работала подсветка волны 92.
+
+## Волна 94 — Страж протечки тестов в боевую базу · 21 авг 2026
+
+- **Бой 20 авг (найдено по данным):** go test ./pkg/... писал строки test-model в request_log и снапшоты в prompt_snapshots боевой ~/.picoclaw/workspace/memory/bot_memory.db — негерметичные тесты с дефолтным путём.
+- **migrate.go:** Migrate под тестовым бинарём (os.Args[0] суффикс .test) перенаправляет любой путь с «.picoclaw» во временный файл + WARN в выводе теста. Продакшн-бинари не затронуты.
+- **Тест:** TestMigrate_TestGuardRedirectsProdPath — боеподобный путь не создаётся, перенаправленная база мигрирована.
+- Rename pika_session_id → session_id осознанно НЕ вошёл: аудит по смыслу (D-AUDIT-116) — имя «session» носят 4 разные сущности, предусловие решения 14 мая (upstream вычищен) не выполнено. Отложено до демонтажа pkg/session JSONL-фолбэка.
