@@ -38,8 +38,9 @@ type ArchivistConfig struct {
 // DefaultArchivistConfig returns sensible defaults (D-107).
 func DefaultArchivistConfig() ArchivistConfig {
 	return ArchivistConfig{
-		PromptFile:           "/workspace/prompts/archivist_build.md",
-		MaxToolCalls:         4,
+		PromptFile: "/workspace/prompts/archivist_build.md",
+		// Волна 86: веер из 3-5 параллельных запросов (мульти-запрос).
+		MaxToolCalls:         8,
 		BuildPromptTimeoutMs: 30000,
 		MemoryBriefSoftLimit: 5000,
 		MemoryBriefHardLimit: 6000,
@@ -668,8 +669,14 @@ func (a *Archivist) searchKnowledge(
 	query, polarity string,
 	limit int,
 ) ([]KnowledgeHit, error) {
+	// Волна 86: сырой multiword-запрос в FTS MATCH работал как AND
+	// (слишком строго). buildFTSQuery — OR по словам, как везде.
+	fq := buildFTSQuery(query)
+	if fq == "" {
+		return nil, nil
+	}
 	atoms, err := a.mem.QueryKnowledgeFTS(
-		ctx, query, limit*2,
+		ctx, fq, limit*2,
 	)
 	if err != nil {
 		return nil, err
@@ -750,54 +757,54 @@ func (a *Archivist) searchMessages(
 		return hits, nil
 	}
 
-	// LIKE search across all sessions
+	// Волна 86 (бой 20 авг): FTS5 вместо однофразного LIKE.
+	// LIKE '%весь запрос%' не находил многословное, а регистр кириллицы
+	// («СИНИЙ» vs «синий») SQLite не складывает. messages_fts (unicode61)
+	// решает оба; buildFTSQuery — тот же, что в search_memory.
 	if query != "" {
-		likeQ := `SELECT role, content, pika_session_id
-			FROM messages
-			WHERE content LIKE '%' || ? || '%'`
-		likeArgs := []any{query}
-		if scopeWhere != "" {
-			likeQ += ` AND chat_id = ?`
-			likeArgs = append(likeArgs, a.currentSessionKey)
-		}
-		likeQ += ` ORDER BY id DESC LIMIT ?`
-		likeArgs = append(likeArgs, limit)
-		// #nosec G202 -- static query parts; values parameterized
-		likeRows, lErr := a.mem.db.QueryContext(ctx, likeQ, likeArgs...)
-		if lErr == nil {
-			defer likeRows.Close()
-			for likeRows.Next() {
-				var role string
-				var content sql.NullString
-				var turn int
-				if err := likeRows.Scan(
-					&role, &content, &turn,
-				); err != nil {
-					continue
-				}
-				key := fmt.Sprintf("%s:%d", role, turn)
-				if !seen[key] {
+		fq := buildFTSQuery(query)
+		if fq != "" {
+			ftsQ := `SELECT role, content, pika_session_id
+				FROM messages_fts f
+				JOIN messages m ON m.id = f.rowid
+				WHERE messages_fts MATCH ?`
+			ftsArgs := []any{fq}
+			if scopeWhere != "" {
+				ftsQ += ` AND m.chat_id = ?`
+				ftsArgs = append(ftsArgs, a.currentSessionKey)
+			}
+			ftsQ += ` ORDER BY bm25(messages_fts) LIMIT ?`
+			ftsArgs = append(ftsArgs, limit)
+			// #nosec G202 -- статические фрагменты; значения параметризованы
+			rows2, err2 := a.mem.db.QueryContext(ctx, ftsQ, ftsArgs...)
+			if err2 == nil {
+				defer rows2.Close()
+				for rows2.Next() {
+					var role string
+					var content sql.NullString
+					var turn int
+					if err := rows2.Scan(&role, &content, &turn); err != nil {
+						continue
+					}
+					key := fmt.Sprintf("%s:%d", role, turn)
+					if seen[key] {
+						continue
+					}
 					seen[key] = true
 					hits = append(hits, MessageHit{
-						Role: role,
-						Content: truncateStr(
-							content.String, 500,
-						),
-						Turn: turn,
+						Role:    role,
+						Content: truncateStr(content.String, 500),
+						Turn:    turn,
 					})
 				}
-				if len(hits) >= limit+lastN {
-					break
-				}
+				_ = rows2.Err()
 			}
-			_ = likeRows.Err() // best-effort LIKE fallback
 		}
 	}
 
 	return hits, nil
 }
 
-// extractReasoningKeywords reads recent reasoning_keywords.
 func (a *Archivist) extractReasoningKeywords(
 	ctx context.Context,
 ) ([]string, error) {

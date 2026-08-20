@@ -303,11 +303,14 @@ func (ms *MemorySearch) searchMessages(
 	fq := buildFTSQuery(query) // слова через OR, каждое в кавычках
 	var args []any
 	// #nosec G202 -- WHERE из статических фрагментов; значения параметризованы
+	// Волна 86 (бой 20 авг): role=tool вне выдачи — иначе поиск находит
+	// собственное эхо (выдача из 10 строк = копии вопроса + вложенный
+	// прошлый tool-вывод).
 	q := `SELECT m.id, m.role, m.content, m.ts,
 		bm25(messages_fts) AS score
 		FROM messages_fts f
 		JOIN messages m ON m.id = f.rowid
-		WHERE messages_fts MATCH ?`
+		WHERE messages_fts MATCH ? AND m.role != 'tool'`
 	args = append(args, fq)
 	if scope == "session" {
 		if sessionID == "" {
@@ -326,6 +329,9 @@ func (ms *MemorySearch) searchMessages(
 	}
 	defer rows.Close()
 
+	// Волна 86: дедуп почти-дублей (нормализация регистра/пробелов) —
+	// 8 копий «какой мой любимый цвет?» схлопываются в одну строку.
+	seenContent := make(map[string]bool)
 	var out []rawResult
 	for rows.Next() {
 		var id int64
@@ -340,6 +346,11 @@ func (ms *MemorySearch) searchMessages(
 				"pika/memory_tools: messages fts scan: %w", scanErr,
 			)
 		}
+		norm := strings.ToLower(strings.Join(strings.Fields(content.String), " "))
+		if seenContent[norm] {
+			continue
+		}
+		seenContent[norm] = true
 		// truncateStr is defined in archivist.go (same package)
 		summary := fmt.Sprintf(
 			"[%s] %s", role,

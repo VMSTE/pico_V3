@@ -387,14 +387,14 @@ func TestValidateAtoms_Valid(t *testing.T) {
 			Summary:     "test summary",
 			Polarity:    "positive",
 			Confidence:  0.9,
-			SourceTurns: []string{"1", "2"},
+			SourceTurns: TurnIDList{"1", "2"},
 		},
 		{
 			Category:    "decision",
 			Summary:     "use port 80",
 			Polarity:    "neutral",
 			Confidence:  0.7,
-			SourceTurns: []string{"2"},
+			SourceTurns: TurnIDList{"2"},
 		},
 	}
 	err := validateAtoms(atoms, []string{"1", "2", "3"})
@@ -410,7 +410,7 @@ func TestValidateAtoms_InvalidCategory(t *testing.T) {
 			Summary:     "test",
 			Polarity:    "positive",
 			Confidence:  0.9,
-			SourceTurns: []string{"1"},
+			SourceTurns: TurnIDList{"1"},
 		},
 	}
 	err := validateAtoms(atoms, []string{"1"})
@@ -426,7 +426,7 @@ func TestValidateAtoms_InvalidPolarity(t *testing.T) {
 			Summary:     "test",
 			Polarity:    "bad",
 			Confidence:  0.9,
-			SourceTurns: []string{"1"},
+			SourceTurns: TurnIDList{"1"},
 		},
 	}
 	err := validateAtoms(atoms, []string{"1"})
@@ -444,7 +444,7 @@ func TestValidateAtoms_ConfidenceOutOfRange(
 			Summary:     "test",
 			Polarity:    "positive",
 			Confidence:  1.5,
-			SourceTurns: []string{"1"},
+			SourceTurns: TurnIDList{"1"},
 		},
 	}
 	err := validateAtoms(atoms, []string{"1"})
@@ -460,7 +460,7 @@ func TestValidateAtoms_TurnNotInChunk(t *testing.T) {
 			Summary:     "test",
 			Polarity:    "positive",
 			Confidence:  0.9,
-			SourceTurns: []string{"99"},
+			SourceTurns: TurnIDList{"99"},
 		},
 	}
 	err := validateAtoms(atoms, []string{"1", "2"})
@@ -483,7 +483,7 @@ func TestValidateAtoms_EmptySummary(t *testing.T) {
 			Summary:     "",
 			Polarity:    "positive",
 			Confidence:  0.9,
-			SourceTurns: []string{"1"},
+			SourceTurns: TurnIDList{"1"},
 		},
 	}
 	err := validateAtoms(atoms, []string{"1"})
@@ -613,5 +613,22 @@ func TestComputeTrajectoryMetrics(t *testing.T) {
 	tm2 := computeTrajectoryMetrics(msgs, events, []string{"2"})
 	if tm2.ActualCalls != 1 || tm2.TokensUsed != 999 {
 		t.Errorf("turn2 = %d calls/%d tokens", tm2.ActualCalls, tm2.TokensUsed)
+	}
+}
+
+// Волна 86 (бой 20 авг): LLM вернул source_turns числами — strict
+// unmarshal убивал прогон, атомы не писались. Принимаем оба вида.
+func TestAtomizerResponse_SourceTurnsNumbers(t *testing.T) {
+	raw := `{"atoms":[{"category":"summary","summary":"факт","polarity":"neutral","confidence":0.9,"source_turns":[1,2]}]}`
+	var resp atomizerLLMResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		t.Fatalf("unmarshal numeric source_turns: %v", err)
+	}
+	got := resp.Atoms[0].SourceTurns
+	if len(got) != 2 || got[0] != "1" || got[1] != "2" {
+		t.Fatalf("SourceTurns = %v, want [1 2]", got)
+	}
+	if err := validateAtoms(resp.Atoms, []string{"1", "2"}); err != nil {
+		t.Fatalf("validateAtoms: %v", err)
 	}
 }

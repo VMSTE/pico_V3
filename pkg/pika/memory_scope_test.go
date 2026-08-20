@@ -119,3 +119,25 @@ func TestSearchMemory_UsesToolSessionKey(t *testing.T) {
 		t.Fatalf("default session scope leaked cross-chat: %s", res2.ForLLM)
 	}
 }
+
+// Волна 86: три идентичных сообщения схлопываются в один результат.
+func TestSearchMessages_DedupIdentical(t *testing.T) {
+	bm, ms, cleanup := setupSearchTest(t)
+	defer cleanup()
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		if _, err := bm.SaveMessage(ctx, MessageRow{
+			ChatID: "s1", PikaSessionID: "1", Role: "user",
+			Content: "какой мой любимый цвет?", Tokens: 5,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := ms.searchMessages(ctx, "цвет", 10, "s1", "all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res) != 1 {
+		t.Fatalf("dedup: got %d results, want 1", len(res))
+	}
+}
