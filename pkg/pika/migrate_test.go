@@ -179,3 +179,30 @@ func TestMigrateV4AgentIDColumn(t *testing.T) {
 		t.Fatalf("agent_id column missing in request_log: %v", err)
 	}
 }
+
+// Волна 94: под тестовым бинарём путь на .picoclaw перенаправляется
+// во временный файл — боевой путь не создаётся и не трогается.
+// Регрессия на бой 20 авг (go test писал в продовую bot_memory.db).
+func TestMigrate_TestGuardRedirectsProdPath(t *testing.T) {
+	prodLike := filepath.Join(
+		t.TempDir(), ".picoclaw", "workspace", "memory", "bot_memory.db",
+	)
+	db, err := Migrate(prodLike)
+	if err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := os.Stat(prodLike); !os.IsNotExist(err) {
+		t.Fatalf("prod-like path touched under tests: %v", err)
+	}
+	var v int
+	if err := db.QueryRow(
+		"SELECT COALESCE(MAX(version),0) FROM schema_version",
+	).Scan(&v); err != nil {
+		t.Fatalf("redirected db not migrated: %v", err)
+	}
+	if v < 4 {
+		t.Fatalf("redirected db version = %d, want >= 4", v)
+	}
+}
