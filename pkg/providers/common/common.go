@@ -374,7 +374,10 @@ func DecodeToolCallArguments(raw json.RawMessage, name string) map[string]any {
 // HandleErrorResponse reads a non-200 response body and returns an appropriate error.
 func HandleErrorResponse(resp *http.Response, apiBase string) error {
 	contentType := resp.Header.Get("Content-Type")
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 256))
+	// Волна 85 (бой 20 авг): 256 байт обрезали тело ошибки провайдера
+	// ровно на середине сообщения — диагностика 400-х была вслепую
+	// («The c...» вместо причины). Читаем достаточно для полного JSON.
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 8192))
 	if readErr != nil {
 		return fmt.Errorf("failed to read response: %w", readErr)
 	}
@@ -384,7 +387,7 @@ func HandleErrorResponse(resp *http.Response, apiBase string) error {
 	return fmt.Errorf(
 		"API request failed:\n  Status: %d\n  Body:   %s",
 		resp.StatusCode,
-		ResponsePreview(body, 128),
+		ResponsePreview(body, 4096),
 	)
 }
 
