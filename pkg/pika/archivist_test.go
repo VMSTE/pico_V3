@@ -632,3 +632,40 @@ func TestArchivist_SpanPreviews(t *testing.T) {
 		t.Errorf("parent output_preview = %q, want brief text", parentOut)
 	}
 }
+
+// Волна 93 (бой 20 авг 21:26): в проде pika_session_id — TEXT вида
+// "sk_v1_...:<ts>". Scan в int молча выбрасывал каждую строку →
+// messages=0 при живом факте в базе. На старом коде этот тест падает.
+func TestArchivist_SearchMessages_NonNumericSessionID(t *testing.T) {
+	a, cleanup := newTestArchivist(t, newMockProvider())
+	defer cleanup()
+	ctx := context.Background()
+
+	if _, err := a.mem.SaveMessage(ctx, MessageRow{
+		ChatID:        "sk_v1_old",
+		PikaSessionID: "sk_v1_old:1787244471",
+		Role:          "user",
+		Content:       "привет, это тест. мой любимый цвет СИНИЙ",
+		Tokens:        5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.mem.SetMemoryScope(ctx, "sk_v1_old", "all"); err != nil {
+		t.Fatal(err)
+	}
+	a.currentSessionKey = "sk_v1_old"
+
+	hits, err := a.searchMessages(ctx, "любимый цвет", 10, 5)
+	if err != nil {
+		t.Fatalf("searchMessages: %v", err)
+	}
+	found := false
+	for _, h := range hits {
+		if strings.Contains(h.Content, "СИНИЙ") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("non-numeric pika_session_id emptied results: %v", hits)
+	}
+}
