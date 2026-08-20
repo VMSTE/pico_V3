@@ -812,3 +812,30 @@ func TestGetRecentFailEvents(t *testing.T) {
 		t.Errorf("all-sessions: got %d, want 1", len(all))
 	}
 }
+
+// Волна 92: превью спана — колонки DDL наполняются и читаются.
+func TestSetSpanPreviews(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+	err := bm.InsertSpan(ctx, TraceSpanRow{
+		SpanID: "sp-prev", TraceID: "t1", Component: "archivist",
+		Operation: "build_prompt",
+		StartedAt: parseSQLiteTime("2025-06-01 12:00:00"), Status: "ok",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bm.SetSpanPreviews(
+		ctx, "sp-prev", "вход: вопрос", "выход: бриф",
+	); err != nil {
+		t.Fatal(err)
+	}
+	var in, out string
+	_ = bm.db.QueryRow(
+		`SELECT coalesce(input_preview,''), coalesce(output_preview,'')
+		FROM trace_spans WHERE span_id='sp-prev'`,
+	).Scan(&in, &out)
+	if in != "вход: вопрос" || out != "выход: бриф" {
+		t.Errorf("previews = %q/%q", in, out)
+	}
+}

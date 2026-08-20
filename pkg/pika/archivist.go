@@ -150,6 +150,7 @@ type Archivist struct {
 	// PIKA-V3: transient tracking for atom_usage (TZ-v2-9a F-2)
 	currentSessionKey string
 	currentSpanID     string
+	currentTraceID    string // Волна 92: дочерние спаны search_context
 }
 
 // NewArchivist creates a new Archivist. All dependencies injected.
@@ -239,11 +240,14 @@ func (a *Archivist) BuildPrompt(
 	traceIDarchivist := fmt.Sprintf("trace_archivist_%d", time.Now().UnixNano())
 	a.currentSessionKey = input.SessionKey
 	a.currentSpanID = spanIDarchivist
+	a.currentTraceID = traceIDarchivist
 	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
 		SpanID: spanIDarchivist, TraceID: traceIDarchivist, Component: "archivist", Operation: "build_prompt",
 		// D-AUDIT-63: DDL CHECK не знает "running" — пишем разрешённый статус.
 		StartedAt: time.Now(), Status: "ok",
 	})
+	// Волна 92: наполняется после сериализации брифа, читается в defer.
+	var briefPreview string
 	defer func() {
 		// D-AUDIT-67: error-статус спана + петля диагностики.
 		// WithoutCancel: у archivist ctx уже с таймаутом, а defer идёт после cancel.
@@ -253,6 +257,11 @@ func (a *Archivist) BuildPrompt(
 			st, errType, errMsg = "error", "agentic", retErr.Error()
 		}
 		_ = a.mem.CompleteSpan(dctx, spanIDarchivist, st, nil, errType, errMsg)
+		// Волна 92: превью входа/выхода в спан — цепочку читаем данными.
+		_ = a.mem.SetSpanPreviews(
+			dctx, spanIDarchivist,
+			truncateStr(input.Message, 300), truncateStr(briefPreview, 500),
+		)
 		if a.diag != nil {
 			if retErr != nil {
 				if res := a.diag.Diagnose(dctx, traceIDarchivist); res.SuggestedCR != nil {
@@ -293,6 +302,7 @@ func (a *Archivist) BuildPrompt(
 
 	// Serialize brief
 	briefText := SerializeMemoryBrief(output.MemoryBrief)
+	briefPreview = briefText
 
 	// Size control (F10-5): rough ~4 chars/token
 	if estimateTokens(briefText) > a.cfg.MemoryBriefSoftLimit {
@@ -587,14 +597,39 @@ func (a *Archivist) handleSearchContext(
 		return `{"error":"invalid params"}`
 	}
 
+	// Волна 92: дочерний спан на каждый search_context — запрос, хиты
+	// и первые сниппеты видны в trace_spans.
+	childID := fmt.Sprintf("span_search_%d", time.Now().UnixNano())
+	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
+		SpanID: childID, ParentSpanID: a.currentSpanID,
+		TraceID: a.currentTraceID, Component: "archivist",
+		Operation: "search_context", StartedAt: time.Now(), Status: "ok",
+	})
+
 	result, err := a.executeSearchContext(
 		ctx, params, isRotation,
 	)
 	if err != nil {
+		_ = a.mem.CompleteSpan(ctx, childID, "error", nil, "search", err.Error())
 		return fmt.Sprintf(
 			`{"error":"%s"}`, err.Error(),
 		)
 	}
+
+	snips := ""
+	for i, m := range result.Messages {
+		if i >= 2 {
+			break
+		}
+		snips += " | " + truncateStr(m.Content, 80)
+	}
+	_ = a.mem.SetSpanPreviews(ctx, childID,
+		truncateStr(params.Query, 200),
+		fmt.Sprintf("knowledge=%d messages=%d tools=%d prefs=%d%s",
+			len(result.Knowledge), len(result.Messages),
+			len(result.CorrelatedTools), len(result.ToolPrefs), snips),
+	)
+	_ = a.mem.CompleteSpan(ctx, childID, "ok", nil, "", "")
 
 	// Волна 88 (бой 20 авг): телеметрия фан-аута — сколько хитов дал
 	// каждый аспект. Видно в /logs; без этого было неотличимо

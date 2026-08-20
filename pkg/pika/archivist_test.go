@@ -578,3 +578,57 @@ func TestArchivist_NoJSONRetry(t *testing.T) {
 		t.Errorf("LLM calls = %d, want 2 (prose + nudge retry)", prov.callCount())
 	}
 }
+
+// Волна 92: прогон оставляет читаемый след — превью на родительском
+// спане и дочерний спан search_context с запросом.
+func TestArchivist_SpanPreviews(t *testing.T) {
+	toolCallResp := &providers.LLMResponse{
+		ToolCalls: []providers.ToolCall{
+			{
+				ID: "call_1",
+				Function: &providers.FunctionCall{
+					Name:      "search_context",
+					Arguments: `{"query":"цвет"}`,
+				},
+			},
+		},
+	}
+	finalResp := &providers.LLMResponse{
+		Content: `{"focus":{"task":"t","step":null,"mode":"routine","blocked":null,"constraints":[],"decisions":[]},"memory_brief":{"avoid":[],"constraints":[],"prefer":[],"context":["цвет — синий"]},"recommended_tools":[],"recommended_skills":[]}`,
+	}
+	prov := newMockProvider(toolCallResp, finalResp)
+	a, cleanup := newTestArchivist(t, prov)
+	defer cleanup()
+
+	_, err := a.BuildPrompt(
+		context.Background(),
+		ArchivistInput{SessionKey: "s1", Message: "какой мой любимый цвет?"},
+	)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+
+	var childIn string
+	err = a.mem.db.QueryRow(
+		`SELECT coalesce(input_preview,'') FROM trace_spans
+		WHERE operation='search_context'`,
+	).Scan(&childIn)
+	if err != nil {
+		t.Fatalf("child span missing: %v", err)
+	}
+	if childIn != "цвет" {
+		t.Errorf("child input_preview = %q, want query", childIn)
+	}
+
+	var parentOut string
+	err = a.mem.db.QueryRow(
+		`SELECT coalesce(output_preview,'') FROM trace_spans
+		WHERE component='archivist' AND operation='build_prompt'`,
+	).Scan(&parentOut)
+	if err != nil {
+		t.Fatalf("parent span: %v", err)
+	}
+	if !strings.Contains(parentOut, "синий") {
+		t.Errorf("parent output_preview = %q, want brief text", parentOut)
+	}
+}

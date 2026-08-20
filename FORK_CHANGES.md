@@ -1147,3 +1147,12 @@ Each entry maps to a single wave/phase and its merged PR.
 - **archivist.go:** тот же over-fetch + дедуп по содержимому в FTS-блоке; no-JSON retry — финал прозой получает nudge «ответь ТОЛЬКО JSON» (до 2 попыток) вместо падения брифа. Промт лгал про response_schema (схема в Chat не передаётся) — строка исправлена.
 - **Решение:** write-time дедуп сообщений НЕ делаем — дубли в сене это честная история (токены для триггеров, таймстемпы, provenance). Write-time дедуп нужен позже на слое атомов (как Mem0) — в хвосты.
 - **Тесты:** TestSearchMessages_OverfetchSurfacesFact (12 эхо + факт при лимите 10 → 2 результата, факт виден), TestSearchMessages_DedupPunctuation, TestArchivist_NoJSONRetry.
+
+## Волна 92 — Подсветка цепочки Архивариуса + оживление prompt_snapshots · 20 авг 2026
+
+- **Повод (бой 20 авг):** «почему модель ответила X» отвечалось догадками. Принцип founder'а: в снапшоты идёт ВСЁ, что попадает в основную модель, включая пустое.
+- **botmemory.go:** NEW SetSpanPreviews — колонки input_preview/output_preview были в DDL без единого писателя (мёртвый канал).
+- **archivist.go:** превью на спане build_prompt (вход = сообщение, выход = BriefText; пустой выход = пустой бриф — видимый факт); дочерний спан на каждый search_context (запрос + счётчики хитов + 2 сниппета).
+- **pipeline_setup.go:** InsertPromptSnapshot переподключён к живому пути — старый писатель был в if-ветке «PikaContextManager вернул SystemPrompt», обесточенной с Phase B (Assemble всегда возвращает пустой). Теперь каждый запрос пишет слепок: хеш, превью, core/brief токены (brief_tokens=0 = брифа не было).
+- **Тесты:** TestSetSpanPreviews, TestArchivist_SpanPreviews (дочерний спан с запросом + превью брифа на родителе).
+- Диагностика любого ответа теперь: prompt_snapshots (что видела модель) → спан archivist (что собрал бриф) → дочерние спаны (что ответила база).
