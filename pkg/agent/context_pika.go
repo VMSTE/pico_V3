@@ -412,8 +412,12 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 	if err != nil {
 		return nil, fmt.Errorf("pika/archivist: BuildPrompt: %w", err)
 	}
+	// Волна 88 (бой 20 авг): пустой бриф — отсутствие вклада, а не
+	// ошибка. Промт Архивариуса легально разрешает пустые блоки при
+	// пустом поиске; hard error выкидывал весь MEMORY BRIEF и шумел
+	// в логах на каждый пустой результат.
 	if result == nil || strings.TrimSpace(result.BriefText) == "" {
-		return nil, fmt.Errorf("pika/archivist: empty brief from BuildPrompt")
+		return nil, nil
 	}
 	// PIKA-V3: Progressive Disclosure — promote recommended tools (Block B2)
 	if c.adapter.al.cfg.ToolSelection.Enabled && agent != nil &&
