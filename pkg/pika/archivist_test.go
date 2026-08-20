@@ -199,7 +199,47 @@ func TestArchivist_BuildPrompt_SingleToolCall(t *testing.T) {
 	}
 }
 
-func TestArchivist_MaxToolCallsExceeded(t *testing.T) {
+// Волна 87 (бой 20 авг): мягкий потолок — при превышении лимита
+// BuildPrompt НЕ падает: недопущенный вызов получает notice, финальная
+// итерация без инструментов, бриф собирается из уже найденного.
+func TestArchivist_SoftCap_ProducesBrief(t *testing.T) {
+	tcResp := &providers.LLMResponse{
+		ToolCalls: []providers.ToolCall{
+			{
+				ID: "call_1",
+				Function: &providers.FunctionCall{
+					Name:      "search_context",
+					Arguments: `{"query":"test"}`,
+				},
+			},
+		},
+	}
+	finalResp := &providers.LLMResponse{
+		Content: `{"focus":{"task":"t","step":null,"mode":"routine","blocked":null,"constraints":[],"decisions":[]},"memory_brief":{"avoid":[],"constraints":[],"prefer":[],"context":[]},"recommended_tools":[],"recommended_skills":[]}`,
+	}
+	prov := newMockProvider(tcResp, tcResp, finalResp)
+	a, cleanup := newTestArchivist(t, prov)
+	defer cleanup()
+	a.cfg.MaxToolCalls = 1
+
+	result, err := a.BuildPrompt(
+		context.Background(),
+		ArchivistInput{SessionKey: "s1", Message: "test"},
+	)
+	if err != nil {
+		t.Fatalf("soft cap must not fail BuildPrompt: %v", err)
+	}
+	if result == nil || result.Focus.Task != "t" {
+		t.Fatalf("result = %+v", result)
+	}
+	if prov.callCount() != 3 {
+		t.Errorf("LLM calls = %d, want 3", prov.callCount())
+	}
+}
+
+// Волна 87: модель, игнорирующая tools=nil после мягкого потолка,
+// получает явную ошибку вместо бесконечного цикла.
+func TestArchivist_SoftCap_ModelIgnoresNilTools(t *testing.T) {
 	tcResp := &providers.LLMResponse{
 		ToolCalls: []providers.ToolCall{
 			{
@@ -218,15 +258,16 @@ func TestArchivist_MaxToolCallsExceeded(t *testing.T) {
 	prov := newMockProvider(resps...)
 	a, cleanup := newTestArchivist(t, prov)
 	defer cleanup()
+	a.cfg.MaxToolCalls = 1
 
 	_, err := a.BuildPrompt(
 		context.Background(),
 		ArchivistInput{SessionKey: "s1", Message: "test"},
 	)
 	if err == nil {
-		t.Fatal("expected error for max tool calls")
+		t.Fatal("expected error when model ignores nil tools")
 	}
-	if !strings.Contains(err.Error(), "max tool calls") {
+	if !strings.Contains(err.Error(), "soft cap") {
 		t.Errorf("error = %q", err)
 	}
 }
