@@ -1,4 +1,4 @@
-import { IconArrowUp, IconPhotoPlus, IconX } from "@tabler/icons-react"
+import { IconArrowUp, IconFile, IconPhotoPlus, IconX } from "@tabler/icons-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
@@ -32,6 +32,7 @@ interface ChatComposerProps {
   attachments: ChatAttachment[]
   onInputChange: (value: string) => void
   onAddImages: () => void
+  onPasteFiles?: (files: File[]) => void
   onRemoveAttachment: (index: number) => void
   onSend: () => void
   onContextDetail?: () => void
@@ -45,6 +46,7 @@ export function ChatComposer({
   attachments,
   onInputChange,
   onAddImages,
+  onPasteFiles,
   onRemoveAttachment,
   onSend,
   onContextDetail,
@@ -133,6 +135,21 @@ export function ChatComposer({
     }
   }
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!onPasteFiles) return
+    const files: File[] = []
+    for (const item of Array.from(e.clipboardData?.items ?? [])) {
+      if (item.kind === "file") {
+        const file = item.getAsFile()
+        if (file) files.push(file)
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault()
+      onPasteFiles(files)
+    }
+  }
+
   return (
     <div className="before:bg-background pointer-events-none relative z-10 -mt-[24px] shrink-0 overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] [scrollbar-gutter:stable] before:pointer-events-none before:absolute before:inset-x-0 before:top-[24px] before:bottom-0 before:content-[''] md:px-8 md:pb-8 lg:px-24 xl:px-48">
       <div className="bg-card border-border/60 pointer-events-auto relative mx-auto flex max-w-[1000px] flex-col rounded-2xl border p-3 shadow-sm">
@@ -143,11 +160,20 @@ export function ChatComposer({
                 key={`${attachment.url}-${index}`}
                 className="bg-background relative h-20 w-20 overflow-hidden rounded-xl border"
               >
-                <img
-                  src={attachment.url}
-                  alt={attachment.filename || t("chat.uploadedImage")}
-                  className="h-full w-full object-cover"
-                />
+                {attachment.type === "image" ? (
+                  <img
+                    src={attachment.url}
+                    alt={attachment.filename || t("chat.uploadedImage")}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-1">
+                    <IconFile className="text-muted-foreground size-6" />
+                    <span className="text-muted-foreground w-full truncate px-1 text-center text-[10px]">
+                      {attachment.filename || "file"}
+                    </span>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment(index)}
@@ -194,6 +220,7 @@ export function ChatComposer({
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={placeholder}
           disabled={!canInput}
           title={disabledMessage || undefined}
