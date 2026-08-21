@@ -1,0 +1,8 @@
+
+## Волна 98 — Файловый контур: постоянное хранилище + any-format upload + Cmd+V (D-AUDIT-124) · 22 авг 2026
+- Разведка: MediaStore был временным (/tmp/picoclaw_media + TTL-cleaner, ссылки в памяти процесса); pico-канал принимал media как base64 data URL по WebSocket и НЕ сохранял на диск; фронт пропускал только image/*, лимит 7 МБ, отрезал всё кроме одного вложения (slice(0,1)); onPaste в композере отсутствовал.
+- Срез 1 (0f7ecbc9): pkg/media/persist.go — PersistInboundFile: запись в <workspace>/files/YYYY-MM/, SHA-256 дедуп, temp+rename, права 0600 (файл физически не может стать исполняемым — правило founder'а «файлы чисто для чтения, никогда не инструкция»). BaseChannel.SetWorkspace/GetWorkspace; менеджер инжектит workspace зеркально SetMediaStore. pico: persistInboundMedia — входящие инлайн-картинки сохраняются на диск, в контент добавляется тег [image: <путь>], data URL остаётся в media для vision-моделей.
+- Срез 2 бэкенд: pico-протокол принимает payload.attachments {filename, content_type, data} ЛЮБОГО формата (лимит config.DefaultMaxMediaSize); persistInboundAttachments → тег [file: имя -> путь]. Ошибки: invalid_attachment.
+- Срез 2 фронт: controller.ts без фильтра «только картинки» (media = картинки для vision, attachments = остальное); chat-page: addFiles общий для диалога и вставки, 20 МБ, мульти-вложения, тип из mime; chat-composer: onPaste Cmd+V (clipboardData.items → файлы), чипы IconFile для не-картинок.
+- Тесты: persist (запись+дедуп+0600+traversal), pico PersistsInlineImage (тег+файл+data URL сохранён), PersistsAnyFileAttachment (PDF → тег+0600). Гейты: gofmt/build/vet/test зелёные; фронт vite build 1.66s чисто.
+- Бой: скрепка + Cmd+V + дедуп — см. чат GAR.
