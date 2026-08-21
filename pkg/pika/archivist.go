@@ -147,6 +147,11 @@ type Archivist struct {
 	mu          sync.RWMutex
 	lastResult  *ArchivistResult
 	cachedFocus *Focus
+	// Волна 97 (бой 21 авг 11:17): штампы кэша — бриф валиден только
+	// для той же сессии и того же scope памяти. Иначе /memory all
+	// молча получал протухший бриф от другого чата (0 LLM-вызовов).
+	builtForSessionKey string
+	builtForScope      string
 
 	// PIKA-V3: transient tracking for atom_usage (TZ-v2-9a F-2)
 	currentSessionKey string
@@ -229,10 +234,16 @@ func (a *Archivist) BuildPrompt(
 	input ArchivistInput,
 ) (_ *ArchivistResult, retErr error) {
 	// Fast path: return cached result (~80% of calls)
+	// Волна 97 (бой 21 авг 11:17): кэш валиден только для ТОЙ ЖЕ сессии
+	// и ТОГО ЖЕ scope памяти — смена любого роняет кэш на этой сборке.
 	a.mu.RLock()
 	cached := a.lastResult
+	builtForSession := a.builtForSessionKey
+	builtForScope := a.builtForScope
 	a.mu.RUnlock()
-	if cached != nil {
+	if cached != nil &&
+		builtForSession == input.SessionKey &&
+		builtForScope == a.mem.GetMemoryScope(ctx, input.SessionKey) {
 		return cached, nil
 	}
 
@@ -242,6 +253,10 @@ func (a *Archivist) BuildPrompt(
 	a.currentSessionKey = input.SessionKey
 	a.currentSpanID = spanIDarchivist
 	a.currentTraceID = traceIDarchivist
+	a.mu.Lock()
+	a.builtForSessionKey = input.SessionKey
+	a.builtForScope = a.mem.GetMemoryScope(ctx, input.SessionKey)
+	a.mu.Unlock()
 	_ = a.mem.InsertSpan(ctx, TraceSpanRow{
 		SpanID: spanIDarchivist, TraceID: traceIDarchivist, Component: "archivist", Operation: "build_prompt",
 		// D-AUDIT-63: DDL CHECK не знает "running" — пишем разрешённый статус.

@@ -1182,3 +1182,9 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Бой 21 авг 01:35:** кнопка «Обновить из main» сделала pull+сборку+рестарт gateway, но самоперезапуск лаунчера молча не случился — добивали из терминала. В selfRelaunch оба пути ошибки были глухие (os.Executable → silent return, syscall.Exec → ошибка в пустоту) — root cause невидим.
 - **selfrelaunch_unix.go:** INFO-лог до exec (после успешного exec старый процесс испаряется), WARN на os.Executable, ERROR на syscall.Exec. Терминал лаунчера теперь показывает всю историю relaunch.
 - Живой тест: следующее нажатие кнопки — в терминале ждём «self-relaunch: exec into ...» + баннер запуска нового процесса. Если ERROR — увидим настоящую причину и починим её.
+
+## Волна 97 — Кэш Архивариуса со штампами: сессия + scope · 21 авг 2026
+
+- **Бой 21 авг 11:15–11:18 (поймано лентой /pika):** ход после /memory all получил НОЛЬ вызовов Архивариуса — fast path отдал lastResult, построенный для другого чата при session-scope. Main ушла в fallback (search_memory ×3, нашла — scope=all работает), ответ был хороший, но первый эшелон молча пропустил ход.
+- **archivist.go:** кэш брифа получил штампы builtForSessionKey + builtForScope; fast path валидирует оба (scope читается живьём из registry). Смена scope (/memory all|session) или сессии роняет кэш на следующей сборке — без новой проводки между пакетами.
+- **Тест:** TestArchivist_CacheInvalidatedOnScopeChange (теплый кэш → смена scope → пересборка → смена сессии → пересборка). На старом коде падает.

@@ -669,3 +669,66 @@ func TestArchivist_SearchMessages_NonNumericSessionID(t *testing.T) {
 		t.Fatalf("non-numeric pika_session_id emptied results: %v", hits)
 	}
 }
+
+// Волна 97 (бой 21 авг 11:17): после /memory all ход получил кэш брифа,
+// построенный для ДРУГОГО чата при session-scope — Архивариус не
+// запустился (0 LLM-вызовов). Смена scope или сессии обязана ронять кэш.
+func TestArchivist_CacheInvalidatedOnScopeChange(t *testing.T) {
+	finalJSON := `{
+		"focus": {"task":"t","step":"s","mode":"m",
+		"blocked":null,"constraints":[],"decisions":[]},
+		"memory_brief": {"avoid":[],"constraints":[],
+		"prefer":[],"context":["cached"]},
+		"recommended_tools": []
+	}`
+	prov := newMockProvider(
+		&providers.LLMResponse{Content: finalJSON},
+		&providers.LLMResponse{Content: finalJSON},
+		&providers.LLMResponse{Content: finalJSON},
+		&providers.LLMResponse{Content: finalJSON},
+	)
+	a, cleanup := newTestArchivist(t, prov)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Первая сборка для s1 (scope=session по умолчанию)
+	if _, err := a.BuildPrompt(ctx, ArchivistInput{
+		SessionKey: "s1", Message: "hi",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Та же сессия, тот же scope — кэш
+	if _, err := a.BuildPrompt(ctx, ArchivistInput{
+		SessionKey: "s1", Message: "hi again",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if prov.callCount() != 1 {
+		t.Fatalf("calls = %d, want 1 (warm cache)", prov.callCount())
+	}
+
+	// /memory all → scope сменился → кэш обязан упасть
+	if err := a.mem.SetMemoryScope(ctx, "s1", "all"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.BuildPrompt(ctx, ArchivistInput{
+		SessionKey: "s1", Message: "after scope change",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if prov.callCount() != 2 {
+		t.Fatalf("calls = %d, want 2 (scope change must rebuild)",
+			prov.callCount())
+	}
+
+	// Другая сессия → тоже пересборка (бой: чат Б получил кэш чата А)
+	if _, err := a.BuildPrompt(ctx, ArchivistInput{
+		SessionKey: "s2", Message: "other chat",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if prov.callCount() != 3 {
+		t.Fatalf("calls = %d, want 3 (session change must rebuild)",
+			prov.callCount())
+	}
+}
