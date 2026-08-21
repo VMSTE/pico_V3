@@ -30,6 +30,8 @@ type LoadImageTool struct {
 
 	defaultChannel string
 	defaultChatID  string
+
+	visionCapable bool
 }
 
 func NewLoadImageTool(
@@ -84,6 +86,9 @@ func (t *LoadImageTool) SetContext(channel, chatID string) {
 func (t *LoadImageTool) SetMediaStore(store media.MediaStore) {
 	t.mediaStore = store
 }
+
+// SetVisionCapable marks whether the calling model can actually see images.
+func (t *LoadImageTool) SetVisionCapable(v bool) { t.visionCapable = v }
 
 func (t *LoadImageTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	path, _ := args["path"].(string)
@@ -151,6 +156,9 @@ func (t *LoadImageTool) Execute(ctx context.Context, args map[string]any) *ToolR
 	// up by resolveMediaRefs in agent_media.go and base64-encoded for tool
 	// result messages (role="tool"), so the LLM can see the image content.
 	msg := fmt.Sprintf("Image loaded: %s\n[image: photo]", filename)
+	if !t.visionCapable {
+		msg += "\n[ЧЕСТНО: файл загружен, но у текущей модели НЕТ vision — ты не видишь пиксели. Не описывай и не угадывай содержимое: скажи пользователю, что видишь только путь, а картинку распознает vision-спутник, либо что она тебе недоступна.]"
+	}
 
 	return &ToolResult{
 		ForLLM:  msg,
