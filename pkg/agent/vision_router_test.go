@@ -28,7 +28,8 @@ func TestAmendMessagesWithDistillate(t *testing.T) {
 	if out[0].Media != nil {
 		t.Fatal("media must be stripped")
 	}
-	if !strings.Contains(out[0].Content, "vision-спутником") || !strings.Contains(out[0].Content, "скриншот страницы PR") {
+	if !strings.Contains(out[0].Content, "vision-спутником") ||
+		!strings.Contains(out[0].Content, "скриншот страницы PR") {
 		t.Fatalf("content = %q", out[0].Content)
 	}
 	if out[1].Content != "просто текст" {

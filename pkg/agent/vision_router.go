@@ -27,7 +27,11 @@ func (p *Pipeline) routeMediaToVision(ctx context.Context, ts *turnState, exec *
 
 	items := collectImageDataURLs(exec.messages)
 	if len(items) == 0 {
-		logger.WarnCF("agent", "non-image media dropped: main model has no vision and satellite handles images only", map[string]any{"agent_id": ts.agent.ID})
+		logger.WarnCF(
+			"agent",
+			"non-image media dropped: main model has no vision and satellite handles images only",
+			map[string]any{"agent_id": ts.agent.ID},
+		)
 		exec.messages = stripMessageMedia(exec.messages)
 		exec.callMessages = exec.messages
 		return
