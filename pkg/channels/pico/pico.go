@@ -973,6 +973,13 @@ func (c *PicoChannel) handleMessageSend(pc *picoConn, msg PicoMessage) {
 		Raw:       metadata,
 	}
 
+	if tags := c.persistInboundMedia(media, msg.ID); len(tags) > 0 {
+		if content != "" {
+			content += "\n"
+		}
+		content += strings.Join(tags, "\n")
+	}
+
 	c.HandleInboundContext(c.ctx, chatID, content, media, inboundCtx, sender)
 }
 
