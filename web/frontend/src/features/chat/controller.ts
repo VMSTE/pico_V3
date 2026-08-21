@@ -330,8 +330,7 @@ export function sendChatMessage({
   }
 
   const normalizedContent = content.trim()
-  const normalizedAttachments = attachments
-    .filter((attachment) => attachment.type === "image" && attachment.url)
+  const normalizedAttachments = attachments.filter((attachment) => attachment.url)
     .map((attachment) => ({ ...attachment }))
 
   if (!normalizedContent && normalizedAttachments.length === 0) {
@@ -363,7 +362,17 @@ export function sendChatMessage({
         id,
         payload: {
           content: normalizedContent,
-          media: normalizedAttachments.map((attachment) => attachment.url),
+          media: normalizedAttachments
+            .filter((attachment) => attachment.type === "image")
+            .map((attachment) => attachment.url),
+          attachments: normalizedAttachments
+            .filter((attachment) => attachment.type !== "image")
+            .map((attachment) => ({
+              type: attachment.type,
+              filename: attachment.filename,
+              content_type: attachment.contentType,
+              data: attachment.url,
+            })),
         },
       }),
     )

@@ -549,6 +549,10 @@ func (m *Manager) initChannel(typeName, channelName string) {
 				setter.SetMediaStore(m.mediaStore)
 			}
 		}
+		// Inject workspace if channel supports it
+		if setter, ok := ch.(interface{ SetWorkspace(w string) }); ok {
+			setter.SetWorkspace(m.config.WorkspacePath())
+		}
 		// Inject PlaceholderRecorder if channel supports it
 		if setter, ok := ch.(interface{ SetPlaceholderRecorder(r PlaceholderRecorder) }); ok {
 			setter.SetPlaceholderRecorder(m)

@@ -91,6 +91,7 @@ type BaseChannel struct {
 	maxMessageLength    int
 	groupTrigger        config.GroupTriggerConfig
 	mediaStore          media.MediaStore
+	workspace           string
 	placeholderRecorder PlaceholderRecorder
 	owner               Channel // the concrete channel that embeds this BaseChannel
 	reasoningChannelID  string
@@ -374,6 +375,12 @@ func (c *BaseChannel) SetMediaStore(s media.MediaStore) { c.mediaStore = s }
 
 // GetMediaStore returns the injected MediaStore (may be nil).
 func (c *BaseChannel) GetMediaStore() media.MediaStore { return c.mediaStore }
+
+// SetWorkspace injects the agent workspace path (for persisting inbound files).
+func (c *BaseChannel) SetWorkspace(w string) { c.workspace = w }
+
+// GetWorkspace returns the injected workspace path (may be empty).
+func (c *BaseChannel) GetWorkspace() string { return c.workspace }
 
 // SetPlaceholderRecorder injects a PlaceholderRecorder into the channel.
 func (c *BaseChannel) SetPlaceholderRecorder(r PlaceholderRecorder) {

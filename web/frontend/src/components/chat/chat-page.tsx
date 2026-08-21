@@ -26,15 +26,15 @@ import type { ChatAttachment } from "@/store/chat"
 import { showAssistantDetailsAtom } from "@/store/chat"
 import type { GatewayState } from "@/store/gateway"
 
-const MAX_IMAGE_SIZE_BYTES = 7 * 1024 * 1024
-const MAX_IMAGE_SIZE_LABEL = "7 MB"
-const ALLOWED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "image/bmp",
-])
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
+const MAX_FILE_SIZE_LABEL = "20 MB"
+
+function attachmentTypeFor(mime: string): ChatAttachment["type"] {
+  if (mime.startsWith("image/")) return "image"
+  if (mime.startsWith("audio/")) return "audio"
+  if (mime.startsWith("video/")) return "video"
+  return "file"
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -207,30 +207,19 @@ export function ChatPage() {
     setAttachments((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
   }
 
-  const handleImageSelection = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? [])
-    event.target.value = ""
-
+  const addFiles = async (files: File[]) => {
     if (files.length === 0) {
       return
     }
 
     const nextAttachments: ChatAttachment[] = []
     for (const file of files) {
-      if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-        toast.error(
-          t("chat.invalidImage", {
-            name: file.name,
-          }),
-        )
-        continue
-      }
-
-      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
         toast.error(
           t("chat.imageTooLarge", {
             name: file.name,
-            size: MAX_IMAGE_SIZE_LABEL,
+            size: MAX_FILE_SIZE_LABEL,
+            defaultValue: "{{name}} is too large (max {{size}})",
           }),
         )
         continue
@@ -238,22 +227,30 @@ export function ChatPage() {
 
       try {
         nextAttachments.push({
-          type: "image",
+          type: attachmentTypeFor(file.type),
           filename: file.name,
+          contentType: file.type || "application/octet-stream",
           url: await readFileAsDataUrl(file),
         })
       } catch {
         toast.error(
           t("chat.imageReadFailed", {
             name: file.name,
+            defaultValue: "Failed to read {{name}}",
           }),
         )
       }
     }
 
     if (nextAttachments.length > 0) {
-      setAttachments(nextAttachments.slice(0, 1))
+      setAttachments((prev) => [...prev, ...nextAttachments])
     }
+  }
+
+  const handleImageSelection = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ""
+    await addFiles(files)
   }
 
   const canSubmit =
@@ -376,7 +373,6 @@ export function ChatPage() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp,image/bmp"
         className="hidden"
         onChange={handleImageSelection}
       />
@@ -403,6 +399,7 @@ export function ChatPage() {
           attachments={attachments}
           onInputChange={setInput}
           onAddImages={handleAddImages}
+          onPasteFiles={addFiles}
           onRemoveAttachment={handleRemoveAttachment}
           onSend={handleSend}
           onContextDetail={() => {
