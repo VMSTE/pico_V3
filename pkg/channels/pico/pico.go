@@ -925,8 +925,16 @@ func (c *PicoChannel) handleMessageSend(pc *picoConn, msg PicoMessage) {
 		pc.writeJSON(errMsg)
 		return
 	}
+	attachments, err := parseInlineAttachments(msg.Payload)
+	if err != nil {
+		errMsg := newErrorWithPayload("invalid_attachment", err.Error(), map[string]any{
+			"request_id": msg.ID,
+		})
+		pc.writeJSON(errMsg)
+		return
+	}
 
-	if strings.TrimSpace(content) == "" && len(media) == 0 {
+	if strings.TrimSpace(content) == "" && len(media) == 0 && len(attachments) == 0 {
 		errMsg := newErrorWithPayload("empty_content", "message content is empty", map[string]any{
 			"request_id": msg.ID,
 		})
@@ -973,7 +981,9 @@ func (c *PicoChannel) handleMessageSend(pc *picoConn, msg PicoMessage) {
 		Raw:       metadata,
 	}
 
-	if tags := c.persistInboundMedia(media, msg.ID); len(tags) > 0 {
+	tags := c.persistInboundMedia(media, msg.ID)
+	tags = append(tags, c.persistInboundAttachments(attachments, msg.ID)...)
+	if len(tags) > 0 {
 		if content != "" {
 			content += "\n"
 		}
