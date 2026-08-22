@@ -1252,7 +1252,7 @@ func TestAgentLoop_InterruptGraceful_UsesTerminalNoToolCall(t *testing.T) {
 	}
 }
 
-func TestAgentLoop_InterruptHard_RestoresSession(t *testing.T) {
+func TestAgentLoop_InterruptHard_PreservesSession(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "agent-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -1301,7 +1301,9 @@ func TestAgentLoop_InterruptHard_RestoresSession(t *testing.T) {
 		{Role: "user", Content: "before"},
 		{Role: "assistant", Content: "after"},
 	}
-	defaultAgent.Sessions.SetHistory(sessionKey, originalHistory)
+	for _, m := range originalHistory {
+		defaultAgent.Sessions.AddFullMessage(sessionKey, m)
+	}
 
 	sub := al.SubscribeEvents(16)
 	defer al.UnsubscribeEvents(sub.ID)
@@ -1352,9 +1354,13 @@ func TestAgentLoop_InterruptHard_RestoresSession(t *testing.T) {
 		t.Fatalf("expected no active turn after hard abort, got %#v", active)
 	}
 
+	// Волна 104: жёсткий стоп НЕ откатывает историю — записанное в БД остаётся.
 	finalHistory := defaultAgent.Sessions.GetHistory(sessionKey)
-	if !reflect.DeepEqual(finalHistory, originalHistory) {
-		t.Fatalf("expected history rollback after hard abort, got %#v", finalHistory)
+	if len(finalHistory) < len(originalHistory) {
+		t.Fatalf("history lost messages after hard abort: got %d, want >= %d", len(finalHistory), len(originalHistory))
+	}
+	if !reflect.DeepEqual(finalHistory[:len(originalHistory)], originalHistory) {
+		t.Fatalf("original history must survive hard abort, got %#v", finalHistory)
 	}
 
 	events := collectEventStream(sub.C)

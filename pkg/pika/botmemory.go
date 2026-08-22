@@ -369,15 +369,6 @@ func (bm *BotMemory) GetMaxPikaSessionID(ctx context.Context, sid string) (strin
 	return m, nil
 }
 
-// DeleteAllMessages removes all messages for a session.
-func (bm *BotMemory) DeleteAllMessages(ctx context.Context, sid string) error {
-	_, err := bm.db.ExecContext(ctx, `DELETE FROM messages WHERE chat_id=?`, sid)
-	if err != nil {
-		return fmt.Errorf("pika/botmemory: delete messages: %w", err)
-	}
-	return nil
-}
-
 // SaveEvent persists an event row into the events table.
 func (bm *BotMemory) SaveEvent(ctx context.Context, e EventRow) (int64, error) {
 	res, err := bm.db.ExecContext(ctx,

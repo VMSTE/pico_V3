@@ -506,13 +506,14 @@ func (ts *turnState) ingestMessage(ctx context.Context, al *AgentLoop, msg provi
 	}
 }
 
+// PIKA-V3 (D-AUDIT-127): откат не трогает таблицу messages — записи
+// durable в SQLite WAL с момента записи, delete+re-insert удалён.
+// Остаётся только in-memory часть (summary cache).
 func (ts *turnState) restoreSession(agent *AgentInstance) error {
 	ts.mu.RLock()
-	history := append([]providers.Message(nil), ts.restorePointHistory...)
 	summary := ts.restorePointSummary
 	ts.mu.RUnlock()
 
-	agent.Sessions.SetHistory(ts.sessionKey, history)
 	agent.Sessions.SetSummary(ts.sessionKey, summary)
 	return agent.Sessions.Save(ts.sessionKey)
 }

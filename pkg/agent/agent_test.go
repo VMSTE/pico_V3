@@ -385,7 +385,9 @@ func TestProcessMessage_BtwCommandRunsWithoutPersistingHistory(t *testing.T) {
 		{Role: "user", Content: "We decided to avoid global state."},
 		{Role: "assistant", Content: "Right, keep it request-scoped."},
 	}
-	defaultAgent.Sessions.SetHistory(sessionKey, initialHistory)
+	for _, m := range initialHistory {
+		defaultAgent.Sessions.AddFullMessage(sessionKey, m)
+	}
 	defaultAgent.Sessions.SetSummary(sessionKey, "The team decided to keep state request-scoped.")
 
 	response, err := al.processMessage(context.Background(), msg)
@@ -504,7 +506,9 @@ func TestProcessMessage_BtwCommandUsesIsolatedProvider(t *testing.T) {
 		{Role: "user", Content: "We decided to avoid global state."},
 		{Role: "assistant", Content: "Right, keep it request-scoped."},
 	}
-	defaultAgent.Sessions.SetHistory(mainSessionKey, initialHistory)
+	for _, m := range initialHistory {
+		defaultAgent.Sessions.AddFullMessage(mainSessionKey, m)
+	}
 
 	// Process a /btw command
 	response, err := al.processMessage(context.Background(), bus.InboundMessage{
@@ -3257,7 +3261,9 @@ func TestAgentLoop_ContextExhaustionRetry(t *testing.T) {
 	if defaultAgent == nil {
 		t.Fatal("No default agent found")
 	}
-	defaultAgent.Sessions.SetHistory(sessionKey, history)
+	for _, m := range history {
+		defaultAgent.Sessions.AddFullMessage(sessionKey, m)
+	}
 
 	// Call ProcessDirectWithChannel
 	// Note: ProcessDirectWithChannel calls processMessage which will execute runLLMIteration
@@ -3281,14 +3287,11 @@ func TestAgentLoop_ContextExhaustionRetry(t *testing.T) {
 		t.Errorf("Expected 2 calls (1 fail + 1 success), got %d", provider.currentCall)
 	}
 
-	// Check final history length
+	// Волна 104: legacy-компрессия удалена (Phase C), история append-only.
+	// 5 посеянных + user + assistant = 7 — ничего не выброшено.
 	finalHistory := defaultAgent.Sessions.GetHistory(sessionKey)
-	// We verify that the history has been modified (compressed)
-	// Original length: 5
-	// Expected behavior: compression drops ~50% of Turns
-	// Without compression: 5 + 1 (new user msg) + 1 (assistant msg) = 7
-	if len(finalHistory) >= 7 {
-		t.Errorf("Expected history to be compressed (len < 7), got %d", len(finalHistory))
+	if len(finalHistory) != 7 {
+		t.Errorf("Expected full history preserved (5 seeded + 2 new = 7), got %d", len(finalHistory))
 	}
 }
 
@@ -3335,7 +3338,7 @@ func (p *visionUnsupportedMediaProvider) GetDefaultModel() string {
 	return "mock-fail-model"
 }
 
-func TestAgentLoop_VisionUnsupportedErrorStripsSessionMedia(t *testing.T) {
+func TestAgentLoop_VisionUnsupportedRetryPreservesHistory(t *testing.T) {
 	workspace := t.TempDir()
 	visionTrue := true
 
@@ -3389,11 +3392,14 @@ func TestAgentLoop_VisionUnsupportedErrorStripsSessionMedia(t *testing.T) {
 	if agent == nil {
 		t.Fatal("expected default agent")
 	}
+	// Волна 104: стрип media — ТОЛЬКО in-memory (проверен mediaSeen выше).
+	// История в БД не перезаписывается: сообщение с media лежит как есть.
 	history := agent.Sessions.GetHistory(sessionKey)
-	for i, msg := range history {
-		if len(msg.Media) > 0 {
-			t.Fatalf("history[%d].Media = %v, want no media after stripping", i, msg.Media)
-		}
+	if len(history) == 0 {
+		t.Fatal("history must be preserved after vision retry")
+	}
+	if !slices.Equal(history[0].Media, []string{"data:image/png;base64,abc123"}) {
+		t.Fatalf("history[0].Media = %v, want media preserved in DB (strip is in-memory only)", history[0].Media)
 	}
 
 	timeoutCtx2, cancel2 := context.WithTimeout(context.Background(), responseTimeout)
@@ -3416,11 +3422,12 @@ func TestAgentLoop_VisionUnsupportedErrorStripsSessionMedia(t *testing.T) {
 	if resp2 != "ok" {
 		t.Fatalf("second response = %q, want %q", resp2, "ok")
 	}
-	if provider.calls != 3 {
-		t.Fatalf("calls after second turn = %d, want %d", provider.calls, 3)
+	// Media сохранилось в БД и подхватывается вторым ходом: снова фейл + ретрай.
+	if provider.calls != 4 {
+		t.Fatalf("calls after second turn = %d, want %d", provider.calls, 4)
 	}
-	if !slices.Equal(provider.mediaSeen, []bool{true, false, false}) {
-		t.Fatalf("mediaSeen = %v, want %v", provider.mediaSeen, []bool{true, false, false})
+	if !slices.Equal(provider.mediaSeen, []bool{true, false, true, false}) {
+		t.Fatalf("mediaSeen = %v, want %v", provider.mediaSeen, []bool{true, false, true, false})
 	}
 }
 

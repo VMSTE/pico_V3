@@ -227,30 +227,19 @@ func (s *PikaSessionStore) SetSummary(key, summary string) {
 	s.summaryCache[key] = summary
 }
 
-// SetHistory replaces the full message history for a session.
+// SetHistory — PIKA-V3 (D-AUDIT-127): no-op для БД. История в SQLite WAL
+// durable с момента записи; delete+re-insert (атавизм JSONL-эпохи) удалён.
+// Метод сохранён для интерфейса session.SessionStore.
 func (s *PikaSessionStore) SetHistory(
-	key string, history []providers.Message,
+	key string, _ []providers.Message,
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	err := s.mem.DeleteAllMessages(
-		context.Background(), key,
-	)
-	if err != nil {
-		log.Printf(
-			"pika/session_store: delete msgs %q: %v",
-			key, err,
-		)
-		return
-	}
 	// PIKA-V3: close old session; fresh one created on next access
 	if sl, ok := s.sessions[key]; ok {
 		sl.CloseSession("history_reset")
 		delete(s.sessions, key)
-	}
-	for _, msg := range history {
-		s.addFullMessageLocked(key, msg)
 	}
 }
 
