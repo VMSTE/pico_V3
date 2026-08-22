@@ -3337,6 +3337,7 @@ func (p *visionUnsupportedMediaProvider) GetDefaultModel() string {
 
 func TestAgentLoop_VisionUnsupportedErrorStripsSessionMedia(t *testing.T) {
 	workspace := t.TempDir()
+	visionTrue := true
 
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
@@ -3347,6 +3348,7 @@ func TestAgentLoop_VisionUnsupportedErrorStripsSessionMedia(t *testing.T) {
 				MaxToolIterations: 3,
 			},
 		},
+		ModelList: []*config.ModelConfig{{ModelName: "test-model", Model: "test/test-model", Vision: &visionTrue}},
 	}
 
 	msgBus := bus.NewMessageBus()
