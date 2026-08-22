@@ -10,7 +10,14 @@ import (
 
 func TestCollectImageDataURLs(t *testing.T) {
 	msgs := []providers.Message{
-		{Role: "user", Media: []string{"data:image/png;base64,AAA", "media://abc", "data:image/jpeg;base64,BBB"}},
+		{
+			Role: "user",
+			Media: []string{
+				"data:image/png;base64,AAA",
+				"media://abc",
+				"data:image/jpeg;base64,BBB",
+			},
+		},
 		{Role: "user", Media: nil},
 	}
 	got := collectImageDataURLs(msgs)
