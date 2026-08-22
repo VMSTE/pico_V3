@@ -1215,3 +1215,8 @@ Each entry maps to a single wave/phase and its merged PR.
 - Миграция v5: reasoning_fts (FTS5 + триггеры AI/AD/AU + rebuild старых строк) по образцу knowledge_fts. До этого слой reasoning ходил только по keywords-ярлыкам, сам reasoning_text был невидим.
 - searchReasoning: дословный FTS-блок с bm25 и сниппетом через существующий extractSnippet; type=reasoning с куском мысли. Кейс: «найди мысль, где решила описывать невидимое».
 - AGENT.md: поиск по мыслям задокументирован. Тест: FtsFindsThoughtText. Гейты зелёные.
+
+## Волна 102 — Телеметрия vision-спутника в request_log (D-AUDIT-125) · 22 авг 2026
+- vision_router: RecordSatelliteLLM/Failure (component='vision', direction='describe', sessionKey хода) в обе ветки роутера — паттерн archivarius/atomizer/reflexor. Дорогой вызов gemini больше не невидим: токены, latency, ошибки в ленте /pika.
+- distillateImages возвращает resp (токены больше не выбрасываются). RecordSatelliteLLM nil-safe — botmem=nil в тестах безопасно.
+- Тест: DistillateImages_ReturnsResponseForTelemetry (resp с Usage доезжает). Гейты зелёные.

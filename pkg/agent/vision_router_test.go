@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -57,5 +58,33 @@ func TestAgentModelSupportsVision(t *testing.T) {
 	cfg.ModelList = []*config.ModelConfig{{ModelName: "m2"}}
 	if agentModelSupportsVision(cfg, "m2") {
 		t.Fatal("nil vision must default to false")
+	}
+}
+
+type visionMockProvider struct{ resp *providers.LLMResponse }
+
+func (m *visionMockProvider) Chat(
+	_ context.Context, _ []providers.Message, _ []providers.ToolDefinition,
+	_ string, _ map[string]any,
+) (*providers.LLMResponse, error) {
+	return m.resp, nil
+}
+
+func (m *visionMockProvider) GetDefaultModel() string { return "mock" }
+
+// Волна 102: resp не теряется — токены нужны телеметрии спутника.
+func TestDistillateImages_ReturnsResponseForTelemetry(t *testing.T) {
+	mock := &visionMockProvider{resp: &providers.LLMResponse{
+		Content: "описание",
+		Usage:   &providers.UsageInfo{PromptTokens: 10, CompletionTokens: 5},
+	}}
+	text, resp, err := distillateImages(
+		context.Background(), mock, "m", []string{"data:image/png;base64,AAA"},
+	)
+	if err != nil || text != "описание" {
+		t.Fatalf("text=%q err=%v", text, err)
+	}
+	if resp == nil || resp.Usage == nil || resp.Usage.PromptTokens != 10 {
+		t.Fatalf("resp lost: %#v", resp)
 	}
 }
