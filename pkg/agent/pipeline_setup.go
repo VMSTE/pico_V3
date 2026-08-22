@@ -40,6 +40,13 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 			summary = resp.Summary
 		}
 	}
+	// Волна 105 (ТЗ-105): media из истории не едут в запрос — картинки уже
+	// описаны дистиллятом или доступны модели через load_image по тегу-пути.
+	// Стрип только in-memory (новая копия); БД не меняется.
+	if len(history) > 0 {
+		history = stripMessageMedia(history)
+	}
+
 	ts.captureRestorePoint(history, summary)
 
 	// --- PIKA-V3 BYPASS ---
@@ -167,8 +174,29 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 		}
 	}
 
+	// Волна 105 (ТЗ-105): vision-роутинг ДО персиста. В базу уходит контент
+	// уже с дистиллятом спутника (ищется поиском, переживает ход); Media в
+	// metadata сохраняется — ничего не удаляется. Роутер видит только свежие
+	// media: история выше очищена.
+	exec := newTurnExecution(
+		ts.agent,
+		ts.opts,
+		history,
+		summary,
+		messages,
+	)
+	p.routeMediaToVision(ctx, ts, exec)
+	messages = exec.messages
+
 	if !ts.opts.NoHistory && (strings.TrimSpace(ts.userMessage) != "" || len(ts.media) > 0) {
 		rootMsg := userPromptMessage(ts.userMessage, ts.media)
+		if n := len(exec.messages); n > 0 {
+			if amended := exec.messages[n-1]; amended.Role == "user" {
+				// Контент после resolveMediaRefs и роутинга: с дистиллятом,
+				// если спутник сработал (или честным маркером при его сбое).
+				rootMsg.Content = amended.Content
+			}
+		}
 		if len(rootMsg.Media) > 0 {
 			ts.agent.Sessions.AddFullMessage(ts.sessionKey, rootMsg)
 		} else {
@@ -210,13 +238,6 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 		activeProvider = ts.agent.LightProvider
 	}
 
-	exec := newTurnExecution(
-		ts.agent,
-		ts.opts,
-		history,
-		summary,
-		messages,
-	)
 	exec.activeCandidates = activeCandidates
 	exec.activeModel = activeModel
 	exec.activeProvider = activeProvider

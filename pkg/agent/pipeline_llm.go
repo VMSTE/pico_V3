@@ -83,9 +83,8 @@ func (p *Pipeline) CallLLM(
 
 	exec.llmModel = exec.activeModel
 
-	// PIKA-V3 (D-AUDIT-124 slice 4): proactive vision routing — без vision у main
-	// изображения уходят спутнику, дистиллят заменяет media текстом.
-	p.routeMediaToVision(turnCtx, ts, exec)
+	// PIKA-V3 (волна 105, ТЗ-105): vision-роутинг переехал в SetupTurn — до
+	// персиста сообщения, один раз за ход; дистиллят пишется в БД.
 
 	// BeforeLLM hook
 	if p.Hooks != nil {
