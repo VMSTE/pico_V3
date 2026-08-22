@@ -621,6 +621,52 @@ func (ms *MemorySearch) searchReasoning(
 	pat := "%" + query + "%"
 	var out []rawResult
 
+	// D-AUDIT-125 (wave 101): дословный поиск по тексту мыслей (FTS5).
+	// Ключевой слой для «о чём она думала, когда…» — keywords-ярлыки
+	// такого не содержат. Сниппет — существующий extractSnippet (окно).
+	fq := buildFTSQuery(query)
+	rows, err := ms.bm.db.QueryContext(ctx,
+		`SELECT rl.id, rl.task, rl.mode, rl.ts, rl.reasoning_text,
+		bm25(reasoning_fts) AS score
+		FROM reasoning_log rl
+		JOIN reasoning_fts rf ON rl.id = rf.rowid
+		WHERE reasoning_fts MATCH ?
+		ORDER BY score LIMIT ?`,
+		fq, limit)
+	if err != nil {
+		logLayerWarn("reasoning_fts", err)
+	} else {
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var id int64
+			var task, mode, text sql.NullString
+			var ts string
+			var bm25Score float64
+			if scanErr := rows.Scan(
+				&id, &task, &mode, &ts, &text, &bm25Score,
+			); scanErr != nil {
+				break
+			}
+			snippet := extractSnippet(text.String, query, 200)
+			if snippet == "" {
+				snippet = reasoningSummary(task.String, mode.String)
+			}
+			out = append(out, rawResult{
+				Type:      "reasoning",
+				Summary:   "[мысль] " + snippet,
+				Source:    "reasoning_log",
+				CreatedAt: parseSQLiteTime(ts),
+				RawBM25:   bm25Score,
+				IsFTS:     true,
+				DedupKey:  fmt.Sprintf("reasoning:%d", id),
+				LayerPrio: prioReasoning,
+			})
+		}
+		if err := rows.Err(); err != nil {
+			logLayerWarn("reasoning_fts", err)
+		}
+	}
+
 	// Hot reasoning_log
 	hotRows, hotErr := ms.bm.db.QueryContext(ctx,
 		`SELECT id, task, mode, ts

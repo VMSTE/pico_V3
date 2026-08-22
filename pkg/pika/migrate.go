@@ -80,9 +80,26 @@ func Migrate(dbPath string) (*sql.DB, error) {
 	}
 	migrations := []migration{
 		{version: 1, description: "unified v3 — initial schema", ddl: migrationV1},
-		{version: 2, description: "rename session_id->chat_id, turn_id->pika_session_id", ddl: migrationV2},
-		{version: 3, description: "messages_fts — FTS5+BM25 message search (D-AUDIT-106)", ddl: migrationV3},
-		{version: 4, description: "request_log.agent_id — named agent identity (D-AUDIT-108)", ddl: migrationV4},
+		{
+			version:     2,
+			description: "rename session_id->chat_id, turn_id->pika_session_id",
+			ddl:         migrationV2,
+		},
+		{
+			version:     3,
+			description: "messages_fts — FTS5+BM25 message search (D-AUDIT-106)",
+			ddl:         migrationV3,
+		},
+		{
+			version:     4,
+			description: "request_log.agent_id — named agent identity (D-AUDIT-108)",
+			ddl:         migrationV4,
+		},
+		{
+			version:     5,
+			description: "reasoning_fts — FTS5 по тексту мыслей (D-AUDIT-125, wave 101)",
+			ddl:         migrationV5,
+		},
 	}
 
 	for _, m := range migrations {
@@ -500,6 +517,37 @@ CREATE TABLE IF NOT EXISTS daily_metrics (
 const migrationV4 = `
 ALTER TABLE request_log ADD COLUMN agent_id TEXT NOT NULL DEFAULT '';
 CREATE INDEX idx_reqlog_agent ON request_log(agent_id, ts);
+`
+
+// PIKA-V3 (D-AUDIT-125, wave 101): reasoning_fts — полнотекст по reasoning_text.
+// До этого слой reasoning искал только по keywords-ярлыкам; сами мысли были
+// невидимы для поиска («найди мысль, где решила описывать невидимое»).
+// По образцу knowledge_fts: contentless-таблица + триггеры + rebuild для старых строк.
+const migrationV5 = `
+CREATE VIRTUAL TABLE IF NOT EXISTS reasoning_fts USING fts5(
+    reasoning_text,
+    content = reasoning_log,
+    content_rowid = id
+);
+
+CREATE TRIGGER rlog_fts_ai AFTER INSERT ON reasoning_log BEGIN
+    INSERT INTO reasoning_fts(rowid, reasoning_text)
+    VALUES (new.id, new.reasoning_text);
+END;
+
+CREATE TRIGGER rlog_fts_ad AFTER DELETE ON reasoning_log BEGIN
+    INSERT INTO reasoning_fts(reasoning_fts, rowid, reasoning_text)
+    VALUES ('delete', old.id, old.reasoning_text);
+END;
+
+CREATE TRIGGER rlog_fts_au AFTER UPDATE ON reasoning_log BEGIN
+    INSERT INTO reasoning_fts(reasoning_fts, rowid, reasoning_text)
+    VALUES ('delete', old.id, old.reasoning_text);
+    INSERT INTO reasoning_fts(rowid, reasoning_text)
+    VALUES (new.id, new.reasoning_text);
+END;
+
+INSERT INTO reasoning_fts(reasoning_fts) VALUES('rebuild');
 `
 
 // PIKA-V3: migrationV2 — rename session_id->chat_id, turn_id->pika_session_id (TEXT).

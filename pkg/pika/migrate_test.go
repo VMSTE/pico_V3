@@ -23,8 +23,8 @@ func TestMigrateNewDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 4 {
-		t.Fatalf("expected version 4, got %d", ver)
+	if ver != 5 {
+		t.Fatalf("expected version 5, got %d", ver)
 	}
 
 	// Check key tables exist
@@ -36,7 +36,7 @@ func TestMigrateNewDB(t *testing.T) {
 		"reasoning_log_archive": false, "trace_spans": false,
 		"prompt_versions": false, "prompt_snapshots": false,
 		"atom_usage": false, "daily_metrics": false,
-		"schema_version": false,
+		"schema_version": false, "reasoning_fts": false,
 	}
 	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
 	if err != nil {
@@ -62,7 +62,10 @@ func TestMigrateNewDB(t *testing.T) {
 	}
 
 	// Check triggers (FTS5 sync)
-	triggers := []string{"katoms_ai", "katoms_ad", "katoms_au", "events_archive_ai"}
+	triggers := []string{
+		"katoms_ai", "katoms_ad", "katoms_au", "events_archive_ai",
+		"rlog_fts_ai", "rlog_fts_ad", "rlog_fts_au",
+	}
 	for _, trg := range triggers {
 		var cnt int
 		if qErr := db.QueryRow(
@@ -96,8 +99,8 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 4 {
-		t.Fatalf("expected version 4 after second Migrate, got %d", ver)
+	if ver != 5 {
+		t.Fatalf("expected version 5 after second Migrate, got %d", ver)
 	}
 }
 

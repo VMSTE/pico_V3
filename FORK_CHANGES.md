@@ -1210,3 +1210,8 @@ Each entry maps to a single wave/phase and its merged PR.
 - search_memory += feedback=true: слой по messages.metadata.feedback_signal (wrong/correction/rephrase — метка ставится ClassifyFeedback на персисте, живая проводка D-85/D-AUDIT-67) + предмет разноса (предыдущий ответ ассистента по монотонному id). around=N: ±N соседей вокруг хита (KWIC-окно). Без новых моделей/таблиц/субагентов.
 - AGENT.md: ссылка на прошлый конфликт → feedback=true.
 - Тесты: FindMarkWithSubject (метка+предмет), ExpandAround (соседи). Гейты зелёные.
+
+## Волна 101 — search_memory: полнотекст по мыслям (D-AUDIT-125) · 22 авг 2026
+- Миграция v5: reasoning_fts (FTS5 + триггеры AI/AD/AU + rebuild старых строк) по образцу knowledge_fts. До этого слой reasoning ходил только по keywords-ярлыкам, сам reasoning_text был невидим.
+- searchReasoning: дословный FTS-блок с bm25 и сниппетом через существующий extractSnippet; type=reasoning с куском мысли. Кейс: «найди мысль, где решила описывать невидимое».
+- AGENT.md: поиск по мыслям задокументирован. Тест: FtsFindsThoughtText. Гейты зелёные.
