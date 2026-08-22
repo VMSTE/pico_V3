@@ -24,6 +24,9 @@ import (
 // background провайдер использует Архивариус (memory brief при сборке
 // промпта), поэтому vision-вызовы считаем по маркеру "Опиши изображение."
 // в теле запроса, остальным отвечаем нейтральным пустым JSON.
+// visionTestMedia — тестовая картинка (data URL), общая для кейсов волны 105.
+var visionTestMedia = []string{"data:image/png;base64,abc123"}
+
 func newVisionPersistTestLoop(
 	t *testing.T, visionHits *atomic.Int32, failSatellite bool,
 ) (*AgentLoop, *visionUnsupportedMediaProvider) {
@@ -103,7 +106,9 @@ func TestAgentLoop_VisionDistillatePersistedAndSatelliteOnce(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), responseTimeout)
 	defer cancel()
 
-	resp, err := al.processMessage(ctx, visionTestInbound(sessionKey, "m1", "что на скрине?", []string{"data:image/png;base64,abc123"}))
+	resp, err := al.processMessage(ctx, visionTestInbound(
+		sessionKey, "m1", "что на скрине?", visionTestMedia,
+	))
 	if err != nil {
 		t.Fatalf("turn1 processMessage() error = %v", err)
 	}
@@ -164,7 +169,9 @@ func TestAgentLoop_VisionSatelliteFailureMarkerPersisted(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), responseTimeout)
 	defer cancel()
 
-	resp, err := al.processMessage(ctx, visionTestInbound(sessionKey, "m1", "что на скрине?", []string{"data:image/png;base64,abc123"}))
+	resp, err := al.processMessage(ctx, visionTestInbound(
+		sessionKey, "m1", "что на скрине?", visionTestMedia,
+	))
 	if err != nil {
 		t.Fatalf("processMessage() error = %v", err)
 	}
