@@ -12,7 +12,12 @@ func TestSearchFeedbackMarks_FindsMarkWithSubject(t *testing.T) {
 	ctx := context.Background()
 	msgs := []MessageRow{
 		{ChatID: "s1", PikaSessionID: "1", Role: "user", Content: "что на скрине?"},
-		{ChatID: "s1", PikaSessionID: "1", Role: "assistant", Content: "на скрине tmux с docker ps"},
+		{
+			ChatID:        "s1",
+			PikaSessionID: "1",
+			Role:          "assistant",
+			Content:       "на скрине tmux с docker ps",
+		},
 		{ChatID: "s1", PikaSessionID: "1", Role: "user", Content: "ЗАЧЕМ ТЫ ВРЕШЬ"},
 	}
 	for _, m := range msgs {

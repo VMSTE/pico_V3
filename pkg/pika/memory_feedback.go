@@ -109,7 +109,7 @@ func (ms *MemorySearch) expandAround(
 			FROM messages
 			WHERE chat_id=? AND id BETWEEN ? AND ? AND role != 'tool'
 			ORDER BY id`,
-			r.ChatID, r.MsgID-around, r.MsgID+around,
+			r.ChatID, r.MsgID-int64(around), r.MsgID+int64(around),
 		)
 		if err != nil {
 			continue
