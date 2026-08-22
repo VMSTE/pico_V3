@@ -412,13 +412,15 @@ func TestAgentLoop_EmitsContextCompressEventOnRetry(t *testing.T) {
 		t.Fatal("expected default agent")
 	}
 
-	defaultAgent.Sessions.SetHistory("session-1", []providers.Message{
+	for _, m := range []providers.Message{
 		{Role: "user", Content: "Old message 1"},
 		{Role: "assistant", Content: "Old response 1"},
 		{Role: "user", Content: "Old message 2"},
 		{Role: "assistant", Content: "Old response 2"},
 		{Role: "user", Content: "Trigger message"},
-	})
+	} {
+		defaultAgent.Sessions.AddFullMessage("session-1", m)
+	}
 
 	sub := al.SubscribeEvents(16)
 	defer al.UnsubscribeEvents(sub.ID)

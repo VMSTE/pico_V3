@@ -230,7 +230,7 @@ func (p *Pipeline) CallLLM(
 			exec.callMessages = stripMessageMedia(exec.callMessages)
 			if !ts.opts.NoHistory {
 				exec.history = stripMessageMedia(exec.history)
-				ts.agent.Sessions.SetHistory(ts.sessionKey, exec.history)
+				// PIKA-V3 (D-AUDIT-127): БД не перезаписываем, strip только in-memory
 				for i := range ts.persistedMessages {
 					ts.persistedMessages[i].Media = nil
 				}

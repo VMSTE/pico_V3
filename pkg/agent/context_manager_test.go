@@ -262,7 +262,9 @@ func TestPikaAssemble_Passthrough(t *testing.T) {
 		{Role: "user", Content: "hello"},
 		{Role: "assistant", Content: "hi there"},
 	}
-	agent.Sessions.SetHistory("test-session", history)
+	for _, m := range history {
+		agent.Sessions.AddFullMessage("test-session", m)
+	}
 
 	resp, err := al.contextManager.Assemble(context.Background(), &AssembleRequest{
 		SessionKey: "test-session",

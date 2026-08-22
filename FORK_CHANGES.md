@@ -1226,3 +1226,10 @@ Each entry maps to a single wave/phase and its merged PR.
 - Миграция v6: детерминированный бэкфилл провенанса старых атомов через source_turns (архив → fallback hot, PK сохраняется). Без LLM, идемпотентно, метка в history.
 - search_memory += full=true: снятие обрезки по требованию (двухстадийный retrieval: сниппет → сырой текст хита — messages/feedback/archive-blob/reasoning). Бой 16:30: модель 12+ вызовов искала полный transcript — теперь достаётся одним параметром.
 - AGENT.md: full=true задокументирован. Тесты: FullReturnsUntruncated, InsertAtom_SetsSourceMessageID, MigrateV6_BackfillsProvenance (+идемпотентность).
+
+## Волна 104 — Отключение деструктивного SetHistory (D-AUDIT-127, ТЗ-104) · 22 авг 2026
+
+- **Повод (бой 21→22 авг):** vision-ретрай в pipeline_llm.go вызывал SetHistory на горячем пути → DeleteAllMessages сносил всю историю чата, перезаписывал только текущей сессией. Нарушение инварианта append-only (ТЗ-v2-1b-v2-B-fix4, D-78).
+- **Код:** SetHistory → no-op для БД (CloseSession-блок сохранён); restoreSession → no-op + кэш summary; HardAbort без отката истории; DeleteAllMessages удалён из BotMemory — механизма удаления сообщений в коде не осталось; реактивный vision-ретрай стрипит media только in-memory.
+- **Тесты:** 9 переписаны под новую семантику (сев через AddFullMessage; аборт/стоп/ретрай = история сохранена); TestSetHistory — no-op семантика; убраны ложно-зелёные ассерты legacy-компрессии (Phase C).
+- **Гейты:** gofmt/build/vet/test зелёные (pkg/pika + pkg/agent).

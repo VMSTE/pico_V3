@@ -484,13 +484,8 @@ func (al *AgentLoop) HardAbort(sessionKey string) error {
 	// Use isHardAbort=true for hard abort to immediately cancel all children.
 	ts.Finish(true)
 
-	// Roll back session history to the state before the turn started.
-	if ts.session != nil {
-		history := ts.session.GetHistory(sessionKey)
-		if ts.initialHistoryLength < len(history) {
-			ts.session.SetHistory(sessionKey, history[:ts.initialHistoryLength])
-		}
-	}
+	// PIKA-V3 (D-AUDIT-127): откат истории удалён. Стоп = остановка
+	// процесса; таблица messages не трогается никогда.
 
 	return nil
 }

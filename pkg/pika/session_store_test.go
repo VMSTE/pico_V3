@@ -238,36 +238,31 @@ func TestGetSetSummary(t *testing.T) {
 	}
 }
 
+// D-AUDIT-127 (волна 104): SetHistory — no-op для БД: не удаляет
+// и не перезаписывает messages.
 func TestSetHistory(t *testing.T) {
 	store, _ := newTestSessionStore(t)
 	key := "test-set-history"
 
-	msgs := []providers.Message{
-		{Role: "user", Content: "one"},
-		{Role: "assistant", Content: "two"},
-		{Role: "user", Content: "three"},
-	}
-	store.SetHistory(key, msgs)
+	store.AddMessage(key, "user", "one")
+	store.AddMessage(key, "assistant", "two")
+
+	store.SetHistory(key, []providers.Message{
+		{Role: "user", Content: "replacement"},
+	})
 
 	history := store.GetHistory(key)
-	if len(history) != 3 {
+	if len(history) != 2 {
 		t.Fatalf(
-			"expected 3 messages, got %d", len(history),
+			"SetHistory changed history: %d messages, want 2",
+			len(history),
 		)
 	}
-	for i, want := range msgs {
-		if history[i].Role != want.Role {
-			t.Errorf(
-				"msg[%d].Role = %q, want %q",
-				i, history[i].Role, want.Role,
-			)
-		}
-		if history[i].Content != want.Content {
-			t.Errorf(
-				"msg[%d].Content = %q, want %q",
-				i, history[i].Content, want.Content,
-			)
-		}
+	if history[0].Content != "one" || history[1].Content != "two" {
+		t.Errorf(
+			"content changed: %q, %q",
+			history[0].Content, history[1].Content,
+		)
 	}
 }
 
