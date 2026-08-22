@@ -1196,3 +1196,11 @@ Each entry maps to a single wave/phase and its merged PR.
 - Срез 2 фронт: controller.ts без фильтра «только картинки» (media = картинки для vision, attachments = остальное); chat-page: addFiles общий для диалога и вставки, 20 МБ, мульти-вложения, тип из mime; chat-composer: onPaste Cmd+V (clipboardData.items → файлы), чипы IconFile для не-картинок.
 - Тесты: persist (запись+дедуп+0600+traversal), pico PersistsInlineImage (тег+файл+data URL сохранён), PersistsAnyFileAttachment (PDF → тег+0600). Гейты: gofmt/build/vet/test зелёные; фронт vite build 1.66s чисто.
 - Бой: скрепка + Cmd+V + дедуп — см. чат GAR.
+
+## Волна 99 — Vision-роутер: без vision у main картинки уходят спутнику (D-AUDIT-124, slice 4) · 22 авг 2026
+- Бой 22 авг 01:40: main (step-3.5-flash, text-only) получила скриншот GitHub PR, load_image вернул «успех без пикселей», модель уверенно выдумала «tmux/docker» и защищала выдумку под давлением founder'а — сломанный контракт инструмента (успех без контента), не «характер» модели. Фабрикация протекла в MEMORY BRIEF (Архивариус записал её как факт) — риск отравления памяти.
+- Роутер (pkg/agent/vision_router.go): media + main без vision (ModelConfig.Vision, nil=false) → спутник background (gemini-2.5-flash) описывает картинку → дистиллят текстом заменяет media в запросе main; при ошибке спутника — честный маркер «не распознано». Синхронно (выбор founder'а).
+- load_image: метка честности в результате инструмента при vision=false (SetVisionCapable, инжект из agent_init по agent.Model).
+- Реактивный retry-path сохранён и перенацелен тестом на случай «vision заявлен, но провайдер отверг».
+- Промт main НЕ трогаем (решение founder'а): обучение через атомы, не через правила.
+- Тесты: collect/amend/SupportsVision + перенацеленный VisionUnsupportedErrorStripsSessionMedia. Гейты: gofmt/build/vet/test зелёные.

@@ -620,6 +620,7 @@ type ModelConfig struct {
 	RPM            int               `json:"rpm,omitempty"`              // Requests per minute limit
 	MaxTokensField string            `json:"max_tokens_field,omitempty"` // Field name for max tokens (e.g., "max_completion_tokens")
 	RequestTimeout int               `json:"request_timeout,omitempty"`
+	Vision         *bool             `json:"vision,omitempty"`         // PIKA-V3 D-AUDIT-124: image input (manual; auto-detect = slice 3)
 	ThinkingLevel  string            `json:"thinking_level,omitempty"` // Extended thinking: off|low|medium|high|xhigh|adaptive
 	ExtraBody      map[string]any    `json:"extra_body,omitempty"`     // Additional fields to inject into request body
 	CustomHeaders  map[string]string `json:"custom_headers,omitempty"` // Additional headers to inject into every HTTP request

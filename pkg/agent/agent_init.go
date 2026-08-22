@@ -213,6 +213,7 @@ func registerSharedTools(
 				nil,
 				allowReadPaths,
 			)
+			loadImageTool.SetVisionCapable(agentModelSupportsVision(cfg, agent.Model))
 			agent.Tools.Register(loadImageTool)
 		}
 
