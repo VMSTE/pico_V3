@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
@@ -43,8 +45,15 @@ func (p *Pipeline) routeMediaToVision(ctx context.Context, ts *turnState, exec *
 		text = "[Изображение не распознано: vision-спутник не настроен (нет модели background)]"
 	} else {
 		model := resolveSatelliteModelID(p.Cfg, "background")
-		d, err := distillateImages(ctx, provider, model, items)
+		// D-AUDIT-125 (волна 102): телеметрия vision-спутника в request_log
+		// (component=vision) — паттерн archivarius/atomizer/reflexor.
+		llmStart := time.Now()
+		d, resp, err := distillateImages(ctx, provider, model, items)
 		if err != nil {
+			pika.RecordSatelliteLLMFailure(
+				ctx, p.al.botmem, "vision", "describe",
+				ts.sessionKey, model, err, llmStart,
+			)
 			logger.WarnCF(
 				"agent",
 				"vision satellite failed",
@@ -52,6 +61,10 @@ func (p *Pipeline) routeMediaToVision(ctx context.Context, ts *turnState, exec *
 			)
 			text = "[Изображение не распознано: ошибка vision-спутника]"
 		} else {
+			pika.RecordSatelliteLLM(
+				ctx, p.al.botmem, "vision", "describe",
+				ts.sessionKey, model, resp, llmStart,
+			)
 			text = d
 		}
 	}
@@ -108,23 +121,24 @@ func amendMessagesWithDistillate(messages []providers.Message, text string) []pr
 	return out
 }
 
+// Волна 102: resp возвращаем для телеметрии (токены + latency в request_log).
 func distillateImages(
 	ctx context.Context,
 	provider providers.LLMProvider,
 	model string,
 	items []string,
-) (string, error) {
+) (string, *providers.LLMResponse, error) {
 	msgs := []providers.Message{
 		{Role: "system", Content: visionDistillateSystemPrompt},
 		{Role: "user", Content: "Опиши изображение.", Media: items},
 	}
 	resp, err := provider.Chat(ctx, msgs, nil, model, nil)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	out := strings.TrimSpace(resp.Content)
 	if out == "" {
-		return "", fmt.Errorf("empty distillate")
+		return "", resp, fmt.Errorf("empty distillate")
 	}
-	return out, nil
+	return out, resp, nil
 }
