@@ -3422,12 +3422,13 @@ func TestAgentLoop_VisionUnsupportedRetryPreservesHistory(t *testing.T) {
 	if resp2 != "ok" {
 		t.Fatalf("second response = %q, want %q", resp2, "ok")
 	}
-	// Media сохранилось в БД и подхватывается вторым ходом: снова фейл + ретрай.
-	if provider.calls != 4 {
-		t.Fatalf("calls after second turn = %d, want %d", provider.calls, 4)
+	// Волна 105: история едет в запрос без media (in-memory стрип при сборке) —
+	// второй ход чистый, без фейла и ретрая. Пиксели при этом в БД сохранены.
+	if provider.calls != 3 {
+		t.Fatalf("calls after second turn = %d, want %d", provider.calls, 3)
 	}
-	if !slices.Equal(provider.mediaSeen, []bool{true, false, true, false}) {
-		t.Fatalf("mediaSeen = %v, want %v", provider.mediaSeen, []bool{true, false, true, false})
+	if !slices.Equal(provider.mediaSeen, []bool{true, false, false}) {
+		t.Fatalf("mediaSeen = %v, want %v", provider.mediaSeen, []bool{true, false, false})
 	}
 }
 

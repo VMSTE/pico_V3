@@ -1233,3 +1233,11 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Код:** SetHistory → no-op для БД (CloseSession-блок сохранён); restoreSession → no-op + кэш summary; HardAbort без отката истории; DeleteAllMessages удалён из BotMemory — механизма удаления сообщений в коде не осталось; реактивный vision-ретрай стрипит media только in-memory.
 - **Тесты:** 9 переписаны под новую семантику (сев через AddFullMessage; аборт/стоп/ретрай = история сохранена); TestSetHistory — no-op семантика; убраны ложно-зелёные ассерты legacy-компрессии (Phase C).
 - **Гейты:** gofmt/build/vet/test зелёные (pkg/pika + pkg/agent).
+
+## Волна 105 — Дистиллят vision-спутника в базу + стрип media из истории (ТЗ-105, D-AUDIT-124) · 23 авг 2026
+
+- **Проблема (разбор 22 авг):** user-сообщение персистилось ДО vision-роутинга → дистиллят жил один ход в памяти, по содержимому картинки поиск не работал; роутер сканировал всю историю → старые base64 ре-триггерили спутника каждый ход (лишний платный вызов + холостой реактивный ретрай у text-only main). Раньше это маскировал тотальный SetHistory (волна 104 сняла маскировку).
+- **Код:** pipeline_setup.go — media из истории снимается in-memory при сборке (stripMessageMedia; БД не трогается); vision-роутинг вызван ДО персиста → в БД контент с дистиллятом, Media в metadata сохраняется (ничего не удаляется — правило founder'а). pipeline_llm.go — вызов роутера убран (переехал в SetupTurn, один раз за ход).
+- **Файлы (не картинки):** код не менялся — контур волны 98 уже правильный (PersistInboundFile на диск + тег-путь в content; Attachment без поля данных). Дыра была только в картинках (data URL в Media).
+- **Тесты:** NEW vision_persist_test.go — TestAgentLoop_VisionDistillatePersistedAndSatelliteOnce (дистиллят в БД + Media на месте + спутник ровно 1 раз + ход 2 без media), TestAgentLoop_VisionSatelliteFailureMarkerPersisted (маркер в БД при 500 спутника); обновлён TestAgentLoop_VisionUnsupportedRetryPreservesHistory (второй ход чистый: calls=3). Мок-спутник на httptest; vision-вызовы отличаются по маркеру «Опиши изображение.» в теле (background делит сервер с Архивариусом).
+- **Гейты:** gofmt/vet/build/test зелёные (pkg/pika + pkg/agent); новые тесты -count=2.
