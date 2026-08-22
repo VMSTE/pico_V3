@@ -632,3 +632,32 @@ func TestAtomizerResponse_SourceTurnsNumbers(t *testing.T) {
 		t.Fatalf("validateAtoms: %v", err)
 	}
 }
+
+// D-AUDIT-126 (волна 103): атом получает провенанс — ссылку на первое
+// сообщение первого source-turn (восстановление D-78/F10-6).
+func TestInsertAtom_SetsSourceMessageID(t *testing.T) {
+	prov := newMockProvider()
+	a, mem, cleanup := newTestAtomizer(t, prov, nil)
+	defer cleanup()
+	ctx := context.Background()
+	msgs := []MessageRow{
+		{ID: 42, ChatID: "s1", PikaSessionID: "1", Role: "user", Content: "x"},
+		{ID: 43, ChatID: "s1", PikaSessionID: "1", Role: "assistant", Content: "y"},
+	}
+	atom := AtomLLMOutput{
+		Category: "summary", Summary: "provenance test",
+		Polarity: "neutral", Confidence: 0.9, SourceTurns: TurnIDList{"1"},
+	}
+	if err := a.insertAtom(ctx, "s1", atom, map[string][]string{}, msgs, nil); err != nil {
+		t.Fatal(err)
+	}
+	var smid int64
+	if err := mem.db.QueryRow(
+		`SELECT COALESCE(source_message_id,0) FROM knowledge_atoms`,
+	).Scan(&smid); err != nil {
+		t.Fatal(err)
+	}
+	if smid != 42 {
+		t.Errorf("source_message_id = %d, want 42 (first msg of turn)", smid)
+	}
+}

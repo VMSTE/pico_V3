@@ -28,6 +28,7 @@ type SearchMemoryArgs struct {
 	Limit    int    `json:"limit"`    // default 10, clamp 1..20
 	Feedback bool   `json:"feedback"` // D-AUDIT-125: слой разносив
 	Around   int    `json:"around"`   // D-AUDIT-125: ±N соседей вокруг хита
+	Full     bool   `json:"full"`     // D-AUDIT-126: снять обрезку хитов
 }
 
 // SearchResult represents a single result from memory search.
@@ -51,6 +52,8 @@ type rawResult struct {
 	LayerPrio float64
 	MsgID     int64
 	ChatID    string
+	// D-AUDIT-126: сырой текст хита (до обрезки) — отдаётся при full=true.
+	FullContent string
 }
 
 // PIKA-V3: Layer priority constants for scoring.
@@ -88,7 +91,8 @@ func (ms *MemorySearch) Description() string {
 		"Returns top-N results with type and relevance score. " +
 		"Model sends query \u2014 Go searches everywhere. " +
 		"feedback=true: dissatisfied-user messages with the criticized answer. " +
-		"around=N: N neighbor messages before/after each hit."
+		"around=N: N neighbor messages before/after each hit. " +
+		"full=true: untruncated raw content of hits (messages/archive/thoughts)."
 }
 
 // Parameters returns the JSON schema for the tool arguments.
@@ -112,6 +116,10 @@ func (ms *MemorySearch) Parameters() map[string]any {
 			"around": map[string]any{
 				"type":        "integer",
 				"description": "N neighbor messages before/after each hit (0=off, max 5)",
+			},
+			"full": map[string]any{
+				"type":        "boolean",
+				"description": "Return untruncated raw content of hits (default: snippets)",
 			},
 		},
 		"required": []string{"query"},
@@ -152,6 +160,15 @@ func (ms *MemorySearch) Execute(
 		ctx, parsed.Query, parsed.Limit, parsed.Feedback, sessionID,
 	)
 	results = dedupResults(results)
+	// D-AUDIT-126 (волна 103): full=true — снятие обрезки по требованию
+	// (двухстадийный retrieval: сниппет → полный текст).
+	if parsed.Full {
+		for i := range results {
+			if results[i].FullContent != "" {
+				results[i].Summary = results[i].FullContent
+			}
+		}
+	}
 	if parsed.Around > 0 {
 		results = ms.expandAround(ctx, results, parsed.Around)
 	}
@@ -211,6 +228,9 @@ func parseSearchArgs(
 			n, _ := v.Int64()
 			parsed.Around = int(n)
 		}
+	}
+	if fl, ok := args["full"].(bool); ok {
+		parsed.Full = fl
 	}
 	return parsed, nil
 }
@@ -421,6 +441,9 @@ func (ms *MemorySearch) searchMessages(
 			LayerPrio: prioMessages,
 			MsgID:     id,
 			ChatID:    chatID,
+			FullContent: fmt.Sprintf(
+				"[%s] %s", role, content.String,
+			),
 		})
 	}
 	return out, rows.Err()
@@ -540,14 +563,15 @@ func (ms *MemorySearch) searchArchive(
 			snippet = h.summary
 		}
 		out = append(out, rawResult{
-			Type:      "archive",
-			Summary:   snippet,
-			Source:    "messages_archive",
-			CreatedAt: parseSQLiteTime(h.createdAt),
-			RawBM25:   h.bm25Score,
-			IsFTS:     true,
-			DedupKey:  fmt.Sprintf("archive:%d", h.msgID),
-			LayerPrio: prioArchive,
+			Type:        "archive",
+			Summary:     snippet,
+			Source:      "messages_archive",
+			CreatedAt:   parseSQLiteTime(h.createdAt),
+			RawBM25:     h.bm25Score,
+			IsFTS:       true,
+			DedupKey:    fmt.Sprintf("archive:%d", h.msgID),
+			LayerPrio:   prioArchive,
+			FullContent: content,
 		})
 	}
 	return out, nil
@@ -652,14 +676,15 @@ func (ms *MemorySearch) searchReasoning(
 				snippet = reasoningSummary(task.String, mode.String)
 			}
 			out = append(out, rawResult{
-				Type:      "reasoning",
-				Summary:   "[мысль] " + snippet,
-				Source:    "reasoning_log",
-				CreatedAt: parseSQLiteTime(ts),
-				RawBM25:   bm25Score,
-				IsFTS:     true,
-				DedupKey:  fmt.Sprintf("reasoning:%d", id),
-				LayerPrio: prioReasoning,
+				Type:        "reasoning",
+				Summary:     "[мысль] " + snippet,
+				Source:      "reasoning_log",
+				CreatedAt:   parseSQLiteTime(ts),
+				RawBM25:     bm25Score,
+				IsFTS:       true,
+				DedupKey:    fmt.Sprintf("reasoning:%d", id),
+				LayerPrio:   prioReasoning,
+				FullContent: "[мысль] " + text.String,
 			})
 		}
 		if err := rows.Err(); err != nil {
