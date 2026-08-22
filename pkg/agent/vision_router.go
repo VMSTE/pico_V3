@@ -45,7 +45,11 @@ func (p *Pipeline) routeMediaToVision(ctx context.Context, ts *turnState, exec *
 		model := resolveSatelliteModelID(p.Cfg, "background")
 		d, err := distillateImages(ctx, provider, model, items)
 		if err != nil {
-			logger.WarnCF("agent", "vision satellite failed", map[string]any{"error": err.Error(), "agent_id": ts.agent.ID})
+			logger.WarnCF(
+				"agent",
+				"vision satellite failed",
+				map[string]any{"error": err.Error(), "agent_id": ts.agent.ID},
+			)
 			text = "[Изображение не распознано: ошибка vision-спутника]"
 		} else {
 			text = d
@@ -54,7 +58,11 @@ func (p *Pipeline) routeMediaToVision(ctx context.Context, ts *turnState, exec *
 
 	exec.messages = amendMessagesWithDistillate(exec.messages, text)
 	exec.callMessages = exec.messages
-	logger.InfoCF("agent", "media routed to vision satellite", map[string]any{"agent_id": ts.agent.ID, "images": len(items)})
+	logger.InfoCF(
+		"agent",
+		"media routed to vision satellite",
+		map[string]any{"agent_id": ts.agent.ID, "images": len(items)},
+	)
 }
 
 func agentModelSupportsVision(cfg *config.Config, modelName string) bool {
@@ -91,14 +99,21 @@ func amendMessagesWithDistillate(messages []providers.Message, text string) []pr
 		if len(m.Media) == 0 {
 			continue
 		}
-		m.Content = strings.TrimSpace(m.Content) + "\n[Изображение, распознанное vision-спутником: " + text + "]"
+		m.Content = strings.TrimSpace(
+			m.Content,
+		) + "\n[Изображение, распознанное vision-спутником: " + text + "]"
 		m.Media = nil
 		out[i] = m
 	}
 	return out
 }
 
-func distillateImages(ctx context.Context, provider providers.LLMProvider, model string, items []string) (string, error) {
+func distillateImages(
+	ctx context.Context,
+	provider providers.LLMProvider,
+	model string,
+	items []string,
+) (string, error) {
 	msgs := []providers.Message{
 		{Role: "system", Content: visionDistillateSystemPrompt},
 		{Role: "user", Content: "Опиши изображение.", Media: items},
