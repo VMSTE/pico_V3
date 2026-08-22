@@ -24,8 +24,10 @@ import (
 
 // SearchMemoryArgs holds the parsed arguments for search_memory.
 type SearchMemoryArgs struct {
-	Query string `json:"query"`
-	Limit int    `json:"limit"` // default 10, clamp 1..20
+	Query    string `json:"query"`
+	Limit    int    `json:"limit"`    // default 10, clamp 1..20
+	Feedback bool   `json:"feedback"` // D-AUDIT-125: слой разносив
+	Around   int    `json:"around"`   // D-AUDIT-125: ±N соседей вокруг хита
 }
 
 // SearchResult represents a single result from memory search.
@@ -47,6 +49,8 @@ type rawResult struct {
 	IsFTS     bool
 	DedupKey  string
 	LayerPrio float64
+	MsgID     int64
+	ChatID    string
 }
 
 // PIKA-V3: Layer priority constants for scoring.
@@ -82,7 +86,9 @@ func (ms *MemorySearch) Name() string {
 func (ms *MemorySearch) Description() string {
 	return "Unified memory search across all knowledge layers. " +
 		"Returns top-N results with type and relevance score. " +
-		"Model sends query \u2014 Go searches everywhere."
+		"Model sends query \u2014 Go searches everywhere. " +
+		"feedback=true: dissatisfied-user messages with the criticized answer. " +
+		"around=N: N neighbor messages before/after each hit."
 }
 
 // Parameters returns the JSON schema for the tool arguments.
@@ -98,6 +104,14 @@ func (ms *MemorySearch) Parameters() map[string]any {
 				"type":        "integer",
 				"default":     10,
 				"description": "Max results (1-20)",
+			},
+			"feedback": map[string]any{
+				"type":        "boolean",
+				"description": "Include messages marked as negative feedback, with the criticized answer",
+			},
+			"around": map[string]any{
+				"type":        "integer",
+				"description": "N neighbor messages before/after each hit (0=off, max 5)",
 			},
 		},
 		"required": []string{"query"},
@@ -135,9 +149,12 @@ func (ms *MemorySearch) Execute(
 	sessionID := toolshared.ToolSessionKey(ctx)
 
 	results := ms.fanOut(
-		ctx, parsed.Query, parsed.Limit, sessionID,
+		ctx, parsed.Query, parsed.Limit, parsed.Feedback, sessionID,
 	)
 	results = dedupResults(results)
+	if parsed.Around > 0 {
+		results = ms.expandAround(ctx, results, parsed.Around)
+	}
 	scored := scoreResults(results)
 
 	sort.Slice(scored, func(i, j int) bool {
@@ -181,6 +198,20 @@ func parseSearchArgs(
 			parsed.Limit = int(n)
 		}
 	}
+	if f, ok := args["feedback"].(bool); ok {
+		parsed.Feedback = f
+	}
+	if a, exists := args["around"]; exists {
+		switch v := a.(type) {
+		case float64:
+			parsed.Around = int(v)
+		case int:
+			parsed.Around = v
+		case json.Number:
+			n, _ := v.Int64()
+			parsed.Around = int(n)
+		}
+	}
 	return parsed, nil
 }
 
@@ -188,6 +219,7 @@ func (ms *MemorySearch) fanOut(
 	ctx context.Context,
 	query string,
 	limit int,
+	feedback bool,
 	sessionID string,
 ) []rawResult {
 	var mu sync.Mutex
@@ -282,6 +314,20 @@ func (ms *MemorySearch) fanOut(
 		return nil
 	})
 
+	if feedback {
+		g.Go(func() error {
+			res, err := ms.searchFeedbackMarks(gCtx, limit, sessionID)
+			if err != nil {
+				logLayerWarn("feedback", err)
+				return nil
+			}
+			mu.Lock()
+			all = append(all, res...)
+			mu.Unlock()
+			return nil
+		})
+	}
+
 	_ = g.Wait()
 	return all
 }
@@ -307,7 +353,7 @@ func (ms *MemorySearch) searchMessages(
 	// Волна 86 (бой 20 авг): role=tool вне выдачи — иначе поиск находит
 	// собственное эхо (выдача из 10 строк = копии вопроса + вложенный
 	// прошлый tool-вывод).
-	q := `SELECT m.id, m.role, m.content, m.ts,
+	q := `SELECT m.id, m.chat_id, m.role, m.content, m.ts,
 		bm25(messages_fts) AS score
 		FROM messages_fts f
 		JOIN messages m ON m.id = f.rowid
@@ -342,12 +388,13 @@ func (ms *MemorySearch) searchMessages(
 	var out []rawResult
 	for rows.Next() {
 		var id int64
+		var chatID string
 		var role string
 		var content sql.NullString
 		var ts string
 		var bm25Score float64
 		if scanErr := rows.Scan(
-			&id, &role, &content, &ts, &bm25Score,
+			&id, &chatID, &role, &content, &ts, &bm25Score,
 		); scanErr != nil {
 			return nil, fmt.Errorf(
 				"pika/memory_tools: messages fts scan: %w", scanErr,
@@ -372,6 +419,8 @@ func (ms *MemorySearch) searchMessages(
 			IsFTS:     true,
 			DedupKey:  fmt.Sprintf("messages:%d", id),
 			LayerPrio: prioMessages,
+			MsgID:     id,
+			ChatID:    chatID,
 		})
 	}
 	return out, rows.Err()

@@ -1204,3 +1204,9 @@ Each entry maps to a single wave/phase and its merged PR.
 - Реактивный retry-path сохранён и перенацелен тестом на случай «vision заявлен, но провайдер отверг».
 - Промт main НЕ трогаем (решение founder'а): обучение через атомы, не через правила.
 - Тесты: collect/amend/SupportsVision + перенацеленный VisionUnsupportedErrorStripsSessionMedia. Гейты: gofmt/build/vet/test зелёные.
+
+## Волна 100 — search_memory: feedback-слой + KWIC-окно (D-AUDIT-125) · 22 авг 2026
+- Задумка founder'а: детерминированный инструмент «рубануть модель фактами» — запрос «я ругался — на что?» как стенд качества трёх контуров (атомы, инструмент, Рефлексор).
+- search_memory += feedback=true: слой по messages.metadata.feedback_signal (wrong/correction/rephrase — метка ставится ClassifyFeedback на персисте, живая проводка D-85/D-AUDIT-67) + предмет разноса (предыдущий ответ ассистента по монотонному id). around=N: ±N соседей вокруг хита (KWIC-окно). Без новых моделей/таблиц/субагентов.
+- AGENT.md: ссылка на прошлый конфликт → feedback=true.
+- Тесты: FindMarkWithSubject (метка+предмет), ExpandAround (соседи). Гейты зелёные.
