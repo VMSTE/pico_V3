@@ -104,36 +104,51 @@ func (ms *MemorySearch) expandAround(
 		if r.MsgID == 0 || r.ChatID == "" {
 			continue
 		}
-		rows, err := ms.bm.db.QueryContext(ctx,
-			`SELECT id, role, substr(COALESCE(content,''),1,120)
-			FROM messages
-			WHERE chat_id=? AND id BETWEEN ? AND ? AND role != 'tool'
-			ORDER BY id`,
-			r.ChatID, r.MsgID-int64(around), r.MsgID+int64(around),
-		)
-		if err != nil {
-			continue
-		}
-		var parts []string
-		for rows.Next() {
-			var nid int64
-			var role, text string
-			if scanErr := rows.Scan(&nid, &role, &text); scanErr != nil {
-				break
-			}
-			marker := " "
-			if nid == r.MsgID {
-				marker = ">"
-			}
-			parts = append(
-				parts, fmt.Sprintf("%s[%s] %s", marker, role, text),
-			)
-		}
-		rows.Close()
+		parts := ms.neighborsAround(ctx, r.ChatID, r.MsgID, around)
 		if len(parts) > 0 {
 			results[i].Summary += "\n↕ контекст: " +
 				strings.Join(parts, " | ")
 		}
 	}
 	return results
+}
+
+// neighborsAround — соседи сообщения msgID в чате (±around по монотонному id).
+// defer Close + проверка Err: требования sqlclosecheck/rowserrcheck.
+func (ms *MemorySearch) neighborsAround(
+	ctx context.Context,
+	chatID string,
+	msgID int64,
+	around int,
+) []string {
+	rows, err := ms.bm.db.QueryContext(ctx,
+		`SELECT id, role, substr(COALESCE(content,''),1,120)
+		FROM messages
+		WHERE chat_id=? AND id BETWEEN ? AND ? AND role != 'tool'
+		ORDER BY id`,
+		chatID, msgID-int64(around), msgID+int64(around),
+	)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+	var parts []string
+	for rows.Next() {
+		var nid int64
+		var role, text string
+		if scanErr := rows.Scan(&nid, &role, &text); scanErr != nil {
+			return parts
+		}
+		marker := " "
+		if nid == msgID {
+			marker = ">"
+		}
+		parts = append(
+			parts, fmt.Sprintf("%s[%s] %s", marker, role, text),
+		)
+	}
+	if err := rows.Err(); err != nil {
+		return parts
+	}
+	return parts
 }
