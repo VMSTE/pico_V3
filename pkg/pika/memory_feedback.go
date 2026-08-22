@@ -66,6 +66,10 @@ func (ms *MemorySearch) searchFeedbackMarks(
 			LayerPrio: prioKnowledge,
 			MsgID:     id,
 			ChatID:    chatID,
+			FullContent: fmt.Sprintf(
+				"[feedback:%s] user: %s | предмет разноса: %s",
+				signal, content.String, subject,
+			),
 		})
 	}
 	return out, rows.Err()

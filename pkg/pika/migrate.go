@@ -100,6 +100,11 @@ func Migrate(dbPath string) (*sql.DB, error) {
 			description: "reasoning_fts — FTS5 по тексту мыслей (D-AUDIT-125, wave 101)",
 			ddl:         migrationV5,
 		},
+		{
+			version:     6,
+			description: "backfill atom provenance source_message_id (D-AUDIT-126, wave 103)",
+			ddl:         migrationV6,
+		},
 	}
 
 	for _, m := range migrations {
@@ -548,6 +553,42 @@ CREATE TRIGGER rlog_fts_au AFTER UPDATE ON reasoning_log BEGIN
 END;
 
 INSERT INTO reasoning_fts(reasoning_fts) VALUES('rebuild');
+`
+
+// PIKA-V3 (D-AUDIT-126, wave 103): детерминированный бэкфилл провенанса.
+// Атомы до волны 103 не имели source_message_id — связка atom→archive
+// запроектирована (D-78/F10-6), но не писалась. Правило: первое сообщение
+// первого source-turn; сначала архив, потом hot (PK сохраняется, D-78).
+// Без LLM, идемпотентно, трогаем только NULL-строки с найденной целью.
+const migrationV6 = `
+UPDATE knowledge_atoms
+SET source_message_id = COALESCE(
+        (SELECT MIN(ma.id) FROM messages_archive ma
+         WHERE ma.chat_id = knowledge_atoms.chat_id
+           AND ma.pika_session_id =
+             json_extract(knowledge_atoms.source_turns, '$[0]')),
+        (SELECT MIN(m.id) FROM messages m
+         WHERE m.chat_id = knowledge_atoms.chat_id
+           AND m.pika_session_id =
+             json_extract(knowledge_atoms.source_turns, '$[0]'))
+    ),
+    history = json_insert(COALESCE(history,'[]'), '$[#]',
+        json_object('by','backfill_v6',
+                    'note','source_message_id from source_turns[0]'))
+WHERE source_message_id IS NULL
+  AND source_turns IS NOT NULL
+  AND json_valid(source_turns)
+  AND json_array_length(source_turns) > 0
+  AND COALESCE(
+        (SELECT MIN(ma.id) FROM messages_archive ma
+         WHERE ma.chat_id = knowledge_atoms.chat_id
+           AND ma.pika_session_id =
+             json_extract(knowledge_atoms.source_turns, '$[0]')),
+        (SELECT MIN(m.id) FROM messages m
+         WHERE m.chat_id = knowledge_atoms.chat_id
+           AND m.pika_session_id =
+             json_extract(knowledge_atoms.source_turns, '$[0]'))
+    ) IS NOT NULL;
 `
 
 // PIKA-V3: migrationV2 — rename session_id->chat_id, turn_id->pika_session_id (TEXT).

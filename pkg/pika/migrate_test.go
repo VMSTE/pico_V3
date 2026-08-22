@@ -23,8 +23,8 @@ func TestMigrateNewDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 5 {
-		t.Fatalf("expected version 5, got %d", ver)
+	if ver != 6 {
+		t.Fatalf("expected version 6, got %d", ver)
 	}
 
 	// Check key tables exist
@@ -99,8 +99,8 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 5 {
-		t.Fatalf("expected version 5 after second Migrate, got %d", ver)
+	if ver != 6 {
+		t.Fatalf("expected version 6 after second Migrate, got %d", ver)
 	}
 }
 
@@ -207,5 +207,53 @@ func TestMigrate_TestGuardRedirectsProdPath(t *testing.T) {
 	}
 	if v < 4 {
 		t.Fatalf("redirected db version = %d, want >= 4", v)
+	}
+}
+
+// D-AUDIT-126 (волна 103): бэкфилл провенанса детерминирован и идемпотентен.
+func TestMigrateV6_BackfillsProvenance(t *testing.T) {
+	db, err := Migrate(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO messages_archive
+		(id, chat_id, pika_session_id, ts, role, tokens, blob)
+		VALUES (42, 's1', '1', '2026-08-22 10:00:00', 'user', 5, NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO knowledge_atoms
+		(atom_id, chat_id, pika_session_id, category, summary,
+		 confidence, polarity, source_turns)
+		VALUES ('S-1', 's1', '1', 'summary', 'old atom without provenance',
+		        0.5, 'neutral', '["1"]')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(migrationV6); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	var smid int64
+	if err := db.QueryRow(
+		`SELECT COALESCE(source_message_id,0)
+		FROM knowledge_atoms WHERE atom_id='S-1'`,
+	).Scan(&smid); err != nil {
+		t.Fatal(err)
+	}
+	if smid != 42 {
+		t.Errorf("source_message_id = %d, want 42", smid)
+	}
+	if _, err := db.Exec(migrationV6); err != nil {
+		t.Fatal(err)
+	}
+	var cnt int
+	if err := db.QueryRow(
+		`SELECT json_array_length(history)
+		FROM knowledge_atoms WHERE atom_id='S-1'`,
+	).Scan(&cnt); err != nil {
+		t.Fatal(err)
+	}
+	if cnt != 1 {
+		t.Errorf("history entries = %d, want 1 (idempotent)", cnt)
 	}
 }

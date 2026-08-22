@@ -1220,3 +1220,9 @@ Each entry maps to a single wave/phase and its merged PR.
 - vision_router: RecordSatelliteLLM/Failure (component='vision', direction='describe', sessionKey хода) в обе ветки роутера — паттерн archivarius/atomizer/reflexor. Дорогой вызов gemini больше не невидим: токены, latency, ошибки в ленте /pika.
 - distillateImages возвращает resp (токены больше не выбрасываются). RecordSatelliteLLM nil-safe — botmem=nil в тестах безопасно.
 - Тест: DistillateImages_ReturnsResponseForTelemetry (resp с Usage доезжает). Гейты зелёные.
+
+## Волна 103 — search_memory full=true + провенанс атомов (D-AUDIT-126) · 22 авг 2026
+- Восстановление задуманного (D-78/F10-6): insertAtom пишет source_message_id (первое сообщение первого source-turn, из уже загруженного чанка, 0 запросов). Связка atom→archive была запроектирована, но выпала между архитектурой и ТЗ-v2-5a.
+- Миграция v6: детерминированный бэкфилл провенанса старых атомов через source_turns (архив → fallback hot, PK сохраняется). Без LLM, идемпотентно, метка в history.
+- search_memory += full=true: снятие обрезки по требованию (двухстадийный retrieval: сниппет → сырой текст хита — messages/feedback/archive-blob/reasoning). Бой 16:30: модель 12+ вызовов искала полный transcript — теперь достаётся одним параметром.
+- AGENT.md: full=true задокументирован. Тесты: FullReturnsUntruncated, InsertAtom_SetsSourceMessageID, MigrateV6_BackfillsProvenance (+идемпотентность).

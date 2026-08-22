@@ -472,6 +472,21 @@ func (a *Atomizer) insertAtom(
 		SourceTurns:   stJSON,
 		History:       histJSON,
 	}
+	// D-AUDIT-126 (волна 103): провенанс — атом ссылается на первое
+	// сообщение первого source-turn (восстановление D-78/F10-6: связка
+	// atom→archive была запроектирована, но не писалась). Модель id
+	// сообщений не видит по построению — пишет Go, 0 запросов к базе.
+	if len(atom.SourceTurns) > 0 {
+		for _, m := range msgs {
+			if m.PikaSessionID != atom.SourceTurns[0] {
+				continue
+			}
+			if row.SourceMessageID == nil || m.ID < *row.SourceMessageID {
+				id := m.ID
+				row.SourceMessageID = &id
+			}
+		}
+	}
 	return a.mem.InsertAtom(ctx, row)
 }
 
