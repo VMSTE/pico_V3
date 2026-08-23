@@ -1259,3 +1259,10 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Брендинг → AtoMinD**: index.html title, appName лаунчера (main.go), пункт сайдбара navigation.pika — во всех трёх локалях. Технические идентификаторы (channel type pico, API-пути, пакеты, протокол) не тронуты — это контракты, не брендинг.
 - **Тесты**: logs_test.go — парсинг+дефолты, level-фильтр, поиск, follow+reset, missing errors.log, unknown source → 400.
 - **Гейты**: gofmt/build/vet + go test web/backend + pnpm build — зелёные.
+
+## Волна 107 — search_logs: Пика читает свои файловые логи (ТЗ-107) · 23 авг 2026
+
+- **pkg/pika/logs_tool.go** — NEW: SearchLogsTool (toolshared.Tool, BRAIN always-on). Читает workspace/logs/gateway.log | errors.log (JSONL от волны 106). Фильтры: query (подстрока, регистронезависимо), level (минимум debug/info/warn/error), since_minutes, limit 1..50 (дефолт 20). Новейшие совпадения в хвосте, header со счётчиками, кап вывода 8 КБ. Только чтение; имя файла из whitelist; секреты уже замаскированы на записи (волна 106). «Всё, к чему агент не может достучаться, не существует» (OpenAI harness) — закрыто для логов.
+- **pkg/agent/instance.go** — регистрация в BRAIN-блоке рядом с search_memory/registry_write.
+- **Тесты**: logs_tool_test.go — 9 тестов: поиск, level, since_minutes, limit+новейшие, missing file (подсказка, не ошибка), source=errors, невалидные входы, пустой workspace.
+- **Гейты**: gofmt/build/vet зелёные; go test pkg/pika + pkg/agent зелёные.
