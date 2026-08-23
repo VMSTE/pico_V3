@@ -1,4 +1,19 @@
 {
+  "logsPage": {
+    "source_gateway": "Gateway",
+    "source_errors": "Errors",
+    "source_launcher": "Launcher",
+    "level_all": "All",
+    "search_placeholder": "Search logs…",
+    "follow": "Follow",
+    "pause": "Pause",
+    "export": "Download .log",
+    "copy": "Copy",
+    "copied": "Copied",
+    "counts": "Showing {{matched}} of {{total}} lines",
+    "empty": "No entries",
+    "unavailable": "Log file not created yet — it appears after gateway start"
+  },
   "navigation": {
     "chat": "Chat",
     "model_group": "Models",
@@ -15,7 +30,7 @@
     "config": "Config",
     "logs": "Logs",
     "mcp": "MCP",
-    "pika": "Pika",
+    "pika": "AtoMinD",
     "security": "Security",
     "subagents": "Subagents",
     "agents": "Agents",

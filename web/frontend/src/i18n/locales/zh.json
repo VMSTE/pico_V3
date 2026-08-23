@@ -1,4 +1,19 @@
 {
+  "logsPage": {
+    "source_gateway": "Gateway",
+    "source_errors": "错误",
+    "source_launcher": "启动器",
+    "level_all": "全部",
+    "search_placeholder": "搜索日志…",
+    "follow": "跟踪",
+    "pause": "暂停",
+    "export": "下载 .log",
+    "copy": "复制",
+    "copied": "已复制",
+    "counts": "显示 {{matched}} / {{total}} 行",
+    "empty": "暂无记录",
+    "unavailable": "日志文件尚未创建 — 启动 gateway 后将出现"
+  },
   "navigation": {
     "chat": "对话",
     "model_group": "模型",
@@ -15,7 +30,7 @@
     "config": "配置",
     "logs": "日志",
     "mcp": "MCP",
-    "pika": "Pika",
+    "pika": "AtoMinD",
     "security": "安全",
     "subagents": "子智能体",
     "agents": "Agents",

@@ -1,4 +1,19 @@
 {
+  "logsPage": {
+    "source_gateway": "Gateway",
+    "source_errors": "Ошибки",
+    "source_launcher": "Лаунчер",
+    "level_all": "Все",
+    "search_placeholder": "Поиск по логам…",
+    "follow": "Следить",
+    "pause": "Пауза",
+    "export": "Скачать .log",
+    "copy": "Копировать",
+    "copied": "Скопировано",
+    "counts": "Показано {{matched}} из {{total}} строк",
+    "empty": "Записей нет",
+    "unavailable": "Файл лога ещё не создан — появится после запуска gateway"
+  },
   "navigation": {
     "chat": "Чат",
     "model_group": "Модели",
@@ -15,7 +30,7 @@
     "config": "Настройки",
     "logs": "Логи",
     "mcp": "MCP",
-    "pika": "Pika",
+    "pika": "АтоМинд",
     "security": "Безопасность",
     "subagents": "Субагенты",
     "agents": "Агенты",

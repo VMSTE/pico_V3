@@ -92,6 +92,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// MCP servers management (D-AUDIT-84)
 	h.registerMCPRoutes(mux)
+	h.registerLogsRoutes(mux) // Волна 106 (ТЗ-106, срез B): файловые логи
 
 	// Named agents CRUD (D-AUDIT-97)
 	h.registerAgentRoutes(mux)
