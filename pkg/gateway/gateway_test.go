@@ -15,10 +15,11 @@ func TestRun_StartupFailuresReturnErrorAndEmitStructuredLog(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		prepare    func(t *testing.T, dir string) string
-		wantErr    string
-		wantLogSub string
+		name        string
+		prepare     func(t *testing.T, dir string) string
+		wantErr     string
+		wantLogSub  string
+		wantLogFile bool // волна 106: файл есть, только если конфиг прочитался
 	}{
 		{
 			name: "invalid config returns load error",
@@ -39,14 +40,18 @@ func TestRun_StartupFailuresReturnErrorAndEmitStructuredLog(t *testing.T) {
 				t.Helper()
 				cfg := config.DefaultConfig()
 				cfg.Gateway.Port = 0
+				// Волна 106: workspace под тест — логи пишутся в <workspace>/logs/,
+				// без этого хелпер писал бы в боевой ~/.picoclaw/workspace.
+				cfg.Agents.Defaults.Workspace = filepath.Join(dir, "workspace")
 				cfgPath := filepath.Join(dir, "config.json")
 				if err := config.SaveConfig(cfgPath, cfg); err != nil {
 					t.Fatalf("SaveConfig() error = %v", err)
 				}
 				return cfgPath
 			},
-			wantErr:    "config pre-check failed: invalid gateway port: 0",
-			wantLogSub: "config pre-check failed: invalid gateway port: 0",
+			wantErr:     "config pre-check failed: invalid gateway port: 0",
+			wantLogSub:  "config pre-check failed: invalid gateway port: 0",
+			wantLogFile: true,
 		},
 	}
 
@@ -74,7 +79,13 @@ func TestRun_StartupFailuresReturnErrorAndEmitStructuredLog(t *testing.T) {
 				t.Fatalf("helper output missing expected error substring %q:\n%s", tt.wantErr, out)
 			}
 
-			logData, readErr := os.ReadFile(filepath.Join(homeDir, logPath, logFile))
+			if !tt.wantLogFile {
+				// Конфиг не читается → workspace неизвестен → файла нет;
+				// структурная ошибка проверена в выводе хелпера выше.
+				return
+			}
+			// Волна 106: каноничный путь — <workspace>/logs/gateway.log
+			logData, readErr := os.ReadFile(filepath.Join(homeDir, "workspace", logPath, logFile))
 			if readErr != nil {
 				t.Fatalf("ReadFile(gateway.log) error = %v", readErr)
 			}

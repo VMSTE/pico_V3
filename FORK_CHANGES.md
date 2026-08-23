@@ -1241,3 +1241,21 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Файлы (не картинки):** код не менялся — контур волны 98 уже правильный (PersistInboundFile на диск + тег-путь в content; Attachment без поля данных). Дыра была только в картинках (data URL в Media).
 - **Тесты:** NEW vision_persist_test.go — TestAgentLoop_VisionDistillatePersistedAndSatelliteOnce (дистиллят в БД + Media на месте + спутник ровно 1 раз + ход 2 без media), TestAgentLoop_VisionSatelliteFailureMarkerPersisted (маркер в БД при 500 спутника); обновлён TestAgentLoop_VisionUnsupportedRetryPreservesHistory (второй ход чистый: calls=3). Мок-спутник на httptest; vision-вызовы отличаются по маркеру «Опиши изображение.» в теле (background делит сервер с Архивариусом).
 - **Гейты:** gofmt/vet/build/test зелёные (pkg/pika + pkg/agent); новые тесты -count=2.
+
+## Волна 106 (срез A) — Каноничные файловые логи в workspace (ТЗ-106, D-AUDIT-128) · 23 авг 2026
+
+- **pkg/logger/file_logging.go** — NEW: EnableWorkspaceFileLogging(workspace): tee в <workspace>/logs/: gateway.log = полный поток от DEBUG («логи = всё, что творится», решение founder'а), errors.log = WARN+. Ротация 10 МБ + 2 бэкапа, права 0600, потокобезопасно. Консоль отделена: SetLevel при включённом файле меняет только консольный фильтр (zerolog FilteredLevelWriter), файл от уровня не зависит.
+- **logger.go**: maskSecrets (telegram bot token) теперь применяется к message и строковым полям в logMessage — маскируется и консоль. DisableConsole/EnableConsole получили гарды ws-режима.
+- **gateway.go**: legacy EnableFileLogging(~/.picoclaw/logs/gateway.log) вырезан (дубль потока — решение founder'а); workspace-логи включаются сразу после LoadConfig; ранний бут — консоль + panic-файл. Сбой файлового логирования не фатален.
+- **gateway_test.go**: кейс «битый конфиг» — файла больше нет (workspace неизвестен до чтения конфига), проверка по выводу; кейс «порт 0» читает <workspace>/logs/gateway.log; workspace задаётся явно в tempdir (хелпер не пишет в прод).
+- **Тесты**: file_logging_test.go — полный поток в файл при WARN-консоли (ключевой инвариант), разведение errors.log, ротация по размеру, маскировка секрета, disable.
+- **Гейты**: gofmt/build/vet зелёные; go test pkg/logger + pkg/gateway + pkg/pika + pkg/agent зелёные.
+
+## Волна 106 (срезы B+C) — /api/logs + страница /logs 2.0 + брендинг AtoMinD (ТЗ-106) · 23 авг 2026
+
+- **web/backend/api/logs.go** — NEW: GET /api/logs?source=gateway|errors|launcher&level=info&q=...&offset=N&limit=200. JSONL-файл → структурные записи (n/level/time/component/caller/message/fields/raw); level = минимум, q = подстрока, offset = follow-курсор по номеру строки, reset=true при ротации. gateway/errors из workspace/logs, launcher из home/logs. Отсутствующий файл → available=false. Старый /api/gateway/logs (буфер) не тронут.
+- **router.go**: registerLogsRoutes.
+- **web/frontend**: api/logs.ts + hooks/use-file-logs.ts (хвост → follow 1с, reset при ротации) + logs-page.tsx 2.0: источник табами, уровень = чипы-фильтр вида (решение founder'а: не пишет конфиг, мгновенно, ничего не теряет), поиск с дебаунсом и подсветкой, follow/pause с прилипанием к низу (<80px), экспорт .log, копирование, счётчик «показано X из Y» + путь к файлу. Работает при остановленном gateway — история из файла, не буфера. Старые log-level-select.tsx и logs-panel.tsx удалены.
+- **Брендинг → AtoMinD**: index.html title, appName лаунчера (main.go), пункт сайдбара navigation.pika — во всех трёх локалях. Технические идентификаторы (channel type pico, API-пути, пакеты, протокол) не тронуты — это контракты, не брендинг.
+- **Тесты**: logs_test.go — парсинг+дефолты, level-фильтр, поиск, follow+reset, missing errors.log, unknown source → 400.
+- **Гейты**: gofmt/build/vet + go test web/backend + pnpm build — зелёные.
