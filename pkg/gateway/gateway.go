@@ -122,11 +122,6 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 	}
 	defer panicFunc()
 
-	if err = logger.EnableFileLogging(filepath.Join(homePath, logPath, logFile)); err != nil {
-		logger.Fatal(fmt.Sprintf("error enabling file logging: %v", err))
-	}
-	defer logger.DisableFileLogging()
-
 	if debug {
 		logger.SetLevel(logger.DEBUG)
 	} else {
@@ -147,6 +142,14 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("error loading config: %w", err)
+	}
+
+	// Волна 106 (ТЗ-106, D-AUDIT-128): каноничные логи — workspace/logs/:
+	// gateway.log = полный поток (DEBUG+), errors.log = WARN+; консоль — по
+	// gateway.log_level. Сбой файлового логирования не фатален.
+	if err = logger.EnableWorkspaceFileLogging(cfg.WorkspacePath()); err != nil {
+		logger.WarnCF("gateway", "workspace file logging not enabled",
+			map[string]any{"error": err.Error()})
 	}
 
 	if err = preCheckConfig(cfg); err != nil {

@@ -113,6 +113,13 @@ func formatFieldValue(i any) string {
 func SetLevel(level LogLevel) {
 	mu.Lock()
 	defer mu.Unlock()
+	// Волна 106: при включённом workspace-логировании SetLevel меняет
+	// только консоль — файл пишет полный поток (floor DEBUG, file_logging.go).
+	if wsLogging {
+		wsConsoleLevel = level
+		rebuildWorkspaceLoggerLocked()
+		return
+	}
 	currentLevel = level
 	zerolog.SetGlobalLevel(level)
 }
@@ -126,6 +133,11 @@ func SetConsoleLevel(level LogLevel) {
 func DisableConsole() {
 	mu.Lock()
 	defer mu.Unlock()
+	if wsLogging {
+		wsConsoleOff = true
+		rebuildWorkspaceLoggerLocked()
+		return
+	}
 	writers[0] = io.Discard
 	logger = logger.Output(io.MultiWriter(writers...))
 }
@@ -133,6 +145,11 @@ func DisableConsole() {
 func EnableConsole() {
 	mu.Lock()
 	defer mu.Unlock()
+	if wsLogging {
+		wsConsoleOff = false
+		rebuildWorkspaceLoggerLocked()
+		return
+	}
 	writers[0] = consoleWriter
 	logger = logger.Output(io.MultiWriter(writers...))
 }
@@ -319,7 +336,7 @@ func logMessage(level LogLevel, component string, message string, fields map[str
 
 	appendFields(event, fields)
 
-	event.CallerSkipFrame(skip).Msg(message)
+	event.CallerSkipFrame(skip).Msg(maskSecrets(message))
 }
 
 func appendFields(event *zerolog.Event, fields map[string]any) {
@@ -329,7 +346,7 @@ func appendFields(event *zerolog.Event, fields map[string]any) {
 		case error:
 			event.Str(k, val.Error())
 		case string:
-			event.Str(k, val)
+			event.Str(k, maskSecrets(val))
 		case int:
 			event.Int(k, val)
 		case int64:
