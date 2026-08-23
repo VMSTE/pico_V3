@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,16 +128,29 @@ func (t *SearchLogsTool) Execute(
 
 	query := strings.ToLower(strings.TrimSpace(logStrArg(args["query"])))
 
-	path := filepath.Join(t.workspace, "logs", source+".log")
-	data, err := os.ReadFile(path)
+	// G304: доступ физически заперт в workspace/logs через os.Root
+	// (Go 1.24+); имя файла — из whitelist выше, traversal невозможен.
+	logsDir := filepath.Join(t.workspace, "logs")
+	root, err := os.OpenRoot(logsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return toolshared.SilentResult(fmt.Sprintf(
-				"log file not found: %s — no %s logs written yet "+
-					"(file logging exists since wave 106)",
-				path, source,
-			))
+			return toolshared.SilentResult(noLogsHint(logsDir, source))
 		}
+		return toolshared.ErrorResult(fmt.Sprintf("open logs dir: %v", err))
+	}
+	defer func() { _ = root.Close() }()
+
+	f, err := root.Open(source + ".log")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return toolshared.SilentResult(noLogsHint(logsDir, source))
+		}
+		return toolshared.ErrorResult(fmt.Sprintf("open log: %v", err))
+	}
+	defer func() { _ = f.Close() }()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
 		return toolshared.ErrorResult(fmt.Sprintf("read log: %v", err))
 	}
 
@@ -184,6 +198,15 @@ func (t *SearchLogsTool) Execute(
 		header += " [output truncated to last 8KB]"
 	}
 	return toolshared.SilentResult(header + "\n" + body)
+}
+
+// noLogsHint — ответ-подсказка, когда файла ещё нет (не ошибка).
+func noLogsHint(logsDir, source string) string {
+	return fmt.Sprintf(
+		"log file not found: %s — no %s logs written yet "+
+			"(file logging exists since wave 106)",
+		filepath.Join(logsDir, source+".log"), source,
+	)
 }
 
 type logJSONEntry struct {
