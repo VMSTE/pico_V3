@@ -69,7 +69,7 @@ func entryMessages(t *testing.T, body map[string]any) []string {
 	if !ok {
 		t.Fatalf("entries missing: %#v", body)
 	}
-	var out []string
+	out := make([]string, 0, len(raw))
 	for _, item := range raw {
 		m := item.(map[string]any)
 		out = append(out, m["message"].(string))
