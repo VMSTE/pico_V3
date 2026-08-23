@@ -133,6 +133,9 @@ func NewAgentInstance(
 	// D-AUDIT-74 (ТЗ-v2-3f): registry_write — модель пишет runbook/скрипты/
 	// снапшоты/correction rules в постоянный реестр. Go — единственный писатель.
 	toolsRegistry.Register(pika.NewRegistryWriteTool(pika.NewRegistryHandler(botMem)))
+	// Волна 107 (ТЗ-107): search_logs — модель читает свои
+	// файловые логи (workspace/logs/, волна 106). Только чтение.
+	toolsRegistry.Register(pika.NewSearchLogsTool(workspace))
 
 	// PIKA-V3: clarify — HITL tool, uses MessageBus for user communication
 	if msgBus != nil && cfg.Clarify.Enabled {
