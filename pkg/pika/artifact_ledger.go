@@ -60,10 +60,10 @@ func (l *ArtifactLedger) Record(
 	if info.Size() <= artifactHashMaxBytes {
 		// #nosec G304 -- путь прошёл валидацию fs-тула (sandboxFs);
 		// леджер читает только что записанный этим тулом файл.
-		data, err := os.ReadFile(abs)
-		if err != nil {
+		data, rerr := os.ReadFile(abs)
+		if rerr != nil {
 			logger.DebugCF("artifact-ledger", "read failed",
-				map[string]any{"error": err.Error()})
+				map[string]any{"error": rerr.Error()})
 			return
 		}
 		h := sha256.Sum256(data)

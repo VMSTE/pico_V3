@@ -19,6 +19,7 @@ func (f *fakeArtifactTool) Description() string { return "fake" }
 func (f *fakeArtifactTool) Parameters() map[string]any {
 	return map[string]any{"type": "object"}
 }
+
 func (f *fakeArtifactTool) Execute(_ context.Context, _ map[string]any) *ToolResult {
 	*f.executed = true
 	if f.fail {
