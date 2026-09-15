@@ -23,8 +23,8 @@ func TestMigrateNewDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 6 {
-		t.Fatalf("expected version 6, got %d", ver)
+	if ver != 7 {
+		t.Fatalf("expected version 7, got %d", ver)
 	}
 
 	// Check key tables exist
@@ -99,8 +99,8 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 6 {
-		t.Fatalf("expected version 6 after second Migrate, got %d", ver)
+	if ver != 7 {
+		t.Fatalf("expected version 7 after second Migrate, got %d", ver)
 	}
 }
 
