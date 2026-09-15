@@ -137,6 +137,10 @@ func NewAgentInstance(
 	// файловые логи (workspace/logs/, волна 106). Только чтение.
 	toolsRegistry.Register(pika.NewSearchLogsTool(workspace))
 
+	// Волна 108 (ТЗ-108, D-AUDIT-131): паспорта артефактов — Go пишет
+	// в artifact_passports автоматически на трубе ExecuteWithContext.
+	toolsRegistry.SetArtifactRecorder(pika.NewArtifactLedger(botMem, workspace))
+
 	// PIKA-V3: clarify — HITL tool, uses MessageBus for user communication
 	if msgBus != nil && cfg.Clarify.Enabled {
 		clarifyCfg := &pika.ClarifyConfig{

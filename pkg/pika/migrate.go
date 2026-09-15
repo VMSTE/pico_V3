@@ -105,6 +105,11 @@ func Migrate(dbPath string) (*sql.DB, error) {
 			description: "backfill atom provenance source_message_id (D-AUDIT-126, wave 103)",
 			ddl:         migrationV6,
 		},
+		{
+			version:     7,
+			description: "artifact_passports — паспорта артефактов, expand-only (D-AUDIT-131, wave 108)",
+			ddl:         migrationV7,
+		},
 	}
 
 	for _, m := range migrations {
@@ -589,6 +594,25 @@ WHERE source_message_id IS NULL
            AND m.pika_session_id =
              json_extract(knowledge_atoms.source_turns, '$[0]'))
     ) IS NOT NULL;
+`
+
+// PIKA-V3 (D-AUDIT-131, волна 108): artifact_passports — паспорта
+// артефактов: кто/когда/чем записал файл, sha256, размер, сессия.
+// Expand-only: новая таблица, существующие (registry и её CHECK)
+// не трогаем — жёсткость схемы это охрана.
+const migrationV7 = `
+CREATE TABLE IF NOT EXISTS artifact_passports (
+    id         INTEGER PRIMARY KEY,
+    ts         DATETIME DEFAULT CURRENT_TIMESTAMP,
+    path       TEXT NOT NULL UNIQUE,
+    tool       TEXT NOT NULL,
+    session    TEXT,
+    sha256     TEXT,
+    size       INTEGER,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifact_passports(ts);
 `
 
 // PIKA-V3: migrationV2 — rename session_id->chat_id, turn_id->pika_session_id (TEXT).

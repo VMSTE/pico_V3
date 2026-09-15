@@ -75,6 +75,10 @@ var (
 		regexp.MustCompile(`\$\(\s*curl\s+`),
 		regexp.MustCompile(`\$\(\s*wget\s+`),
 		regexp.MustCompile(`\$\(\s*which\s+`),
+		// Волна 108 (D-AUDIT-131): .vault — закрытая зона; мутации через
+		// exec запрещены (чтение разрешено).
+		regexp.MustCompile(`(?i)(rm|mv|cp|chmod|chflags|chown|truncate|dd|shred|install|tee)\b[^;|&]*\.vault`),
+		regexp.MustCompile(`>+\s*[^;|&]*\.vault`),
 		regexp.MustCompile(`\bsudo\b`),
 		regexp.MustCompile(`\bchmod\s+[0-7]{3,4}\b`),
 		regexp.MustCompile(`\bchown\b`),

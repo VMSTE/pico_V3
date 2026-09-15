@@ -63,6 +63,7 @@ const (
 	prioArchive     = 0.8
 	prioReasoning   = 0.7
 	prioRegistry    = 0.6
+	prioArtifacts   = 0.65 // волна 108: паспорта артефактов
 	prioMessages    = 0.5
 	recencyMaxDays  = 30.0
 	recencyMaxBoost = 0.1
@@ -311,6 +312,19 @@ func (ms *MemorySearch) fanOut(
 		)
 		if err != nil {
 			logLayerWarn("reasoning", err)
+			return nil
+		}
+		mu.Lock()
+		all = append(all, res...)
+		mu.Unlock()
+		return nil
+	})
+
+	// Layer 6b: artifact passports (волна 108, D-AUDIT-131) — что писали в файлы
+	g.Go(func() error {
+		res, err := ms.searchArtifacts(gCtx, query, limit)
+		if err != nil {
+			logLayerWarn("artifacts", err)
 			return nil
 		}
 		mu.Lock()
@@ -1005,4 +1019,49 @@ func normalizeContentKey(s string) string {
 		}
 	}
 	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// searchArtifacts — паспорта артефактов (волна 108, D-AUDIT-131).
+// LIKE по пути и тулу: «что я писала», «где лежит X».
+func (ms *MemorySearch) searchArtifacts(
+	ctx context.Context,
+	query string,
+	limit int,
+) ([]rawResult, error) {
+	pat := "%" + query + "%"
+	rows, err := ms.bm.db.QueryContext(ctx,
+		`SELECT id, path, tool, session, ts, updated_at
+		FROM artifact_passports
+		WHERE path LIKE ? OR tool LIKE ?
+		ORDER BY updated_at DESC
+		LIMIT ?`,
+		pat, pat, limit)
+	if err != nil {
+		return nil, fmt.Errorf("pika/memory_tools: artifacts: %w", err)
+	}
+	defer rows.Close()
+
+	var out []rawResult
+	for rows.Next() {
+		var id int64
+		var path, tool string
+		var sess, ts, ua sql.NullString
+		if scanErr := rows.Scan(&id, &path, &tool, &sess, &ts, &ua); scanErr != nil {
+			return nil, fmt.Errorf("pika/memory_tools: artifact scan: %w", scanErr)
+		}
+		created := ts.String
+		if ua.String != "" {
+			created = ua.String
+		}
+		out = append(out, rawResult{
+			Type:      "artifact",
+			Summary:   path + " (via " + tool + ")",
+			Source:    "artifact_passports",
+			CreatedAt: parseSQLiteTime(created),
+			IsFTS:     false,
+			DedupKey:  fmt.Sprintf("artifact:%d", id),
+			LayerPrio: prioArtifacts,
+		})
+	}
+	return out, rows.Err()
 }

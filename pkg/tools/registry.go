@@ -24,6 +24,8 @@ type ToolRegistry struct {
 	mu         sync.RWMutex
 	version    atomic.Uint64 // incremented on Register/RegisterHidden for cache invalidation
 	mediaStore media.MediaStore
+	// волна 108: писатель паспортов артефактов (D-AUDIT-131)
+	artifactRecorder ArtifactRecorder
 }
 
 type mediaStoreAware interface {
@@ -229,6 +231,15 @@ func (r *ToolRegistry) ExecuteWithContext(
 			WithError(fmt.Errorf("argument validation failed: %w", err))
 	}
 
+	// Волна 108 (D-AUDIT-131): .vault — закрытая зона. Мутирующие
+	// файловые тулы туда не пишут (чтение разрешено; exec — shell.go).
+	if artifactMutatingTools[name] && isVaultToolPath(args) {
+		return ErrorResult(
+			"path is inside .vault — protected zone (D-AUDIT-131): " +
+				"model tools cannot write here",
+		).WithError(fmt.Errorf("vault write blocked"))
+	}
+
 	// Inject channel/chatID into ctx so tools read them via ToolChannel(ctx)/ToolChatID(ctx).
 	// Always inject — tools validate what they require.
 	ctx = WithToolContext(ctx, channel, chatID)
@@ -305,6 +316,12 @@ func (r *ToolRegistry) ExecuteWithContext(
 				"duration_ms":   duration.Milliseconds(),
 				"result_length": len(result.ContentForLLM()),
 			})
+	}
+
+	// Волна 108 (D-AUDIT-131): паспорт артефакта пишет Go на трубе.
+	if r.artifactRecorder != nil && !result.IsError && !result.Async &&
+		artifactMutatingTools[name] {
+		r.artifactRecorder.Record(ctx, name, args)
 	}
 
 	return result
