@@ -42,9 +42,12 @@ func TestRegisterContextManager_EmptyName(t *testing.T) {
 	cleanup := resetCMRegistry()
 	defer cleanup()
 
-	err := RegisterContextManager("", func(cfg json.RawMessage, al *AgentLoop) (ContextManager, error) {
-		return &noopContextManager{}, nil
-	})
+	err := RegisterContextManager(
+		"",
+		func(cfg json.RawMessage, al *AgentLoop) (ContextManager, error) {
+			return &noopContextManager{}, nil
+		},
+	)
 	if err == nil {
 		t.Fatal("expected error for empty name")
 	}
@@ -306,15 +309,21 @@ func TestPikaAssemble_EmptyHistory(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLegacyCompact_Overflow(t *testing.T) {
-	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; overflow compression is now handled by PikaContextManager")
+	t.Skip(
+		"PIKA-V3 Phase B: legacyContextManager removed; overflow compression is now handled by PikaContextManager",
+	)
 }
 
 func TestLegacyCompact_Overflow_ProactiveReason(t *testing.T) {
-	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; overflow compression is now handled by PikaContextManager")
+	t.Skip(
+		"PIKA-V3 Phase B: legacyContextManager removed; overflow compression is now handled by PikaContextManager",
+	)
 }
 
 func TestLegacyCompact_Overflow_TooShortToCompress(t *testing.T) {
-	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; overflow compression is now handled by PikaContextManager")
+	t.Skip(
+		"PIKA-V3 Phase B: legacyContextManager removed; overflow compression is now handled by PikaContextManager",
+	)
 }
 
 // ---------------------------------------------------------------------------
@@ -322,7 +331,9 @@ func TestLegacyCompact_Overflow_TooShortToCompress(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLegacyCompact_PostTurn_BelowThreshold(t *testing.T) {
-	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; post-turn compaction is now handled by PikaContextManager")
+	t.Skip(
+		"PIKA-V3 Phase B: legacyContextManager removed; post-turn compaction is now handled by PikaContextManager",
+	)
 }
 
 func TestLegacyCompact_PostTurn_ExceedsMessageThreshold(t *testing.T) {
@@ -473,7 +484,9 @@ func TestIngestCalledDuringTurn(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLegacyCompact_Overflow_SingleTurnKeepsLastUserMessage(t *testing.T) {
-	t.Skip("PIKA-V3 Phase B: legacyContextManager removed; forceCompression is now handled by PikaContextManager")
+	t.Skip(
+		"PIKA-V3 Phase B: legacyContextManager removed; forceCompression is now handled by PikaContextManager",
+	)
 }
 
 // ---------------------------------------------------------------------------
@@ -483,7 +496,10 @@ func TestLegacyCompact_Overflow_SingleTurnKeepsLastUserMessage(t *testing.T) {
 // noopContextManager is a minimal ContextManager that does nothing.
 type noopContextManager struct{}
 
-func (m *noopContextManager) Assemble(_ context.Context, req *AssembleRequest) (*AssembleResponse, error) {
+func (m *noopContextManager) Assemble(
+	_ context.Context,
+	req *AssembleRequest,
+) (*AssembleResponse, error) {
 	return &AssembleResponse{}, nil
 }
 func (m *noopContextManager) Compact(_ context.Context, _ *CompactRequest) error { return nil }
@@ -501,7 +517,10 @@ type trackingContextManager struct {
 	lastIngest    *IngestRequest
 }
 
-func (m *trackingContextManager) Assemble(_ context.Context, req *AssembleRequest) (*AssembleResponse, error) {
+func (m *trackingContextManager) Assemble(
+	_ context.Context,
+	req *AssembleRequest,
+) (*AssembleResponse, error) {
 	m.assembleCalls.Add(1)
 	m.mu.Lock()
 	m.lastAssemble = req

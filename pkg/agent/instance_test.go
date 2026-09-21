@@ -168,7 +168,11 @@ func TestNewAgentInstance_ResolveCandidatesFromModelListAlias(t *testing.T) {
 				t.Fatalf("len(Candidates) = %d, want 1", len(agent.Candidates))
 			}
 			if agent.Candidates[0].Provider != tt.wantProvider {
-				t.Fatalf("candidate provider = %q, want %q", agent.Candidates[0].Provider, tt.wantProvider)
+				t.Fatalf(
+					"candidate provider = %q, want %q",
+					agent.Candidates[0].Provider,
+					tt.wantProvider,
+				)
 			}
 			if agent.Candidates[0].Model != tt.wantModel {
 				t.Fatalf("candidate model = %q, want %q", agent.Candidates[0].Model, tt.wantModel)
@@ -219,7 +223,11 @@ func TestNewAgentInstance_PreservesDistinctLimiterIdentityForSharedResolvedModel
 		t.Fatalf("first identity key = %q, want %q", first.IdentityKey, "model_name:glm-4.7")
 	}
 	if second.IdentityKey != "model_name:glm-4.7__key_1" {
-		t.Fatalf("second identity key = %q, want %q", second.IdentityKey, "model_name:glm-4.7__key_1")
+		t.Fatalf(
+			"second identity key = %q, want %q",
+			second.IdentityKey,
+			"model_name:glm-4.7__key_1",
+		)
 	}
 	if first.RPM != 1 {
 		t.Fatalf("first RPM = %d, want 1", first.RPM)
@@ -368,7 +376,11 @@ func TestPopulateCandidateProviders_SkipsExistingKeys(t *testing.T) {
 
 	cfg := &config.Config{
 		ModelList: []*config.ModelConfig{
-			{ModelName: "my-gpt", Model: "openai/gpt-4o", APIKeys: config.SimpleSecureStrings("test-key")},
+			{
+				ModelName: "my-gpt",
+				Model:     "openai/gpt-4o",
+				APIKeys:   config.SimpleSecureStrings("test-key"),
+			},
 		},
 	}
 	populateCandidateProvidersFromNames(cfg, t.TempDir(), []string{"my-gpt"}, out)
@@ -387,7 +399,12 @@ func TestPopulateCandidateProviders_ResolvesAlias(t *testing.T) {
 
 	cfg := &config.Config{
 		ModelList: []*config.ModelConfig{
-			{ModelName: "my-gpt", Model: "openai/gpt-4o", APIBase: "https://api.openai.com/v1", Workspace: workspace},
+			{
+				ModelName: "my-gpt",
+				Model:     "openai/gpt-4o",
+				APIBase:   "https://api.openai.com/v1",
+				Workspace: workspace,
+			},
 		},
 	}
 	populateCandidateProvidersFromNames(cfg, workspace, []string{"my-gpt"}, out)
@@ -429,7 +446,11 @@ func TestPopulateCandidateProviders_EmptyNamesIsNoop(t *testing.T) {
 	out := map[string]providers.LLMProvider{}
 	cfg := &config.Config{
 		ModelList: []*config.ModelConfig{
-			{ModelName: "my-gpt", Model: "openai/gpt-4o", APIKeys: config.SimpleSecureStrings("key")},
+			{
+				ModelName: "my-gpt",
+				Model:     "openai/gpt-4o",
+				APIKeys:   config.SimpleSecureStrings("key"),
+			},
 		},
 	}
 	populateCandidateProvidersFromNames(cfg, t.TempDir(), nil, out)
@@ -456,7 +477,11 @@ func TestPopulateCandidateProviders_UnmatchedNameIsSkipped(t *testing.T) {
 	out := map[string]providers.LLMProvider{}
 	cfg := &config.Config{
 		ModelList: []*config.ModelConfig{
-			{ModelName: "my-gpt", Model: "openai/gpt-4o", APIKeys: config.SimpleSecureStrings("key")},
+			{
+				ModelName: "my-gpt",
+				Model:     "openai/gpt-4o",
+				APIKeys:   config.SimpleSecureStrings("key"),
+			},
 		},
 	}
 	populateCandidateProvidersFromNames(cfg, t.TempDir(), []string{"nonexistent-model"}, out)

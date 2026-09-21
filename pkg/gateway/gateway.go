@@ -216,7 +216,13 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 			"skills_available": skillsInfo["available"],
 		})
 
-	runningServices, err := setupAndStartServices(cfg, agentLoop, msgBus, pidData.Token, listenResult)
+	runningServices, err := setupAndStartServices(
+		cfg,
+		agentLoop,
+		msgBus,
+		pidData.Token,
+		listenResult,
+	)
 	if err != nil {
 		return err
 	}
@@ -242,14 +248,33 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 	agentLoop.SetReloadFunc(reloadTrigger)
 
 	for _, bindHost := range listenResult.BindHosts {
-		fmt.Printf("✓ Gateway started on %s\n", net.JoinHostPort(bindHost, strconv.Itoa(cfg.Gateway.Port)))
+		fmt.Printf(
+			"✓ Gateway started on %s\n",
+			net.JoinHostPort(bindHost, strconv.Itoa(cfg.Gateway.Port)),
+		)
 	}
 	fmt.Println("Press Ctrl+C to stop")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go agentLoop.Run(ctx)
+	// Волна 113: смерть цикла слышно. Раньше ошибка Run улетала в никуда —
+	// агент молчал без единой строки в логе (бой 21 сен: 3 мёртвых MCP-сервера).
+	go func() {
+		if err := agentLoop.Run(ctx); err != nil {
+			logger.ErrorCF(
+				"gateway",
+				"Agent loop DIED — messages queue in bus, agent is silent; check errors above and restart gateway",
+				map[string]any{"error": err.Error()},
+			)
+			return
+		}
+		logger.WarnCF(
+			"gateway",
+			"Agent loop exited cleanly — agent no longer processes messages (unexpected at runtime)",
+			nil,
+		)
+	}()
 
 	var configReloadChan <-chan *config.Config
 	stopWatch := func() {}
@@ -273,7 +298,16 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 				logger.Warn("Config reload skipped: another reload is in progress")
 				continue
 			}
-			err := executeReload(ctx, agentLoop, newCfg, &provider, runningServices, msgBus, allowEmptyStartup, debug)
+			err := executeReload(
+				ctx,
+				agentLoop,
+				newCfg,
+				&provider,
+				runningServices,
+				msgBus,
+				allowEmptyStartup,
+				debug,
+			)
 			if err != nil {
 				logger.Errorf("Config reload failed: %v", err)
 			}
@@ -290,7 +324,16 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 				runningServices.reloading.Store(false)
 				continue
 			}
-			err = executeReload(ctx, agentLoop, newCfg, &provider, runningServices, msgBus, allowEmptyStartup, debug)
+			err = executeReload(
+				ctx,
+				agentLoop,
+				newCfg,
+				&provider,
+				runningServices,
+				msgBus,
+				allowEmptyStartup,
+				debug,
+			)
 			if err != nil {
 				logger.Errorf("Manual reload failed: %v", err)
 			} else {
@@ -302,7 +345,10 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) (runEr
 
 func preCheckConfig(cfg *config.Config) error {
 	if cfg.Gateway.Port <= 0 || cfg.Gateway.Port > 65535 {
-		return fmt.Errorf("invalid gateway port: %d, port must be between 1 and 65535", cfg.Gateway.Port)
+		return fmt.Errorf(
+			"invalid gateway port: %d, port must be between 1 and 65535",
+			cfg.Gateway.Port,
+		)
 	}
 	return nil
 }
@@ -319,7 +365,16 @@ func executeReload(
 ) error {
 	defer runningServices.reloading.Store(false)
 
-	return handleConfigReload(ctx, agentLoop, newCfg, provider, runningServices, msgBus, allowEmptyStartup, debug)
+	return handleConfigReload(
+		ctx,
+		agentLoop,
+		newCfg,
+		provider,
+		runningServices,
+		msgBus,
+		allowEmptyStartup,
+		debug,
+	)
 }
 
 func createStartupProvider(
@@ -421,7 +476,11 @@ func setupAndStartServices(
 		fms.Start()
 	}
 
-	runningServices.ChannelManager, err = channels.NewManager(cfg, msgBus, runningServices.MediaStore)
+	runningServices.ChannelManager, err = channels.NewManager(
+		cfg,
+		msgBus,
+		runningServices.MediaStore,
+	)
 	if err != nil {
 		if fms, ok := runningServices.MediaStore.(*media.FileMediaStore); ok {
 			fms.Stop()
@@ -435,7 +494,11 @@ func setupAndStartServices(
 	transcriber := asr.DetectTranscriber(cfg)
 	if transcriber != nil {
 		agentLoop.SetTranscriber(transcriber)
-		logger.InfoCF("voice", "Transcription enabled (agent-level)", map[string]any{"provider": transcriber.Name()})
+		logger.InfoCF(
+			"voice",
+			"Transcription enabled (agent-level)",
+			map[string]any{"provider": transcriber.Name()},
+		)
 	}
 
 	ttsAvailable := tts.DetectTTS(cfg) != nil
@@ -448,7 +511,11 @@ func setupAndStartServices(
 	}
 
 	runningServices.authToken = authToken
-	runningServices.HealthServer = health.NewServer(listenResult.ProbeHost, cfg.Gateway.Port, authToken)
+	runningServices.HealthServer = health.NewServer(
+		listenResult.ProbeHost,
+		cfg.Gateway.Port,
+		authToken,
+	)
 
 	var listenAddr string
 	if len(listenResult.Listeners) > 0 {
@@ -489,7 +556,11 @@ func setupAndStartServices(
 	}, stateManager)
 	runningServices.DeviceService.SetBus(msgBus)
 	if err = runningServices.DeviceService.Start(context.Background()); err != nil {
-		logger.ErrorCF("device", "Error starting device service", map[string]any{"error": err.Error()})
+		logger.ErrorCF(
+			"device",
+			"Error starting device service",
+			map[string]any{"error": err.Error()},
+		)
 	} else if cfg.Devices.Enabled {
 		fmt.Println("✓ Device event service started")
 	}
@@ -497,7 +568,11 @@ func setupAndStartServices(
 	return runningServices, nil
 }
 
-func stopAndCleanupServices(runningServices *services, shutdownTimeout time.Duration, isReload bool) {
+func stopAndCleanupServices(
+	runningServices *services,
+	shutdownTimeout time.Duration,
+	isReload bool,
+) {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()
 
@@ -738,7 +813,11 @@ func restartServices(
 	}, stateManager)
 	runningServices.DeviceService.SetBus(msgBus)
 	if err := runningServices.DeviceService.Start(context.Background()); err != nil {
-		logger.WarnCF("device", "Failed to restart device service", map[string]any{"error": err.Error()})
+		logger.WarnCF(
+			"device",
+			"Failed to restart device service",
+			map[string]any{"error": err.Error()},
+		)
 	} else if cfg.Devices.Enabled {
 		fmt.Println("  ✓ Device event service restarted")
 	}
@@ -746,7 +825,11 @@ func restartServices(
 	transcriber := asr.DetectTranscriber(cfg)
 	al.SetTranscriber(transcriber)
 	if transcriber != nil {
-		logger.InfoCF("voice", "Transcription re-enabled (agent-level)", map[string]any{"provider": transcriber.Name()})
+		logger.InfoCF(
+			"voice",
+			"Transcription re-enabled (agent-level)",
+			map[string]any{"provider": transcriber.Name()},
+		)
 
 		// Start Voice Agent Orchestrator on reload
 		vaCtx, vaCancel := context.WithCancel(context.Background())
@@ -863,7 +946,15 @@ func setupCronTool(
 	var cronTool *tools.CronTool
 	if cfg.Tools.IsToolEnabled("cron") {
 		var err error
-		cronTool, err = tools.NewCronTool(cronService, agentLoop, msgBus, workspace, restrict, execTimeout, cfg)
+		cronTool, err = tools.NewCronTool(
+			cronService,
+			agentLoop,
+			msgBus,
+			workspace,
+			restrict,
+			execTimeout,
+			cfg,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("critical error during CronTool initialization: %w", err)
 		}
@@ -899,7 +990,9 @@ func setupCronTool(
 	return cronService, nil
 }
 
-func createHeartbeatHandler(agentLoop *agent.AgentLoop) func(prompt, channel, chatID string) *tools.ToolResult {
+func createHeartbeatHandler(
+	agentLoop *agent.AgentLoop,
+) func(prompt, channel, chatID string) *tools.ToolResult {
 	return func(prompt, channel, chatID string) *tools.ToolResult {
 		if channel == "" || chatID == "" {
 			channel, chatID = "cli", "direct"

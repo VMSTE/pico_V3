@@ -14,7 +14,11 @@ import (
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
-func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipeline) (turnResult, error) {
+func (al *AgentLoop) runTurn(
+	ctx context.Context,
+	ts *turnState,
+	pipeline *Pipeline,
+) (turnResult, error) {
 	turnCtx, turnCancel := context.WithCancel(ctx)
 	defer turnCancel()
 	ts.setTurnCancel(turnCancel)
@@ -99,18 +103,26 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState, pipeline *Pipel
 		// Check if parent turn has ended (SubTurn support from HEAD)
 		if ts.parentTurnState != nil && ts.IsParentEnded() {
 			if !ts.critical {
-				logger.InfoCF("agent", "Parent turn ended, non-critical SubTurn exiting gracefully", map[string]any{
+				logger.InfoCF(
+					"agent",
+					"Parent turn ended, non-critical SubTurn exiting gracefully",
+					map[string]any{
+						"agent_id":  ts.agentID,
+						"iteration": iteration,
+						"turn_id":   ts.turnID,
+					},
+				)
+				break
+			}
+			logger.InfoCF(
+				"agent",
+				"Parent turn ended, critical SubTurn continues running",
+				map[string]any{
 					"agent_id":  ts.agentID,
 					"iteration": iteration,
 					"turn_id":   ts.turnID,
-				})
-				break
-			}
-			logger.InfoCF("agent", "Parent turn ended, critical SubTurn continues running", map[string]any{
-				"agent_id":  ts.agentID,
-				"iteration": iteration,
-				"turn_id":   ts.turnID,
-			})
+				},
+			)
 		}
 
 		// Р-4 (D-AUDIT-54): результаты async SubTurn — через общий хелпер
@@ -294,7 +306,10 @@ func (al *AgentLoop) selectCandidates(
 			"score":       score,
 			"threshold":   agent.Router.Threshold(),
 		})
-	return agent.LightCandidates, resolvedCandidateModel(agent.LightCandidates, agent.Router.LightModel()), true
+	return agent.LightCandidates, resolvedCandidateModel(
+		agent.LightCandidates,
+		agent.Router.LightModel(),
+	), true
 }
 
 // resolveContextManager returns the configured ContextManager.
@@ -311,7 +326,12 @@ func (al *AgentLoop) resolveContextManager() ContextManager {
 		})
 		factory, ok = lookupContextManager("pika")
 		if !ok {
-			panic(fmt.Sprintf("context manager %q not registered and pika fallback unavailable", name))
+			panic(
+				fmt.Sprintf(
+					"context manager %q not registered and pika fallback unavailable",
+					name,
+				),
+			)
 		}
 	}
 	cm, err := factory(al.cfg.Agents.Defaults.ContextManagerConfig, al)
@@ -395,7 +415,11 @@ func (al *AgentLoop) askSideQuestion(
 		forceModel bool,
 		callMessages []providers.Message,
 	) (*providers.LLMResponse, error) {
-		provider, providerModel, cleanup, err := al.isolatedSideQuestionProvider(agent, selectedModelName, candidate)
+		provider, providerModel, cleanup, err := al.isolatedSideQuestionProvider(
+			agent,
+			selectedModelName,
+			candidate,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -415,7 +439,11 @@ func (al *AgentLoop) askSideQuestion(
 
 	turnCtx := newTurnContext(nil, nil, nil)
 	if opts != nil {
-		turnCtx = newTurnContext(opts.Dispatch.InboundContext, opts.Dispatch.RouteResult, opts.Dispatch.SessionScope)
+		turnCtx = newTurnContext(
+			opts.Dispatch.InboundContext,
+			opts.Dispatch.RouteResult,
+			opts.Dispatch.SessionScope,
+		)
 	}
 	llmModel := activeModel
 	if al.hooks != nil {
@@ -471,7 +499,8 @@ func (al *AgentLoop) askSideQuestion(
 				func(ctx context.Context, providerName, model string) (*providers.LLMResponse, error) {
 					candidate := providers.FallbackCandidate{Provider: providerName, Model: model}
 					for _, activeCandidate := range activeCandidates {
-						if activeCandidate.Provider == providerName && activeCandidate.Model == model {
+						if activeCandidate.Provider == providerName &&
+							activeCandidate.Model == model {
 							candidate = activeCandidate
 							break
 						}
@@ -559,7 +588,9 @@ func (al *AgentLoop) isolatedSideQuestionProvider(
 	candidate providers.FallbackCandidate,
 ) (providers.LLMProvider, string, func(), error) {
 	if agent == nil {
-		return nil, "", func() {}, fmt.Errorf("isolatedSideQuestionProvider: no agent available for /btw")
+		return nil, "", func() {}, fmt.Errorf(
+			"isolatedSideQuestionProvider: no agent available for /btw",
+		)
 	}
 
 	modelCfg, err := al.sideQuestionModelConfig(agent, baseModelName, candidate)

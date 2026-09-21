@@ -316,7 +316,10 @@ func (al *AgentLoop) agentForSession(sessionKey string) *AgentInstance {
 // user has since enqueued steering messages.
 //
 // If no steering messages are pending, it returns an empty string.
-func (al *AgentLoop) Continue(ctx context.Context, sessionKey, channel, chatID string) (string, error) {
+func (al *AgentLoop) Continue(
+	ctx context.Context,
+	sessionKey, channel, chatID string,
+) (string, error) {
 	// Claim the session with a unique placeholder to prevent a TOCTOU race where two
 	// concurrent Continue calls for the same session both pass the active-turn
 	// check and create parallel turns. The placeholder is replaced by the real
@@ -327,7 +330,11 @@ func (al *AgentLoop) Continue(ctx context.Context, sessionKey, channel, chatID s
 	}
 	if _, loaded := al.activeTurnStates.LoadOrStore(sessionKey, placeholder); loaded {
 		if active := al.GetActiveTurnBySession(sessionKey); active != nil {
-			return "", fmt.Errorf("turn %s is still active for session %q", active.TurnID, sessionKey)
+			return "", fmt.Errorf(
+				"turn %s is still active for session %q",
+				active.TurnID,
+				sessionKey,
+			)
 		}
 		// Another Continue just claimed the slot; let it handle the steering.
 		return "", nil
@@ -365,7 +372,15 @@ func (al *AgentLoop) Continue(ctx context.Context, sessionKey, channel, chatID s
 		scope = metaStore.GetSessionScope(sessionKey)
 	}
 
-	return al.continueWithSteeringMessages(ctx, agent, sessionKey, channel, chatID, scope, steeringMsgs)
+	return al.continueWithSteeringMessages(
+		ctx,
+		agent,
+		sessionKey,
+		channel,
+		chatID,
+		scope,
+		steeringMsgs,
+	)
 }
 
 func (al *AgentLoop) InterruptGraceful(hint string) error {

@@ -103,11 +103,21 @@ func userPromptMessage(content string, media []string) providers.Message {
 	if len(media) > 0 {
 		msg.Media = append([]string(nil), media...)
 	}
-	return promptMessageWithMetadata(msg, PromptLayerTurn, PromptSlotMessage, PromptSourceUserMessage)
+	return promptMessageWithMetadata(
+		msg,
+		PromptLayerTurn,
+		PromptSlotMessage,
+		PromptSourceUserMessage,
+	)
 }
 
 func steeringPromptMessage(msg providers.Message) providers.Message {
-	return promptMessageWithDefaultMetadata(msg, PromptLayerTurn, PromptSlotSteering, PromptSourceSteering)
+	return promptMessageWithDefaultMetadata(
+		msg,
+		PromptLayerTurn,
+		PromptSlotSteering,
+		PromptSourceSteering,
+	)
 }
 
 func subTurnResultPromptMessage(content string) providers.Message {

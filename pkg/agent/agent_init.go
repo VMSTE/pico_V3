@@ -113,7 +113,11 @@ func registerSharedTools(
 		if cfg.Tools.IsToolEnabled("web") {
 			searchTool, err := tools.NewWebSearchTool(tools.WebSearchToolOptionsFromConfig(cfg))
 			if err != nil {
-				logger.ErrorCF("agent", "Failed to create web search tool", map[string]any{"error": err.Error()})
+				logger.ErrorCF(
+					"agent",
+					"Failed to create web search tool",
+					map[string]any{"error": err.Error()},
+				)
 			} else if searchTool != nil {
 				agent.Tools.Register(searchTool)
 			}
@@ -126,7 +130,11 @@ func registerSharedTools(
 				cfg.Tools.Web.FetchLimitBytes,
 				cfg.Tools.Web.PrivateHostWhitelist)
 			if err != nil {
-				logger.ErrorCF("agent", "Failed to create web fetch tool", map[string]any{"error": err.Error()})
+				logger.ErrorCF(
+					"agent",
+					"Failed to create web fetch tool",
+					map[string]any{"error": err.Error()},
+				)
 			} else {
 				agent.Tools.Register(fetchTool)
 			}
@@ -171,21 +179,23 @@ func registerSharedTools(
 		}
 		if cfg.Tools.IsToolEnabled("reaction") {
 			reactionTool := tools.NewReactionTool()
-			reactionTool.SetReactionCallback(func(ctx context.Context, channel, chatID, messageID string) error {
-				if al.channelManager == nil {
-					return fmt.Errorf("channel manager not configured")
-				}
-				ch, ok := al.channelManager.GetChannel(channel)
-				if !ok {
-					return fmt.Errorf("channel %s not found", channel)
-				}
-				rc, ok := ch.(channels.ReactionCapable)
-				if !ok {
-					return fmt.Errorf("channel %s does not support reactions", channel)
-				}
-				_, err := rc.ReactToMessage(ctx, chatID, messageID)
-				return err
-			})
+			reactionTool.SetReactionCallback(
+				func(ctx context.Context, channel, chatID, messageID string) error {
+					if al.channelManager == nil {
+						return fmt.Errorf("channel manager not configured")
+					}
+					ch, ok := al.channelManager.GetChannel(channel)
+					if !ok {
+						return fmt.Errorf("channel %s not found", channel)
+					}
+					rc, ok := ch.(channels.ReactionCapable)
+					if !ok {
+						return fmt.Errorf("channel %s does not support reactions", channel)
+					}
+					_, err := rc.ReactToMessage(ctx, chatID, messageID)
+					return err
+				},
+			)
 			agent.Tools.Register(reactionTool)
 		}
 

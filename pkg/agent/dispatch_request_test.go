@@ -35,7 +35,11 @@ func TestNormalizeProcessOptions_PopulatesDispatchFromLegacyFields(t *testing.T)
 		)
 	}
 	if opts.Dispatch.SenderID() != "user-1" || opts.Dispatch.MessageID() != "msg-1" {
-		t.Fatalf("dispatch sender/message = (%q,%q)", opts.Dispatch.SenderID(), opts.Dispatch.MessageID())
+		t.Fatalf(
+			"dispatch sender/message = (%q,%q)",
+			opts.Dispatch.SenderID(),
+			opts.Dispatch.MessageID(),
+		)
 	}
 	if opts.Dispatch.ReplyToMessageID() != "reply-1" {
 		t.Fatalf("Dispatch.ReplyToMessageID() = %q, want reply-1", opts.Dispatch.ReplyToMessageID())
@@ -130,6 +134,9 @@ func TestNormalizeProcessOptions_InfersLegacyChatTypeFromSessionScope(t *testing
 		t.Fatal("Dispatch.InboundContext is nil")
 	}
 	if opts.Dispatch.InboundContext.ChatType != "group" {
-		t.Fatalf("Dispatch.InboundContext.ChatType = %q, want group", opts.Dispatch.InboundContext.ChatType)
+		t.Fatalf(
+			"Dispatch.InboundContext.ChatType = %q, want group",
+			opts.Dispatch.InboundContext.ChatType,
+		)
 	}
 }

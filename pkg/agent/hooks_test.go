@@ -176,7 +176,10 @@ func (h *llmUserAppendHook) BeforeLLM(
 	req *LLMHookRequest,
 ) (*LLMHookRequest, HookDecision, error) {
 	next := req.Clone()
-	next.Messages = append(next.Messages, providers.Message{Role: "user", Content: "extra user context"})
+	next.Messages = append(
+		next.Messages,
+		providers.Message{Role: "user", Content: "extra user context"},
+	)
 	return next, HookDecision{Action: HookActionModify}, nil
 }
 
@@ -216,7 +219,10 @@ func (h *llmJSONRoundTripUserAppendHook) BeforeLLM(
 	next.Model = decoded.Model
 	next.Messages = decoded.Messages
 	next.Tools = decoded.Tools
-	next.Messages = append(next.Messages, providers.Message{Role: "user", Content: "json extra user context"})
+	next.Messages = append(
+		next.Messages,
+		providers.Message{Role: "user", Content: "json extra user context"},
+	)
 	return next, HookDecision{Action: HookActionModify}, nil
 }
 
@@ -423,7 +429,8 @@ func TestHookManager_BeforeLLMControlsToolDefinitionMutation(t *testing.T) {
 	if got.Tools[0].Function.Description != "create issue" {
 		t.Fatalf("tool description = %q, want original", got.Tools[0].Function.Description)
 	}
-	if got.Tools[0].PromptSource != "mcp:github" || got.Tools[0].PromptSlot != string(PromptSlotMCP) {
+	if got.Tools[0].PromptSource != "mcp:github" ||
+		got.Tools[0].PromptSlot != string(PromptSlotMCP) {
 		t.Fatalf("tool prompt metadata = %#v, want original mcp metadata", got.Tools[0])
 	}
 }
@@ -761,7 +768,10 @@ func (t *echoTextRewrittenTool) Parameters() map[string]any {
 	}
 }
 
-func (t *echoTextRewrittenTool) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
+func (t *echoTextRewrittenTool) Execute(
+	ctx context.Context,
+	args map[string]any,
+) *tools.ToolResult {
 	text, _ := args["text"].(string)
 	return tools.SilentResult("rewritten:" + text)
 }
@@ -815,7 +825,10 @@ func TestAgentLoop_Hooks_ToolFeedbackUsesRewrittenToolName(t *testing.T) {
 
 type denyApprovalHook struct{}
 
-func (h *denyApprovalHook) ApproveTool(ctx context.Context, req *ToolApprovalRequest) (ApprovalDecision, error) {
+func (h *denyApprovalHook) ApproveTool(
+	ctx context.Context,
+	req *ToolApprovalRequest,
+) (ApprovalDecision, error) {
 	return ApprovalDecision{
 		Approved: false,
 		Reason:   "blocked",
@@ -1072,7 +1085,10 @@ type errorMediaChannel struct {
 	sendErr error
 }
 
-func (f *errorMediaChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMessage) ([]string, error) {
+func (f *errorMediaChannel) SendMedia(
+	ctx context.Context,
+	msg bus.OutboundMediaMessage,
+) ([]string, error) {
 	return nil, f.sendErr
 }
 
@@ -1245,10 +1261,14 @@ func TestAgentLoop_HookRespond_ResponseHandledMediaPreservesOutboundContext(t *t
 	}
 
 	if len(telegramChannel.getSentMedia()) != 1 {
-		t.Fatalf("expected exactly 1 sent media message, got %d", len(telegramChannel.getSentMedia()))
+		t.Fatalf(
+			"expected exactly 1 sent media message, got %d",
+			len(telegramChannel.getSentMedia()),
+		)
 	}
 	sent := telegramChannel.getSentMedia()[0]
-	if sent.Context.Channel != "telegram" || sent.Context.ChatID != "-100123" || sent.Context.TopicID != "42" {
+	if sent.Context.Channel != "telegram" || sent.Context.ChatID != "-100123" ||
+		sent.Context.TopicID != "42" {
 		t.Fatalf("unexpected media context: %+v", sent.Context)
 	}
 	if sent.AgentID != agent.ID {
@@ -1308,7 +1328,9 @@ func TestAgentLoop_HookRespond_InterruptSkipsRemaining(t *testing.T) {
 	defer cleanup()
 
 	tool1ExecCh := make(chan struct{}, 1)
-	al.RegisterTool(&slowTool{name: "tool_two", duration: 100 * time.Millisecond, execCh: tool1ExecCh})
+	al.RegisterTool(
+		&slowTool{name: "tool_two", duration: 100 * time.Millisecond, execCh: tool1ExecCh},
+	)
 	al.RegisterTool(&slowTool{name: "tool_three", duration: 100 * time.Millisecond})
 
 	hook := &respondHook{

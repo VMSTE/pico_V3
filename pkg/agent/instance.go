@@ -90,9 +90,23 @@ func NewAgentInstance(
 		maxReadFileSize := cfg.Tools.ReadFile.MaxReadFileSize
 		switch cfg.Tools.ReadFile.EffectiveMode() {
 		case config.ReadFileModeLines:
-			toolsRegistry.Register(tools.NewReadFileLinesTool(workspace, readRestrict, maxReadFileSize, allowReadPaths))
+			toolsRegistry.Register(
+				tools.NewReadFileLinesTool(
+					workspace,
+					readRestrict,
+					maxReadFileSize,
+					allowReadPaths,
+				),
+			)
 		default:
-			toolsRegistry.Register(tools.NewReadFileBytesTool(workspace, readRestrict, maxReadFileSize, allowReadPaths))
+			toolsRegistry.Register(
+				tools.NewReadFileBytesTool(
+					workspace,
+					readRestrict,
+					maxReadFileSize,
+					allowReadPaths,
+				),
+			)
 		}
 	}
 	if cfg.Tools.IsToolEnabled("write_file") {
@@ -234,8 +248,15 @@ func NewAgentInstance(
 		if len(resolved) > 0 {
 			lightModelCfg, err := resolvedModelConfig(cfg, rc.LightModel, workspace)
 			if err != nil {
-				logger.WarnCF("agent", "Routing light model config invalid; routing disabled",
-					map[string]any{"light_model": rc.LightModel, "agent_id": agentID, "error": err.Error()})
+				logger.WarnCF(
+					"agent",
+					"Routing light model config invalid; routing disabled",
+					map[string]any{
+						"light_model": rc.LightModel,
+						"agent_id":    agentID,
+						"error":       err.Error(),
+					},
+				)
 			} else {
 				lp, _, err := providers.CreateProviderFromConfig(lightModelCfg)
 				if err != nil {
@@ -300,9 +321,11 @@ func populateCandidateProvidersFromNames(
 	for _, name := range names {
 		mc, err := resolvedModelConfig(cfg, strings.TrimSpace(name), workspace)
 		if err != nil {
-			logger.WarnCF("agent",
+			logger.WarnCF(
+				"agent",
 				"fallback provider: no model_list entry found; will inherit primary provider credentials",
-				map[string]any{"name": name, "error": err.Error()})
+				map[string]any{"name": name, "error": err.Error()},
+			)
 			continue
 		}
 		protocol, modelID := providers.ExtractProtocol(mc)
@@ -326,7 +349,8 @@ func resolveAgentWorkspace(agentCfg *config.AgentConfig, defaults *config.AgentD
 		return expandHome(strings.TrimSpace(agentCfg.Workspace))
 	}
 	// Use the configured default workspace (respects PICOCLAW_HOME)
-	if agentCfg == nil || agentCfg.Default || agentCfg.ID == "" || routing.NormalizeAgentID(agentCfg.ID) == "main" {
+	if agentCfg == nil || agentCfg.Default || agentCfg.ID == "" ||
+		routing.NormalizeAgentID(agentCfg.ID) == "main" {
 		return expandHome(defaults.Workspace)
 	}
 	// For named agents without explicit workspace, use default workspace with agent ID suffix

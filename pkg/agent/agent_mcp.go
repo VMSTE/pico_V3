@@ -55,6 +55,13 @@ func (r *mcpRuntime) getInitErr() error {
 	return r.initErr
 }
 
+// MCPInitError возвращает кэшированную ошибку фонового MCP-инита (волна 113).
+// Цикл агента больше не умирает от MCP — статус читают здесь (/health, морда).
+// nil = MCP ок или выключен.
+func (al *AgentLoop) MCPInitError() error {
+	return al.mcp.getInitErr()
+}
+
 func (r *mcpRuntime) takeManager() *mcp.Manager {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -77,7 +84,11 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 	}
 
 	if al.cfg.Tools.MCP.Servers == nil || len(al.cfg.Tools.MCP.Servers) == 0 {
-		logger.WarnCF("agent", "MCP is enabled but no servers are configured, skipping MCP initialization", nil)
+		logger.WarnCF(
+			"agent",
+			"MCP is enabled but no servers are configured, skipping MCP initialization",
+			nil,
+		)
 		return nil
 	}
 
@@ -88,7 +99,11 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 		}
 	}
 	if !findValidServer {
-		logger.WarnCF("agent", "MCP is enabled but no valid servers are configured, skipping MCP initialization", nil)
+		logger.WarnCF(
+			"agent",
+			"MCP is enabled but no valid servers are configured, skipping MCP initialization",
+			nil,
+		)
 		return nil
 	}
 
@@ -152,7 +167,10 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 			summaries := make([]mcpToolSummary, 0, len(aclNames))
 			for _, t := range conn.Tools {
 				if t != nil && aclAllow[t.Name] {
-					summaries = append(summaries, mcpToolSummary{Name: t.Name, Description: t.Description})
+					summaries = append(
+						summaries,
+						mcpToolSummary{Name: t.Name, Description: t.Description},
+					)
 				}
 			}
 			guardBlocked := al.guardAuditMCPTools(ctx, serverName, summaries)
@@ -256,10 +274,14 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 				}
 
 				if useRegex {
-					agent.Tools.Register(tools.NewRegexSearchTool(agent.Tools, ttl, maxSearchResults))
+					agent.Tools.Register(
+						tools.NewRegexSearchTool(agent.Tools, ttl, maxSearchResults),
+					)
 				}
 				if useBM25 {
-					agent.Tools.Register(tools.NewBM25SearchTool(agent.Tools, ttl, maxSearchResults))
+					agent.Tools.Register(
+						tools.NewBM25SearchTool(agent.Tools, ttl, maxSearchResults),
+					)
 				}
 			}
 		}

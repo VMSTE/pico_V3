@@ -169,8 +169,10 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 
 	opts := processOptions{
 		Dispatch: DispatchRequest{
-			SessionKey:     sessionKey,
-			SessionAliases: buildSessionAliases(sessionKey, append(allocation.SessionAliases, msg.SessionKey)...),
+			SessionKey: sessionKey,
+			SessionAliases: buildSessionAliases(
+				sessionKey,
+				append(allocation.SessionAliases, msg.SessionKey)...),
 			InboundContext: cloneInboundContext(&msg.Context),
 			RouteResult:    cloneResolvedRoute(&route),
 			SessionScope:   session.CloneScope(&allocation.Scope),
@@ -203,7 +205,9 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	return al.runAgentLoop(ctx, agent, opts)
 }
 
-func (al *AgentLoop) resolveMessageRoute(msg bus.InboundMessage) (routing.ResolvedRoute, *AgentInstance, error) {
+func (al *AgentLoop) resolveMessageRoute(
+	msg bus.InboundMessage,
+) (routing.ResolvedRoute, *AgentInstance, error) {
 	registry := al.GetRegistry()
 	inboundCtx := normalizedInboundContext(msg)
 	route := registry.ResolveRoute(inboundCtx)
@@ -213,13 +217,19 @@ func (al *AgentLoop) resolveMessageRoute(msg bus.InboundMessage) (routing.Resolv
 		agent = registry.GetDefaultAgent()
 	}
 	if agent == nil {
-		return routing.ResolvedRoute{}, nil, fmt.Errorf("no agent available for route (agent_id=%s)", route.AgentID)
+		return routing.ResolvedRoute{}, nil, fmt.Errorf(
+			"no agent available for route (agent_id=%s)",
+			route.AgentID,
+		)
 	}
 
 	return route, agent, nil
 }
 
-func (al *AgentLoop) allocateRouteSession(route routing.ResolvedRoute, msg bus.InboundMessage) session.Allocation {
+func (al *AgentLoop) allocateRouteSession(
+	route routing.ResolvedRoute,
+	msg bus.InboundMessage,
+) session.Allocation {
 	return session.AllocateRouteSession(session.AllocationInput{
 		AgentID:       route.AgentID,
 		Context:       normalizedInboundContext(msg),

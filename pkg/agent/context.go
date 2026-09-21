@@ -54,9 +54,13 @@ func (cb *ContextBuilder) WithToolDiscovery(useBM25, useRegex bool) *ContextBuil
 			useBM25:  useBM25,
 			useRegex: useRegex,
 		}); err != nil {
-			logger.WarnCF("agent", "Failed to register tool discovery prompt contributor", map[string]any{
-				"error": err.Error(),
-			})
+			logger.WarnCF(
+				"agent",
+				"Failed to register tool discovery prompt contributor",
+				map[string]any{
+					"error": err.Error(),
+				},
+			)
 		}
 	}
 	return cb
@@ -636,7 +640,9 @@ func formatCurrentSenderLine(senderID, senderDisplayName string) string {
 	}
 }
 
-func (cb *ContextBuilder) buildDynamicContext(channel, chatID, senderID, senderDisplayName string) string {
+func (cb *ContextBuilder) buildDynamicContext(
+	channel, chatID, senderID, senderDisplayName string,
+) string {
 	now := time.Now().Format("2006-01-02 15:04 (Monday)")
 	rt := fmt.Sprintf("%s %s, Go %s", runtime.GOOS, runtime.GOARCH, runtime.Version())
 
@@ -689,7 +695,12 @@ func (cb *ContextBuilder) BuildMessagesFromPrompt(req PromptBuildRequest) []prov
 	staticPrompt := cb.BuildSystemPromptWithCache()
 
 	// Build short dynamic context (time, runtime, session) — changes per request
-	dynamicCtx := cb.buildDynamicContext(req.Channel, req.ChatID, req.SenderID, req.SenderDisplayName)
+	dynamicCtx := cb.buildDynamicContext(
+		req.Channel,
+		req.ChatID,
+		req.SenderID,
+		req.SenderDisplayName,
+	)
 
 	// Compose a single system message: static (cached) + dynamic + optional summary.
 	// Keeping all system content in one message ensures every provider adapter can
@@ -865,7 +876,11 @@ func sanitizeHistoryForProvider(history []providers.Message) []providers.Message
 		case "assistant":
 			if len(msg.ToolCalls) > 0 {
 				if len(sanitized) == 0 {
-					logger.DebugCF("agent", "Dropping assistant tool-call turn at history start", map[string]any{})
+					logger.DebugCF(
+						"agent",
+						"Dropping assistant tool-call turn at history start",
+						map[string]any{},
+					)
 					continue
 				}
 				prev := sanitized[len(sanitized)-1]
@@ -919,7 +934,11 @@ func sanitizeHistoryForProvider(history []providers.Message) []providers.Message
 					break
 				}
 				if next.ToolCallID == "" {
-					logger.DebugCF("agent", "Dropping tool result without tool_call_id", map[string]any{})
+					logger.DebugCF(
+						"agent",
+						"Dropping tool result without tool_call_id",
+						map[string]any{},
+					)
 					continue
 				}
 				if _, ok := expected[next.ToolCallID]; !ok {
@@ -929,9 +948,13 @@ func sanitizeHistoryForProvider(history []providers.Message) []providers.Message
 					continue
 				}
 				if seenInBlock[next.ToolCallID] {
-					logger.DebugCF("agent", "Dropping duplicate tool result in tool block", map[string]any{
-						"tool_call_id": next.ToolCallID,
-					})
+					logger.DebugCF(
+						"agent",
+						"Dropping duplicate tool result in tool block",
+						map[string]any{
+							"tool_call_id": next.ToolCallID,
+						},
+					)
 					continue
 				}
 				seenInBlock[next.ToolCallID] = true
@@ -941,7 +964,11 @@ func sanitizeHistoryForProvider(history []providers.Message) []providers.Message
 
 			allFound := !invalidToolCallID
 			if invalidToolCallID {
-				logger.DebugCF("agent", "Dropping assistant message with empty tool_call_id", map[string]any{})
+				logger.DebugCF(
+					"agent",
+					"Dropping assistant message with empty tool_call_id",
+					map[string]any{},
+				)
 			}
 			for toolCallID, found := range expected {
 				if !found {
@@ -971,9 +998,13 @@ func sanitizeHistoryForProvider(history []providers.Message) []providers.Message
 		}
 
 		if msg.Role == "tool" {
-			logger.DebugCF("agent", "Dropping orphaned tool message after validation", map[string]any{
-				"tool_call_id": msg.ToolCallID,
-			})
+			logger.DebugCF(
+				"agent",
+				"Dropping orphaned tool message after validation",
+				map[string]any{
+					"tool_call_id": msg.ToolCallID,
+				},
+			)
 			continue
 		}
 

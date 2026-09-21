@@ -24,13 +24,17 @@ func (al *AgentLoop) gatedMCPToolNames(serverName string, names []string) map[st
 		set[d.Name] = true
 	}
 	if len(set) != len(names) {
-		logger.WarnCF("agent", "MCP ACL blocked tools at registration (deny-by-default)", map[string]any{
-			"server":  serverName,
-			"allowed": len(set),
-			"total":   len(names),
-			"hint": "add security.mcp.servers." + serverName +
-				".allowed_tools or trust_level: \"internal\"",
-		})
+		logger.WarnCF(
+			"agent",
+			"MCP ACL blocked tools at registration (deny-by-default)",
+			map[string]any{
+				"server":  serverName,
+				"allowed": len(set),
+				"total":   len(names),
+				"hint": "add security.mcp.servers." + serverName +
+					".allowed_tools or trust_level: \"internal\"",
+			},
+		)
 	}
 	return set
 }

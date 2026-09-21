@@ -110,7 +110,10 @@ func (al *AgentLoop) applyExplicitSkillCommand(
 
 	skillName, ok := agent.ContextBuilder.ResolveSkillName(arg)
 	if !ok {
-		return true, true, fmt.Sprintf("Unknown skill: %s\nUse /list skills to see installed skills.", arg)
+		return true, true, fmt.Sprintf(
+			"Unknown skill: %s\nUse /list skills to see installed skills.",
+			arg,
+		)
 	}
 
 	if len(parts) < 3 {
@@ -231,12 +234,18 @@ func (al *AgentLoop) buildCommandsRuntime(
 
 			manager := al.mcp.getManager()
 			if manager == nil {
-				return nil, fmt.Errorf("MCP server '%s' is configured but not connected", resolvedName)
+				return nil, fmt.Errorf(
+					"MCP server '%s' is configured but not connected",
+					resolvedName,
+				)
 			}
 
 			conn, ok := manager.GetServer(resolvedName)
 			if !ok {
-				return nil, fmt.Errorf("MCP server '%s' is configured but not connected", resolvedName)
+				return nil, fmt.Errorf(
+					"MCP server '%s' is configured but not connected",
+					resolvedName,
+				)
 			}
 
 			toolInfos := make([]commands.MCPToolInfo, 0, len(conn.Tools))
@@ -302,7 +311,10 @@ func (al *AgentLoop) buildCommandsRuntime(
 			rt.ListSkillNames = agent.ContextBuilder.ListSkillNames
 		}
 		rt.GetModelInfo = func() (string, string) {
-			return agent.Model, resolvedCandidateProvider(agent.Candidates, cfg.Agents.Defaults.Provider)
+			return agent.Model, resolvedCandidateProvider(
+				agent.Candidates,
+				cfg.Agents.Defaults.Provider,
+			)
 		}
 		rt.SwitchModel = func(value string) (string, error) {
 			value = strings.TrimSpace(value)
@@ -316,7 +328,12 @@ func (al *AgentLoop) buildCommandsRuntime(
 				return "", fmt.Errorf("failed to initialize model %q: %w", value, err)
 			}
 
-			nextCandidates := resolveModelCandidates(cfg, cfg.Agents.Defaults.Provider, value, agent.Fallbacks)
+			nextCandidates := resolveModelCandidates(
+				cfg,
+				cfg.Agents.Defaults.Provider,
+				value,
+				agent.Fallbacks,
+			)
 			if len(nextCandidates) == 0 {
 				return "", fmt.Errorf("model %q did not resolve to any provider candidates", value)
 			}

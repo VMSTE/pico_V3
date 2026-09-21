@@ -184,7 +184,8 @@ func TestContextBuilder_CollectsToolDiscoveryContributor(t *testing.T) {
 	for _, part := range system.SystemParts {
 		if part.PromptSource == string(PromptSourceToolDiscovery) {
 			found = true
-			if part.PromptLayer != string(PromptLayerCapability) || part.PromptSlot != string(PromptSlotTooling) {
+			if part.PromptLayer != string(PromptLayerCapability) ||
+				part.PromptSlot != string(PromptSlotTooling) {
 				t.Fatalf("tool discovery metadata = %#v, want capability/tooling", part)
 			}
 			if part.CacheControl == nil || part.CacheControl.Type != "ephemeral" {
@@ -219,7 +220,8 @@ func TestContextBuilder_CollectsMCPServerContributor(t *testing.T) {
 	for _, part := range system.SystemParts {
 		if part.PromptSource == "mcp:github_server" {
 			found = true
-			if part.PromptLayer != string(PromptLayerCapability) || part.PromptSlot != string(PromptSlotMCP) {
+			if part.PromptLayer != string(PromptLayerCapability) ||
+				part.PromptSlot != string(PromptSlotMCP) {
 				t.Fatalf("mcp metadata = %#v, want capability/mcp", part)
 			}
 			if part.CacheControl == nil || part.CacheControl.Type != "ephemeral" {
@@ -241,7 +243,10 @@ func (c testPromptContributor) PromptSource() PromptSourceDescriptor {
 	return c.desc
 }
 
-func (c testPromptContributor) ContributePrompt(_ context.Context, _ PromptBuildRequest) ([]PromptPart, error) {
+func (c testPromptContributor) ContributePrompt(
+	_ context.Context,
+	_ PromptBuildRequest,
+) ([]PromptPart, error) {
 	return []PromptPart{c.part}, nil
 }
 

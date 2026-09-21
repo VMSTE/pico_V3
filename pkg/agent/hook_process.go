@@ -101,7 +101,11 @@ type processHookAfterToolResponse struct {
 	Result *ToolResultHookResponse `json:"result,omitempty"`
 }
 
-func NewProcessHook(ctx context.Context, name string, opts ProcessHookOptions) (*ProcessHook, error) {
+func NewProcessHook(
+	ctx context.Context,
+	name string,
+	opts ProcessHookOptions,
+) (*ProcessHook, error) {
 	if len(opts.Command) == 0 {
 		return nil, fmt.Errorf("process hook command is required")
 	}
@@ -292,7 +296,10 @@ func (ph *ProcessHook) AfterTool(
 	return resp.Result, HookDecision{Action: resp.Action, Reason: resp.Reason}, nil
 }
 
-func (ph *ProcessHook) ApproveTool(ctx context.Context, req *ToolApprovalRequest) (ApprovalDecision, error) {
+func (ph *ProcessHook) ApproveTool(
+	ctx context.Context,
+	req *ToolApprovalRequest,
+) (ApprovalDecision, error) {
 	if ph == nil || !ph.opts.ApproveTool {
 		return ApprovalDecision{Approved: true}, nil
 	}
@@ -508,7 +515,11 @@ func (ph *ProcessHook) removePending(id uint64) {
 	}
 }
 
-func (al *AgentLoop) MountProcessHook(ctx context.Context, name string, opts ProcessHookOptions) error {
+func (al *AgentLoop) MountProcessHook(
+	ctx context.Context,
+	name string,
+	opts ProcessHookOptions,
+) error {
 	if al == nil {
 		return fmt.Errorf("agent loop is nil")
 	}
