@@ -26,6 +26,8 @@ type ToolRegistry struct {
 	mediaStore media.MediaStore
 	// волна 108: писатель паспортов артефактов (D-AUDIT-131)
 	artifactRecorder ArtifactRecorder
+	// волна 109: машина времени — снапшот ДО мутации (ТЗ-109)
+	checkpointTaker CheckpointTaker
 }
 
 type mediaStoreAware interface {
@@ -238,6 +240,13 @@ func (r *ToolRegistry) ExecuteWithContext(
 			"path is inside .vault — protected zone (D-AUDIT-131): " +
 				"model tools cannot write here",
 		).WithError(fmt.Errorf("vault write blocked"))
+	}
+
+	// Волна 109 (ТЗ-109): машина времени — снапшот workspace ДО мутации
+	// (fs-записи всегда; exec — при деструктивной команде).
+	if r.checkpointTaker != nil &&
+		(artifactMutatingTools[name] || execDestructive(name, args)) {
+		r.checkpointTaker.BeforeMutation(name, args)
 	}
 
 	// Inject channel/chatID into ctx so tools read them via ToolChannel(ctx)/ToolChatID(ctx).

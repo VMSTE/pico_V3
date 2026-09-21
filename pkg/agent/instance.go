@@ -141,6 +141,10 @@ func NewAgentInstance(
 	// в artifact_passports автоматически на трубе ExecuteWithContext.
 	toolsRegistry.SetArtifactRecorder(pika.NewArtifactLedger(botMem, workspace))
 
+	// Волна 109 (ТЗ-109): машина времени — снапшот ДО мутации на трубе.
+	// Менеджер нефатален: без git на PATH — выключен молча.
+	toolsRegistry.SetCheckpointTaker(pika.NewCheckpointManager(workspace))
+
 	// PIKA-V3: clarify — HITL tool, uses MessageBus for user communication
 	if msgBus != nil && cfg.Clarify.Enabled {
 		clarifyCfg := &pika.ClarifyConfig{
