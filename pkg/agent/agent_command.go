@@ -13,6 +13,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/commands"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/pika"
 	"github.com/sipeed/picoclaw/pkg/providers"
 )
 
@@ -36,6 +37,13 @@ func (al *AgentLoop) handleCommand(
 	if cmdName, ok := commands.CommandName(msg.Content); ok &&
 		cmdName == "memory" {
 		return al.applyMemoryScopeCommand(ctx, msg, opts), true
+	}
+
+	// Волна 109 (ТЗ-109): /rollback — машина времени. Только founder:
+	// команда не регистрируется как тул, модель её не видит.
+	if cmdName, ok := commands.CommandName(msg.Content); ok &&
+		cmdName == "rollback" {
+		return al.applyRollbackCommand(ctx, msg, agent), true
 	}
 
 	if al.cmdRegistry == nil {
@@ -538,4 +546,61 @@ func (al *AgentLoop) applyMemoryScopeCommand(
 		return "Usage: /memory - show scope; /memory all - whole base; " +
 			"/memory session - only this chat."
 	}
+}
+
+// applyRollbackCommand implements /rollback [N|hash] [all] — машина
+// времени (ТЗ-109, волна 109). Без аргументов — список чекпоинтов.
+// Менеджер стейтless (всё состояние — в .vault/store), поэтому создаём
+// на месте из workspace агента.
+func (al *AgentLoop) applyRollbackCommand(
+	ctx context.Context,
+	msg bus.InboundMessage,
+	agent *AgentInstance,
+) string {
+	if agent == nil {
+		return "Time machine unavailable: no agent."
+	}
+	cm := pika.NewCheckpointManager(agent.Workspace)
+	if !cm.Enabled() {
+		return "Time machine is disabled (no git on PATH or empty workspace)."
+	}
+	parts := strings.Fields(strings.TrimSpace(msg.Content))
+	if len(parts) < 2 {
+		list := cm.List()
+		if len(list) == 0 {
+			return "No checkpoints yet — they appear before file writes."
+		}
+		var sb strings.Builder
+		sb.WriteString("Checkpoints (newest first):\n")
+		for i, c := range list {
+			ts := c.Time
+			if len(ts) > 19 {
+				ts = ts[:19]
+			}
+			fmt.Fprintf(&sb, "%d. %s  %s\n", i+1, ts, c.Reason)
+		}
+		sb.WriteString(
+			"\n/rollback N — restore (your hand edits survive); " +
+				"/rollback N all — full restore.")
+		return sb.String()
+	}
+	target := parts[1]
+	force := len(parts) > 2 && parts[2] == "all"
+	restored, skipped, err := cm.Rollback(ctx, target, al.botmem, force)
+	if err != nil {
+		return "Rollback failed: " + err.Error()
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Rolled back to checkpoint %s.\n", target)
+	fmt.Fprintf(&sb, "Restored: %d", len(restored))
+	for _, r := range restored {
+		sb.WriteString("\n  + " + r)
+	}
+	if len(skipped) > 0 {
+		fmt.Fprintf(&sb, "\nKept (your edits): %d", len(skipped))
+		for _, sk := range skipped {
+			sb.WriteString("\n  = " + sk)
+		}
+	}
+	return sb.String()
 }

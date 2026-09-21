@@ -1266,3 +1266,11 @@ Each entry maps to a single wave/phase and its merged PR.
 - **pkg/agent/instance.go** — регистрация в BRAIN-блоке рядом с search_memory/registry_write.
 - **Тесты**: logs_tool_test.go — 9 тестов: поиск, level, since_minutes, limit+новейшие, missing file (подсказка, не ошибка), source=errors, невалидные входы, пустой workspace.
 - **Гейты**: gofmt/build/vet зелёные; go test pkg/pika + pkg/agent зелёные.
+
+## Волна 109 — Машина времени: чекпоинты workspace + /rollback (ТЗ-109, D-AUDIT-131 фаза 2) · 21 сен 2026
+
+- **pkg/pika/checkpoints.go (NEW)** — CheckpointManager: shadow git store в .vault/store (bare repo, --git-dir/--work-tree, ноль следов в workspace). MaybeCheckpoint: add -A → drop >10 МБ → skip-if-no-change → commit; исключены .git/.vault/memory/logs/files/node_modules; без git — выключен молча. Rollback(target, mem, force): pre-rollback снапшот → diff --name-status → защита ручных правок через artifact_passports (хеш паспорта == текущему → откат; иначе пропуск+отчёт); новые файлы Пики удаляются, пользовательские живут. Бой-дебаг: git init не принимает --work-tree → init отдельной командой (initStore).
+- **pkg/tools/artifact_recorder.go** — CheckpointTaker{BeforeMutation} + SetCheckpointTaker + execDestructive (rm/mv/sed -i/dd/redirect/git reset|clean|checkout). **registry.go** — поле + триггер на трубе ДО мутации (после vault-гарда).
+- **pkg/agent/instance.go** — SetCheckpointTaker(NewCheckpointManager(workspace)). **agent_command.go** — перехват /rollback (паттерн /memory): список/откат/force; менеджер стейтless, создаётся на месте. Не тул — модель не видит.
+- **web/backend/api/commands.go** — /rollback в палитре.
+- **Тесты**: checkpoints_test.go (10) + checkpoint_taker_test.go (2). Гейты: gofmt/vet/test зелёные (tools + pika + agent + web/api).

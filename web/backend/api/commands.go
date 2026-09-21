@@ -36,6 +36,11 @@ func (h *Handler) handleListCommands(w http.ResponseWriter, r *http.Request) {
 		Description: "Per-chat memory search scope",
 		Usage:       "/memory [all|session]",
 	})
+	out = append(out, commandInfo{
+		Name:        "rollback",
+		Description: "Time machine: checkpoints list / restore (wave 109)",
+		Usage:       "/rollback [N|hash] [all]",
+	})
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"commands": out})
 }
