@@ -70,7 +70,11 @@ func outboundTurnMetadata(
 }
 
 func outboundMessageForTurn(ts *turnState, content string) bus.OutboundMessage {
-	agentID, sessionKey, scope := outboundTurnMetadata(ts.agent.ID, ts.sessionKey, ts.opts.Dispatch.SessionScope)
+	agentID, sessionKey, scope := outboundTurnMetadata(
+		ts.agent.ID,
+		ts.sessionKey,
+		ts.opts.Dispatch.SessionScope,
+	)
 	return bus.OutboundMessage{
 		Channel: ts.channel,
 		ChatID:  ts.chatID,
@@ -327,7 +331,12 @@ func buildSessionAliases(canonicalKey string, keys ...string) []string {
 	return aliases
 }
 
-func ensureSessionMetadata(store session.SessionStore, key string, scope *session.SessionScope, aliases []string) {
+func ensureSessionMetadata(
+	store session.SessionStore,
+	key string,
+	scope *session.SessionScope,
+	aliases []string,
+) {
 	if key == "" || scope == nil {
 		return
 	}

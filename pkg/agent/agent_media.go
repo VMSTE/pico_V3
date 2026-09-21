@@ -40,7 +40,11 @@ var (
 // LLM APIs enforce.
 // Non-image files always get path tags regardless of role.
 // Returns a new slice; original messages are not mutated.
-func resolveMediaRefs(messages []providers.Message, store media.MediaStore, maxSize int) []providers.Message {
+func resolveMediaRefs(
+	messages []providers.Message,
+	store media.MediaStore,
+	maxSize int,
+) []providers.Message {
 	if store == nil {
 		return messages
 	}

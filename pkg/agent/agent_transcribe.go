@@ -11,7 +11,10 @@ import (
 	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
-func (al *AgentLoop) transcribeAudioInMessage(ctx context.Context, msg bus.InboundMessage) (bus.InboundMessage, bool) {
+func (al *AgentLoop) transcribeAudioInMessage(
+	ctx context.Context,
+	msg bus.InboundMessage,
+) (bus.InboundMessage, bool) {
 	if al.transcriber == nil || al.mediaStore == nil || len(msg.Media) == 0 {
 		return msg, false
 	}
@@ -22,7 +25,11 @@ func (al *AgentLoop) transcribeAudioInMessage(ctx context.Context, msg bus.Inbou
 	for _, ref := range msg.Media {
 		path, meta, err := al.mediaStore.ResolveWithMeta(ref)
 		if err != nil {
-			logger.WarnCF("voice", "Failed to resolve media ref", map[string]any{"ref": ref, "error": err})
+			logger.WarnCF(
+				"voice",
+				"Failed to resolve media ref",
+				map[string]any{"ref": ref, "error": err},
+			)
 			keptMedia = append(keptMedia, ref)
 			continue
 		}
@@ -104,6 +111,10 @@ func (al *AgentLoop) sendTranscriptionFeedback(
 		ReplyToMessageID: messageID,
 	})
 	if err != nil {
-		logger.WarnCF("voice", "Failed to send transcription feedback", map[string]any{"error": err.Error()})
+		logger.WarnCF(
+			"voice",
+			"Failed to send transcription feedback",
+			map[string]any{"error": err.Error()},
+		)
 	}
 }

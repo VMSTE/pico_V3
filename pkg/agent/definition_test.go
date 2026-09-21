@@ -61,8 +61,12 @@ Act directly and use tools first.
 	if len(definition.Agent.Frontmatter.Skills) != 2 {
 		t.Fatalf("expected skills to be parsed, got %v", definition.Agent.Frontmatter.Skills)
 	}
-	if len(definition.Agent.Frontmatter.MCPServers) != 1 || definition.Agent.Frontmatter.MCPServers[0] != "github" {
-		t.Fatalf("expected mcpServers to be parsed, got %v", definition.Agent.Frontmatter.MCPServers)
+	if len(definition.Agent.Frontmatter.MCPServers) != 1 ||
+		definition.Agent.Frontmatter.MCPServers[0] != "github" {
+		t.Fatalf(
+			"expected mcpServers to be parsed, got %v",
+			definition.Agent.Frontmatter.MCPServers,
+		)
 	}
 	if definition.Agent.Frontmatter.Fields["metadata"] == nil {
 		t.Fatal("expected arbitrary frontmatter fields to remain available")
@@ -96,7 +100,10 @@ func TestLoadAgentDefinitionFallsBackToLegacyAgentsMarkdown(t *testing.T) {
 		t.Fatal("expected AGENTS.md to be loaded")
 	}
 	if definition.Agent.RawFrontmatter != "" {
-		t.Fatalf("legacy AGENTS.md should not have frontmatter, got %q", definition.Agent.RawFrontmatter)
+		t.Fatalf(
+			"legacy AGENTS.md should not have frontmatter, got %q",
+			definition.Agent.RawFrontmatter,
+		)
 	}
 	if !strings.Contains(definition.Agent.Body, "Keep compatibility") {
 		t.Fatalf("expected legacy body to be preserved, got %q", definition.Agent.Body)
@@ -159,7 +166,10 @@ Keep going.
 		len(definition.Agent.Frontmatter.Skills) != 0 ||
 		len(definition.Agent.Frontmatter.MCPServers) != 0 ||
 		len(definition.Agent.Frontmatter.Fields) != 0 {
-		t.Fatalf("expected invalid frontmatter to decode as empty struct, got %+v", definition.Agent.Frontmatter)
+		t.Fatalf(
+			"expected invalid frontmatter to decode as empty struct, got %+v",
+			definition.Agent.Frontmatter,
+		)
 	}
 }
 

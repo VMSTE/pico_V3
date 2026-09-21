@@ -148,7 +148,10 @@ func (p *errorProvider) GetDefaultModel() string {
 // Test Helper Functions
 // =============================================================================
 
-func newTurnCoordTestLoop(t *testing.T, provider providers.LLMProvider) (*AgentLoop, *AgentInstance, func()) {
+func newTurnCoordTestLoop(
+	t *testing.T,
+	provider providers.LLMProvider,
+) (*AgentLoop, *AgentInstance, func()) {
 	t.Helper()
 	tmpDir := t.TempDir()
 

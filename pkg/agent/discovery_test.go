@@ -204,7 +204,10 @@ Handle restricted work.
 	}
 	if strings.Contains(systemPrompt, `"id": "restricted"`) ||
 		strings.Contains(systemPrompt, `"description": "Restricted specialist"`) {
-		t.Fatalf("did not expect restricted peer descriptor in discovery section, got %q", systemPrompt)
+		t.Fatalf(
+			"did not expect restricted peer descriptor in discovery section, got %q",
+			systemPrompt,
+		)
 	}
 	for _, forbidden := range []string{`"current_agent_id"`, `"available_tools"`, `"model"`, `"channels"`, `"skills"`, `"mcpServers"`, `"tools"`} {
 		if strings.Contains(systemPrompt, forbidden) {
@@ -417,6 +420,10 @@ Second line.
 		t.Fatal("expected research descriptor lookup to succeed")
 	}
 	if descriptor.Description != "First useful line." {
-		t.Fatalf("descriptor.Description = %q, want %q", descriptor.Description, "First useful line.")
+		t.Fatalf(
+			"descriptor.Description = %q, want %q",
+			descriptor.Description,
+			"First useful line.",
+		)
 	}
 }

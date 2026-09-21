@@ -82,7 +82,16 @@ func TestSingleSystemMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msgs := cb.BuildMessages(tt.history, tt.summary, tt.message, nil, "test", "chat1", "", "")
+			msgs := cb.BuildMessages(
+				tt.history,
+				tt.summary,
+				tt.message,
+				nil,
+				"test",
+				"chat1",
+				"",
+				"",
+			)
 
 			systemCount := 0
 			for _, m := range msgs {
@@ -168,7 +177,16 @@ func TestBuildMessages_CurrentSenderDynamicContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msgs := cb.BuildMessages(nil, "", "hello", nil, "discord", "chat1", tt.senderID, tt.senderDisplayName)
+			msgs := cb.BuildMessages(
+				nil,
+				"",
+				"hello",
+				nil,
+				"discord",
+				"chat1",
+				tt.senderID,
+				tt.senderDisplayName,
+			)
 			sys := msgs[0].Content
 
 			if tt.wantSection {
@@ -369,7 +387,10 @@ func TestNewFileCreationInvalidatesCache(t *testing.T) {
 			// Cache should auto-invalidate because file went from absent -> present
 			sp2 := cb.BuildSystemPromptWithCache()
 			if !strings.Contains(sp2, tt.checkField) {
-				t.Errorf("cache not invalidated on new file creation: expected %q in prompt", tt.checkField)
+				t.Errorf(
+					"cache not invalidated on new file creation: expected %q in prompt",
+					tt.checkField,
+				)
 			}
 		})
 	}

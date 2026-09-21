@@ -17,11 +17,21 @@ import (
 	"github.com/sipeed/picoclaw/pkg/utils"
 )
 
-func (al *AgentLoop) maybePublishError(ctx context.Context, channel, chatID, sessionKey string, err error) bool {
+func (al *AgentLoop) maybePublishError(
+	ctx context.Context,
+	channel, chatID, sessionKey string,
+	err error,
+) bool {
 	if errors.Is(err, context.Canceled) {
 		return false
 	}
-	al.PublishResponseIfNeeded(ctx, channel, chatID, sessionKey, fmt.Sprintf("Error processing message: %v", err))
+	al.PublishResponseIfNeeded(
+		ctx,
+		channel,
+		chatID,
+		sessionKey,
+		fmt.Sprintf("Error processing message: %v", err),
+	)
 	return true
 }
 
@@ -40,7 +50,10 @@ func (al *AgentLoop) publishResponseOrError(
 	al.PublishResponseIfNeeded(ctx, channel, chatID, sessionKey, response)
 }
 
-func (al *AgentLoop) PublishResponseIfNeeded(ctx context.Context, channel, chatID, sessionKey, response string) {
+func (al *AgentLoop) PublishResponseIfNeeded(
+	ctx context.Context,
+	channel, chatID, sessionKey, response string,
+) {
 	if response == "" {
 		return
 	}
@@ -114,10 +127,14 @@ func (al *AgentLoop) publishPicoReasoning(ctx context.Context, reasoningContent,
 	}); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) ||
 			errors.Is(err, bus.ErrBusClosed) {
-			logger.DebugCF("agent", "Pico reasoning publish skipped (timeout/cancel)", map[string]any{
-				"channel": "pico",
-				"error":   err.Error(),
-			})
+			logger.DebugCF(
+				"agent",
+				"Pico reasoning publish skipped (timeout/cancel)",
+				map[string]any{
+					"channel": "pico",
+					"error":   err.Error(),
+				},
+			)
 		} else {
 			logger.WarnCF("agent", "Failed to publish pico reasoning (best-effort)", map[string]any{
 				"channel": "pico",
@@ -174,11 +191,15 @@ func (al *AgentLoop) publishPicoToolCallInterim(
 		if err != nil && !errors.Is(err, context.DeadlineExceeded) &&
 			!errors.Is(err, context.Canceled) &&
 			!errors.Is(err, bus.ErrBusClosed) {
-			logger.WarnCF("agent", "Failed to publish pico interim assistant content", map[string]any{
-				"channel": ts.channel,
-				"chat_id": ts.chatID,
-				"error":   err.Error(),
-			})
+			logger.WarnCF(
+				"agent",
+				"Failed to publish pico interim assistant content",
+				map[string]any{
+					"channel": ts.channel,
+					"chat_id": ts.chatID,
+					"error":   err.Error(),
+				},
+			)
 		}
 	}
 

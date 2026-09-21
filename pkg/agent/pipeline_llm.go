@@ -59,7 +59,10 @@ func (p *Pipeline) CallLLM(
 
 	exec.callMessages = exec.messages
 	if exec.gracefulTerminal {
-		exec.callMessages = append(append([]providers.Message(nil), exec.messages...), ts.interruptHintMessage())
+		exec.callMessages = append(
+			append([]providers.Message(nil), exec.messages...),
+			ts.interruptHintMessage(),
+		)
 		exec.providerToolDefs = nil
 		ts.markGracefulTerminalUsed()
 	}
@@ -166,7 +169,13 @@ func (p *Pipeline) CallLLM(
 					if cp, ok := ts.agent.CandidateProviders[providers.ModelKey(provider, model)]; ok {
 						candidateProvider = cp
 					}
-					return candidateProvider.Chat(ctx, messagesForCall, toolDefsForCall, model, exec.llmOpts)
+					return candidateProvider.Chat(
+						ctx,
+						messagesForCall,
+						toolDefsForCall,
+						model,
+						exec.llmOpts,
+					)
 				},
 			)
 			if fbErr != nil {
@@ -182,7 +191,13 @@ func (p *Pipeline) CallLLM(
 			}
 			return fbResult.Response, nil
 		}
-		return exec.activeProvider.Chat(providerCtx, messagesForCall, toolDefsForCall, exec.llmModel, exec.llmOpts)
+		return exec.activeProvider.Chat(
+			providerCtx,
+			messagesForCall,
+			toolDefsForCall,
+			exec.llmModel,
+			exec.llmOpts,
+		)
 	}
 
 	// PIKA-V3: Budget check before LLM call (TZ-v2-9a F-1)
@@ -190,7 +205,10 @@ func (p *Pipeline) CallLLM(
 		allowed, remaining := al.telemetry.CheckBudget()
 		if !allowed {
 			exec.response = &providers.LLMResponse{
-				Content: fmt.Sprintf("⚠️ Дневной бюджет исчерпан (остаток: $%.2f). Жду завтра.", remaining),
+				Content: fmt.Sprintf(
+					"⚠️ Дневной бюджет исчерпан (остаток: $%.2f). Жду завтра.",
+					remaining,
+				),
 			}
 			return ControlBreak, nil
 		}
@@ -289,13 +307,15 @@ func (p *Pipeline) CallLLM(
 		// Context overflow was previously handled by Compact+re-Assemble here.
 		// Session rotation via SessionLifecycle will handle this (wave 4).
 		if isContextError {
-			logger.WarnCF("agent",
+			logger.WarnCF(
+				"agent",
 				"PIKA-V3: context window exceeded, legacy compression removed; pending session rotation (wave 4)",
 				map[string]any{
 					"session_key": ts.sessionKey,
 					"error":       err.Error(),
 					"retry":       retry,
-				})
+				},
+			)
 		}
 		break
 	}

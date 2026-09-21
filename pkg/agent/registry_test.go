@@ -200,6 +200,10 @@ func TestAgentInstance_FallbackExplicitEmpty(t *testing.T) {
 
 	agent, _ := registry.GetAgent("no-fallback")
 	if len(agent.Fallbacks) != 0 {
-		t.Errorf("expected 0 fallbacks (explicit empty), got %d: %v", len(agent.Fallbacks), agent.Fallbacks)
+		t.Errorf(
+			"expected 0 fallbacks (explicit empty), got %d: %v",
+			len(agent.Fallbacks),
+			agent.Fallbacks,
+		)
 	}
 }

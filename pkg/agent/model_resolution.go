@@ -56,13 +56,15 @@ func lookupModelConfigByRef(cfg *config.Config, raw string) *config.ModelConfig 
 		return nil
 	}
 
-	if mc, err := cfg.GetModelConfig(raw); err == nil && mc != nil && strings.TrimSpace(mc.Model) != "" {
+	if mc, err := cfg.GetModelConfig(raw); err == nil && mc != nil &&
+		strings.TrimSpace(mc.Model) != "" {
 		return mc
 	}
 
 	rawRef := providers.ParseModelRef(raw, "")
 	rawKey := ""
-	if rawRef != nil && strings.TrimSpace(rawRef.Provider) != "" && strings.TrimSpace(rawRef.Model) != "" {
+	if rawRef != nil && strings.TrimSpace(rawRef.Provider) != "" &&
+		strings.TrimSpace(rawRef.Model) != "" {
 		rawKey = providers.ModelKey(rawRef.Provider, rawRef.Model)
 	}
 
@@ -160,7 +162,10 @@ func resolvedCandidateProvider(candidates []providers.FallbackCandidate, fallbac
 	return fallback
 }
 
-func resolvedModelConfig(cfg *config.Config, modelName, workspace string) (*config.ModelConfig, error) {
+func resolvedModelConfig(
+	cfg *config.Config,
+	modelName, workspace string,
+) (*config.ModelConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}

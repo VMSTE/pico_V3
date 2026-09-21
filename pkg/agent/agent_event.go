@@ -8,7 +8,10 @@ import (
 	"github.com/sipeed/picoclaw/pkg/logger"
 )
 
-func (al *AgentLoop) newTurnEventScope(agentID, sessionKey string, turnCtx *TurnContext) turnEventScope {
+func (al *AgentLoop) newTurnEventScope(
+	agentID, sessionKey string,
+	turnCtx *TurnContext,
+) turnEventScope {
 	seq := al.turnSeq.Add(1)
 	return turnEventScope{
 		agentID:    agentID,

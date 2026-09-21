@@ -143,7 +143,10 @@ func TestAgentLoop_VisionDistillatePersistedAndSatelliteOnce(t *testing.T) {
 	// Ход 2: старая картинка из истории НЕ перераспознаётся и не едет в main
 	// Ход 2 намеренно БЕЗ новой картинки: если старая из истории долетит
 	// до роутера — спутник дёрнется повторно и тест упадёт.
-	resp2, err := al.processMessage(ctx, visionTestInbound(sessionKey, "m2", "а что там слева?", nil))
+	resp2, err := al.processMessage(
+		ctx,
+		visionTestInbound(sessionKey, "m2", "а что там слева?", nil),
+	)
 	if err != nil {
 		t.Fatalf("turn2 processMessage() error = %v", err)
 	}

@@ -54,7 +54,10 @@ func (f *fakeMediaChannel) Send(ctx context.Context, msg bus.OutboundMessage) ([
 	return nil, nil
 }
 
-func (f *fakeMediaChannel) SendMedia(ctx context.Context, msg bus.OutboundMediaMessage) ([]string, error) {
+func (f *fakeMediaChannel) SendMedia(
+	ctx context.Context,
+	msg bus.OutboundMediaMessage,
+) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sentMedia = append(f.sentMedia, msg)
@@ -401,7 +404,10 @@ func TestProcessMessage_BtwCommandRunsWithoutPersistingHistory(t *testing.T) {
 		t.Fatal("provider did not receive any messages")
 	}
 	if len(provider.lastMessages) != 4 {
-		t.Fatalf("provider messages len = %d, want 4 (system + prior history + user)", len(provider.lastMessages))
+		t.Fatalf(
+			"provider messages len = %d, want 4 (system + prior history + user)",
+			len(provider.lastMessages),
+		)
 	}
 
 	if !reflect.DeepEqual(provider.lastMessages[1:3], initialHistory) {
@@ -461,7 +467,10 @@ func TestProcessMessage_BtwCommandIncludesRequestContextAndMedia(t *testing.T) {
 	if !strings.Contains(systemPrompt, "## Current Session\nChannel: discord\nChat ID: group-1") {
 		t.Fatalf("system prompt missing current session context:\n%s", systemPrompt)
 	}
-	if !strings.Contains(systemPrompt, "## Current Sender\nCurrent sender: Alice (ID: discord:123)") {
+	if !strings.Contains(
+		systemPrompt,
+		"## Current Sender\nCurrent sender: Alice (ID: discord:123)",
+	) {
 		t.Fatalf("system prompt missing current sender context:\n%s", systemPrompt)
 	}
 
@@ -539,7 +548,11 @@ func TestProcessMessage_BtwCommandUsesIsolatedProvider(t *testing.T) {
 	// Verify main session history was NOT modified
 	currentHistory := defaultAgent.Sessions.GetHistory(mainSessionKey)
 	if !reflect.DeepEqual(currentHistory, initialHistory) {
-		t.Fatalf("main session history was modified:\ngot  %#v\nwant %#v", currentHistory, initialHistory)
+		t.Fatalf(
+			"main session history was modified:\ngot  %#v\nwant %#v",
+			currentHistory,
+			initialHistory,
+		)
 	}
 }
 
@@ -1054,7 +1067,9 @@ func TestProcessMessage_MediaToolHandledSkipsFollowUpLLMAndFinalText(t *testing.
 	store := media.NewFileMediaStore()
 	al.SetMediaStore(store)
 	telegramChannel := &fakeMediaChannel{fakeChannel: fakeChannel{id: "rid-telegram"}}
-	al.SetChannelManager(newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel))
+	al.SetChannelManager(
+		newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel),
+	)
 
 	imagePath := filepath.Join(tmpDir, "screen.png")
 	if err := os.WriteFile(imagePath, []byte("fake screenshot"), 0o644); err != nil {
@@ -1076,7 +1091,10 @@ func TestProcessMessage_MediaToolHandledSkipsFollowUpLLMAndFinalText(t *testing.
 		t.Fatalf("processMessage() error = %v", err)
 	}
 	if response != "" {
-		t.Fatalf("expected no final response when media tool already handled delivery, got %q", response)
+		t.Fatalf(
+			"expected no final response when media tool already handled delivery, got %q",
+			response,
+		)
 	}
 	if provider.calls != 1 {
 		t.Fatalf("expected exactly 1 LLM call, got %d", provider.calls)
@@ -1089,13 +1107,20 @@ func TestProcessMessage_MediaToolHandledSkipsFollowUpLLMAndFinalText(t *testing.
 	}
 
 	if len(telegramChannel.getSentMedia()) != 1 {
-		t.Fatalf("expected exactly 1 synchronously sent media message, got %d", len(telegramChannel.getSentMedia()))
+		t.Fatalf(
+			"expected exactly 1 synchronously sent media message, got %d",
+			len(telegramChannel.getSentMedia()),
+		)
 	}
-	if telegramChannel.getSentMedia()[0].Channel != "telegram" || telegramChannel.getSentMedia()[0].ChatID != "chat1" {
+	if telegramChannel.getSentMedia()[0].Channel != "telegram" ||
+		telegramChannel.getSentMedia()[0].ChatID != "chat1" {
 		t.Fatalf("unexpected sent media target: %+v", telegramChannel.getSentMedia()[0])
 	}
 	if len(telegramChannel.getSentMedia()[0].Parts) != 1 {
-		t.Fatalf("expected exactly 1 sent media part, got %d", len(telegramChannel.getSentMedia()[0].Parts))
+		t.Fatalf(
+			"expected exactly 1 sent media part, got %d",
+			len(telegramChannel.getSentMedia()[0].Parts),
+		)
 	}
 
 	select {
@@ -1117,22 +1142,29 @@ func TestProcessMessage_MediaToolHandledSkipsFollowUpLLMAndFinalText(t *testing.
 	if err != nil {
 		t.Fatalf("resolveMessageRoute() error = %v", err)
 	}
-	sessionKey := resolveScopeKey(al.allocateRouteSession(route, testInboundMessage(bus.InboundMessage{
-		Channel:  "telegram",
-		ChatID:   "chat1",
-		SenderID: "user1",
-		Content:  "take a screenshot of the screen and send it to me",
-	})).SessionKey, "")
+	sessionKey := resolveScopeKey(
+		al.allocateRouteSession(route, testInboundMessage(bus.InboundMessage{
+			Channel:  "telegram",
+			ChatID:   "chat1",
+			SenderID: "user1",
+			Content:  "take a screenshot of the screen and send it to me",
+		})).SessionKey,
+		"",
+	)
 	history := defaultAgent.Sessions.GetHistory(sessionKey)
 	if len(history) == 0 {
 		t.Fatal("expected session history to be saved")
 	}
 	last := history[len(history)-1]
-	if last.Role != "assistant" || last.Content != "Requested output delivered via tool attachment." {
+	if last.Role != "assistant" ||
+		last.Content != "Requested output delivered via tool attachment." {
 		t.Fatalf("expected handled assistant summary in history, got %+v", last)
 	}
 	if len(last.Attachments) != 1 {
-		t.Fatalf("expected handled assistant summary attachments in history, got %+v", last.Attachments)
+		t.Fatalf(
+			"expected handled assistant summary attachments in history, got %+v",
+			last.Attachments,
+		)
 	}
 }
 
@@ -1156,7 +1188,9 @@ func TestProcessMessage_HandledToolProcessesQueuedSteeringBeforeReturning(t *tes
 	store := media.NewFileMediaStore()
 	al.SetMediaStore(store)
 	telegramChannel := &fakeMediaChannel{fakeChannel: fakeChannel{id: "rid-telegram"}}
-	al.SetChannelManager(newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel))
+	al.SetChannelManager(
+		newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel),
+	)
 
 	imagePath := filepath.Join(tmpDir, "screen-steering.png")
 	if err := os.WriteFile(imagePath, []byte("fake screenshot"), 0o644); err != nil {
@@ -1185,7 +1219,10 @@ func TestProcessMessage_HandledToolProcessesQueuedSteeringBeforeReturning(t *tes
 		t.Fatalf("expected 2 LLM calls after queued steering, got %d", provider.calls)
 	}
 	if len(telegramChannel.getSentMedia()) != 1 {
-		t.Fatalf("expected exactly 1 synchronously sent media message, got %d", len(telegramChannel.getSentMedia()))
+		t.Fatalf(
+			"expected exactly 1 synchronously sent media message, got %d",
+			len(telegramChannel.getSentMedia()),
+		)
 	}
 }
 
@@ -1204,7 +1241,9 @@ func TestRunAgentLoop_ResponseHandledToolPublishesForUserWhenSendResponseDisable
 	store := media.NewFileMediaStore()
 	al.SetMediaStore(store)
 	telegramChannel := &fakeMediaChannel{fakeChannel: fakeChannel{id: "rid-telegram"}}
-	al.SetChannelManager(newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel))
+	al.SetChannelManager(
+		newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel),
+	)
 	al.RegisterTool(&handledUserTool{})
 
 	defaultAgent := al.registry.GetDefaultAgent()
@@ -1248,16 +1287,26 @@ func TestRunAgentLoop_ResponseHandledToolPublishesForUserWhenSendResponseDisable
 		time.Sleep(10 * time.Millisecond)
 	}
 	if len(telegramChannel.getSentMessages()) != 1 {
-		t.Fatalf("expected exactly 1 sent text message, got %d", len(telegramChannel.getSentMessages()))
+		t.Fatalf(
+			"expected exactly 1 sent text message, got %d",
+			len(telegramChannel.getSentMessages()),
+		)
 	}
 	if telegramChannel.getSentMessages()[0].Content != "Handled user output from tool." {
 		t.Fatalf("unexpected sent text message: %+v", telegramChannel.getSentMessages()[0])
 	}
 	if telegramChannel.getSentMessages()[0].AgentID != defaultAgent.ID {
-		t.Fatalf("sent text agent_id = %q, want %q", telegramChannel.getSentMessages()[0].AgentID, defaultAgent.ID)
+		t.Fatalf(
+			"sent text agent_id = %q, want %q",
+			telegramChannel.getSentMessages()[0].AgentID,
+			defaultAgent.ID,
+		)
 	}
 	if telegramChannel.getSentMessages()[0].SessionKey != "session-1" {
-		t.Fatalf("sent text session_key = %q, want session-1", telegramChannel.getSentMessages()[0].SessionKey)
+		t.Fatalf(
+			"sent text session_key = %q, want session-1",
+			telegramChannel.getSentMessages()[0].SessionKey,
+		)
 	}
 	if telegramChannel.getSentMessages()[0].Scope == nil ||
 		telegramChannel.getSentMessages()[0].Scope.Values["chat"] != "direct:chat1" {
@@ -1461,7 +1510,9 @@ func TestProcessMessage_MediaArtifactCanBeForwardedBySendFile(t *testing.T) {
 	store := media.NewFileMediaStore()
 	al.SetMediaStore(store)
 	telegramChannel := &fakeMediaChannel{fakeChannel: fakeChannel{id: "rid-telegram"}}
-	al.SetChannelManager(newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel))
+	al.SetChannelManager(
+		newStartedTestChannelManager(t, msgBus, store, "telegram", telegramChannel),
+	)
 
 	mediaDir := media.TempDir()
 	if err := os.MkdirAll(mediaDir, 0o700); err != nil {
@@ -1494,13 +1545,20 @@ func TestProcessMessage_MediaArtifactCanBeForwardedBySendFile(t *testing.T) {
 	}
 
 	if len(telegramChannel.getSentMedia()) != 1 {
-		t.Fatalf("expected exactly 1 synchronously sent media message, got %d", len(telegramChannel.getSentMedia()))
+		t.Fatalf(
+			"expected exactly 1 synchronously sent media message, got %d",
+			len(telegramChannel.getSentMedia()),
+		)
 	}
-	if telegramChannel.getSentMedia()[0].Channel != "telegram" || telegramChannel.getSentMedia()[0].ChatID != "chat1" {
+	if telegramChannel.getSentMedia()[0].Channel != "telegram" ||
+		telegramChannel.getSentMedia()[0].ChatID != "chat1" {
 		t.Fatalf("unexpected sent media target: %+v", telegramChannel.getSentMedia()[0])
 	}
 	if len(telegramChannel.getSentMedia()[0].Parts) != 1 {
-		t.Fatalf("expected exactly 1 sent media part, got %d", len(telegramChannel.getSentMedia()[0].Parts))
+		t.Fatalf(
+			"expected exactly 1 sent media part, got %d",
+			len(telegramChannel.getSentMedia()[0].Parts),
+		)
 	}
 
 	select {
@@ -1959,10 +2017,16 @@ func TestToolFeedbackExplanationForToolCall_PrefersToolSpecificExtraContent(t *t
 	got1 := toolFeedbackExplanationForToolCall(response, response.ToolCalls[0], nil)
 	got2 := toolFeedbackExplanationForToolCall(response, response.ToolCalls[1], nil)
 	if got1 != "Read README.md first." {
-		t.Fatalf("toolFeedbackExplanationForToolCall() first = %q, want tool-specific explanation", got1)
+		t.Fatalf(
+			"toolFeedbackExplanationForToolCall() first = %q, want tool-specific explanation",
+			got1,
+		)
 	}
 	if got2 != "Update config example after reading it." {
-		t.Fatalf("toolFeedbackExplanationForToolCall() second = %q, want tool-specific explanation", got2)
+		t.Fatalf(
+			"toolFeedbackExplanationForToolCall() second = %q, want tool-specific explanation",
+			got2,
+		)
 	}
 }
 
@@ -2241,7 +2305,10 @@ func (m *handledMediaWithSteeringTool) Parameters() map[string]any {
 	}
 }
 
-func (m *handledMediaWithSteeringTool) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
+func (m *handledMediaWithSteeringTool) Execute(
+	ctx context.Context,
+	args map[string]any,
+) *tools.ToolResult {
 	if err := m.loop.Steer(providers.Message{Role: "user", Content: "what about this instead?"}); err != nil {
 		return tools.ErrorResult(err.Error()).WithError(err)
 	}
@@ -2394,7 +2461,11 @@ func newStrictChatCompletionTestServer(
 	}))
 }
 
-func (h testHelper) executeAndGetResponse(tb testing.TB, ctx context.Context, msg bus.InboundMessage) string {
+func (h testHelper) executeAndGetResponse(
+	tb testing.TB,
+	ctx context.Context,
+	msg bus.InboundMessage,
+) string {
 	// Use a short timeout to avoid hanging
 	timeoutCtx, cancel := context.WithTimeout(ctx, responseTimeout)
 	defer cancel()
@@ -2550,7 +2621,10 @@ func TestProcessMessage_CommandOutcomes(t *testing.T) {
 		t.Fatalf("unexpected /foo reply: %q", fooResp)
 	}
 	if provider.calls != 1 {
-		t.Fatalf("LLM should be called exactly once after /foo passthrough, calls=%d", provider.calls)
+		t.Fatalf(
+			"LLM should be called exactly once after /foo passthrough, calls=%d",
+			provider.calls,
+		)
 	}
 
 	newResp := helper.executeAndGetResponse(t, context.Background(), bus.InboundMessage{
@@ -2755,7 +2829,10 @@ func TestProcessMessage_SwitchModelRejectsUnknownAlias(t *testing.T) {
 	}
 
 	if provider.calls != 0 {
-		t.Fatalf("LLM should not be called for rejected /switch and /show, calls=%d", provider.calls)
+		t.Fatalf(
+			"LLM should not be called for rejected /switch and /show, calls=%d",
+			provider.calls,
+		)
 	}
 }
 
@@ -2773,7 +2850,13 @@ func TestProcessMessage_SwitchModelRoutesSubsequentRequestsToSelectedProvider(t 
 
 	remoteCalls := 0
 	remoteModel := ""
-	remoteServer := newChatCompletionTestServer(t, "remote", "remote reply", &remoteCalls, &remoteModel)
+	remoteServer := newChatCompletionTestServer(
+		t,
+		"remote",
+		"remote reply",
+		&remoteCalls,
+		&remoteModel,
+	)
 	defer remoteServer.Close()
 
 	cfg := &config.Config{
@@ -2953,18 +3036,20 @@ func TestProcessMessage_FallbackUsesPerCandidateProvider(t *testing.T) {
 	workspace := t.TempDir()
 
 	primaryCalls := 0
-	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		primaryCalls++
-		// Return 429 so FallbackChain classifies this as retriable and moves on.
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusTooManyRequests)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"error": map[string]any{
-				"message": "rate limit exceeded",
-				"type":    "rate_limit_error",
-			},
-		})
-	}))
+	primaryServer := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			primaryCalls++
+			// Return 429 so FallbackChain classifies this as retriable and moves on.
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
+					"message": "rate limit exceeded",
+					"type":    "rate_limit_error",
+				},
+			})
+		}),
+	)
 	defer primaryServer.Close()
 
 	fallbackCalls := 0
@@ -3037,23 +3122,28 @@ func TestProcessMessage_FallbackUsesActiveProviderWhenCandidateNotRegistered(t *
 	// Both the primary and the unregistered fallback share this server
 	// (same api_base) so activeProvider routes both calls here.
 	callCount := 0
-	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		w.Header().Set("Content-Type", "application/json")
-		if callCount == 1 {
-			w.WriteHeader(http.StatusTooManyRequests)
+	primaryServer := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.Header().Set("Content-Type", "application/json")
+			if callCount == 1 {
+				w.WriteHeader(http.StatusTooManyRequests)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{"message": "rate limit", "type": "rate_limit_error"},
+				})
+				return
+			}
+			// Second call (fallback via activeProvider) succeeds.
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"error": map[string]any{"message": "rate limit", "type": "rate_limit_error"},
+				"choices": []map[string]any{
+					{
+						"message":       map[string]any{"content": "active provider reply"},
+						"finish_reason": "stop",
+					},
+				},
 			})
-			return
-		}
-		// Second call (fallback via activeProvider) succeeds.
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"choices": []map[string]any{
-				{"message": map[string]any{"content": "active provider reply"}, "finish_reason": "stop"},
-			},
-		})
-	}))
+		}),
+	)
 	defer primaryServer.Close()
 
 	cfg := &config.Config{
@@ -3097,7 +3187,10 @@ func TestProcessMessage_FallbackUsesActiveProviderWhenCandidateNotRegistered(t *
 		t.Fatalf("response = %q, want %q", resp, "active provider reply")
 	}
 	if callCount < 2 {
-		t.Fatalf("primary server calls = %d, want >= 2 (one 429 + one success via activeProvider)", callCount)
+		t.Fatalf(
+			"primary server calls = %d, want >= 2 (one 429 + one success via activeProvider)",
+			callCount,
+		)
 	}
 }
 
@@ -3237,7 +3330,9 @@ func TestAgentLoop_ContextExhaustionRetry(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 
 	// Create a provider that fails once with a context error
-	contextErr := fmt.Errorf("InvalidParameter: Total tokens of image and text exceed max message tokens")
+	contextErr := fmt.Errorf(
+		"InvalidParameter: Total tokens of image and text exceed max message tokens",
+	)
 	provider := &failFirstMockProvider{
 		failures:    1,
 		failError:   contextErr,
@@ -3291,7 +3386,10 @@ func TestAgentLoop_ContextExhaustionRetry(t *testing.T) {
 	// 5 посеянных + user + assistant = 7 — ничего не выброшено.
 	finalHistory := defaultAgent.Sessions.GetHistory(sessionKey)
 	if len(finalHistory) != 7 {
-		t.Errorf("Expected full history preserved (5 seeded + 2 new = 7), got %d", len(finalHistory))
+		t.Errorf(
+			"Expected full history preserved (5 seeded + 2 new = 7), got %d",
+			len(finalHistory),
+		)
 	}
 }
 
@@ -3351,7 +3449,9 @@ func TestAgentLoop_VisionUnsupportedRetryPreservesHistory(t *testing.T) {
 				MaxToolIterations: 3,
 			},
 		},
-		ModelList: []*config.ModelConfig{{ModelName: "test-model", Model: "test/test-model", Vision: &visionTrue}},
+		ModelList: []*config.ModelConfig{
+			{ModelName: "test-model", Model: "test/test-model", Vision: &visionTrue},
+		},
 	}
 
 	msgBus := bus.NewMessageBus()
@@ -3382,7 +3482,11 @@ func TestAgentLoop_VisionUnsupportedRetryPreservesHistory(t *testing.T) {
 		t.Fatalf("response = %q, want %q", resp, "ok")
 	}
 	if provider.calls != 2 {
-		t.Fatalf("calls = %d, want %d (fail with media, then retry without media)", provider.calls, 2)
+		t.Fatalf(
+			"calls = %d, want %d (fail with media, then retry without media)",
+			provider.calls,
+			2,
+		)
 	}
 	if !slices.Equal(provider.mediaSeen, []bool{true, false}) {
 		t.Fatalf("mediaSeen = %v, want %v", provider.mediaSeen, []bool{true, false})
@@ -3399,7 +3503,10 @@ func TestAgentLoop_VisionUnsupportedRetryPreservesHistory(t *testing.T) {
 		t.Fatal("history must be preserved after vision retry")
 	}
 	if !slices.Equal(history[0].Media, []string{"data:image/png;base64,abc123"}) {
-		t.Fatalf("history[0].Media = %v, want media preserved in DB (strip is in-memory only)", history[0].Media)
+		t.Fatalf(
+			"history[0].Media = %v, want media preserved in DB (strip is in-memory only)",
+			history[0].Media,
+		)
 	}
 
 	timeoutCtx2, cancel2 := context.WithTimeout(context.Background(), responseTimeout)
@@ -3454,7 +3561,13 @@ func TestAgentLoop_EmptyModelResponseUsesAccurateFallback(t *testing.T) {
 	provider := &simpleMockProvider{response: ""}
 	al := NewAgentLoop(cfg, msgBus, provider)
 
-	response, err := al.ProcessDirectWithChannel(context.Background(), "hello", "empty-response", "test", "chat1")
+	response, err := al.ProcessDirectWithChannel(
+		context.Background(),
+		"hello",
+		"empty-response",
+		"test",
+		"chat1",
+	)
 	if err != nil {
 		t.Fatalf("ProcessDirectWithChannel failed: %v", err)
 	}
@@ -3486,7 +3599,13 @@ func TestAgentLoop_ToolLimitUsesDedicatedFallback(t *testing.T) {
 	al := NewAgentLoop(cfg, msgBus, provider)
 	al.RegisterTool(&toolLimitTestTool{})
 
-	response, err := al.ProcessDirectWithChannel(context.Background(), "hello", "tool-limit", "test", "chat1")
+	response, err := al.ProcessDirectWithChannel(
+		context.Background(),
+		"hello",
+		"tool-limit",
+		"test",
+		"chat1",
+	)
 	if err != nil {
 		t.Fatalf("ProcessDirectWithChannel failed: %v", err)
 	}
@@ -3503,11 +3622,13 @@ func TestAgentLoop_ToolLimitUsesDedicatedFallback(t *testing.T) {
 		ChatType: "direct",
 		SenderID: "cron",
 	})
-	history := defaultAgent.Sessions.GetHistory(al.allocateRouteSession(route, testInboundMessage(bus.InboundMessage{
-		Channel:  "test",
-		SenderID: "cron",
-		ChatID:   "chat1",
-	})).SessionKey)
+	history := defaultAgent.Sessions.GetHistory(
+		al.allocateRouteSession(route, testInboundMessage(bus.InboundMessage{
+			Channel:  "test",
+			SenderID: "cron",
+			ChatID:   "chat1",
+		})).SessionKey,
+	)
 	if len(history) != 4 {
 		t.Fatalf("history len = %d, want 4", len(history))
 	}
@@ -3805,7 +3926,9 @@ func TestHandleReasoning(t *testing.T) {
 					break
 				}
 				if msg.Content == "should timeout" {
-					t.Fatal("expected reasoning message to be dropped when bus is full, but it was published")
+					t.Fatal(
+						"expected reasoning message to be dropped when bus is full, but it was published",
+					)
 				}
 			}
 		}
@@ -3924,7 +4047,11 @@ func TestProcessMessage_PicoPublishesReasoningAsThoughtMessage(t *testing.T) {
 	}
 
 	if thoughtMsg.Channel != "pico" || thoughtMsg.ChatID != "pico:test-session" {
-		t.Fatalf("thought message route = %s/%s, want pico/pico:test-session", thoughtMsg.Channel, thoughtMsg.ChatID)
+		t.Fatalf(
+			"thought message route = %s/%s, want pico/pico:test-session",
+			thoughtMsg.Channel,
+			thoughtMsg.ChatID,
+		)
 	}
 	if thoughtMsg.Context.Raw[metadataKeyMessageKind] != messageKindThought {
 		t.Fatalf(
@@ -3966,7 +4093,12 @@ func TestProcessHeartbeat_DoesNotPublishToolFeedback(t *testing.T) {
 	provider := &toolFeedbackProvider{filePath: heartbeatFile}
 	al := NewAgentLoop(cfg, msgBus, provider)
 
-	response, err := al.ProcessHeartbeat(context.Background(), "check heartbeat tasks", "telegram", "chat-1")
+	response, err := al.ProcessHeartbeat(
+		context.Background(),
+		"check heartbeat tasks",
+		"telegram",
+		"chat-1",
+	)
 	if err != nil {
 		t.Fatalf("ProcessHeartbeat() error = %v", err)
 	}
@@ -4041,10 +4173,16 @@ func TestProcessMessage_PublishesToolFeedbackWhenEnabled(t *testing.T) {
 			t.Fatalf("tool feedback content = %q, want read_file summary", outbound.Content)
 		}
 		if !strings.Contains(outbound.Content, utils.ToolFeedbackContinuationHint) {
-			t.Fatalf("tool feedback content = %q, want continuation hint fallback", outbound.Content)
+			t.Fatalf(
+				"tool feedback content = %q, want continuation hint fallback",
+				outbound.Content,
+			)
 		}
 		if !strings.Contains(outbound.Content, "check tool feedback") {
-			t.Fatalf("tool feedback content = %q, want current user intent fallback", outbound.Content)
+			t.Fatalf(
+				"tool feedback content = %q, want current user intent fallback",
+				outbound.Content,
+			)
 		}
 		if !strings.Contains(outbound.Content, "\"path\":") {
 			t.Fatalf("tool feedback content = %q, want serialized tool arguments", outbound.Content)
@@ -4053,7 +4191,10 @@ func TestProcessMessage_PublishesToolFeedbackWhenEnabled(t *testing.T) {
 			t.Fatalf("tool feedback content = %q, want tool argument value", outbound.Content)
 		}
 		if strings.Contains(outbound.Content, "Previous turn explanation") {
-			t.Fatalf("tool feedback content = %q, want no previous assistant fallback", outbound.Content)
+			t.Fatalf(
+				"tool feedback content = %q, want no previous assistant fallback",
+				outbound.Content,
+			)
 		}
 		if outbound.AgentID != "main" {
 			t.Fatalf("tool feedback agent_id = %q, want main", outbound.AgentID)
@@ -4061,7 +4202,8 @@ func TestProcessMessage_PublishesToolFeedbackWhenEnabled(t *testing.T) {
 		if outbound.SessionKey == "" {
 			t.Fatal("expected tool feedback to carry session_key")
 		}
-		if outbound.Scope == nil || outbound.Scope.AgentID != "main" || outbound.Scope.Channel != "telegram" {
+		if outbound.Scope == nil || outbound.Scope.AgentID != "main" ||
+			outbound.Scope.Channel != "telegram" {
 			t.Fatalf("expected tool feedback scope, got %+v", outbound.Scope)
 		}
 	case <-time.After(2 * time.Second):
@@ -4120,7 +4262,11 @@ func TestProcessMessage_PersistsReasoningContentInSessionHistory(t *testing.T) {
 		t.Fatalf("last message content = %q, want %q", last.Content, "final answer")
 	}
 	if last.ReasoningContent != "thinking trace" {
-		t.Fatalf("last message reasoning_content = %q, want %q", last.ReasoningContent, "thinking trace")
+		t.Fatalf(
+			"last message reasoning_content = %q, want %q",
+			last.ReasoningContent,
+			"thinking trace",
+		)
 	}
 }
 
@@ -4179,16 +4325,29 @@ func TestProcessMessage_PersistsReasoningToolResponseAsSingleAssistantRecord(t *
 		t.Fatal("expected assistant history record with tool_calls")
 	}
 	if assistantWithToolCall.Content != "I'll inspect that file now." {
-		t.Fatalf("assistant content = %q, want %q", assistantWithToolCall.Content, "I'll inspect that file now.")
+		t.Fatalf(
+			"assistant content = %q, want %q",
+			assistantWithToolCall.Content,
+			"I'll inspect that file now.",
+		)
 	}
 	if assistantWithToolCall.ReasoningContent != "Read the file before answering." {
-		t.Fatalf("assistant reasoning_content = %q, want preserved", assistantWithToolCall.ReasoningContent)
+		t.Fatalf(
+			"assistant reasoning_content = %q, want preserved",
+			assistantWithToolCall.ReasoningContent,
+		)
 	}
 	if len(assistantWithToolCall.ToolCalls) != 1 {
-		t.Fatalf("assistant tool calls = %+v, want single read_file tool", assistantWithToolCall.ToolCalls)
+		t.Fatalf(
+			"assistant tool calls = %+v, want single read_file tool",
+			assistantWithToolCall.ToolCalls,
+		)
 	}
 	if got := providers.NormalizeToolCall(assistantWithToolCall.ToolCalls[0]).Name; got != "read_file" {
-		t.Fatalf("assistant tool calls = %+v, want single read_file tool", assistantWithToolCall.ToolCalls)
+		t.Fatalf(
+			"assistant tool calls = %+v, want single read_file tool",
+			assistantWithToolCall.ToolCalls,
+		)
 	}
 
 	sessionDir := filepath.Join(tmpDir, "sessions")
@@ -4228,7 +4387,8 @@ func TestProcessMessage_PersistsReasoningToolResponseAsSingleAssistantRecord(t *
 		if msg.Role != "assistant" {
 			continue
 		}
-		if msg.Content == "I'll inspect that file now." || msg.ReasoningContent == "Read the file before answering." {
+		if msg.Content == "I'll inspect that file now." ||
+			msg.ReasoningContent == "Read the file before answering." {
 			matchingRecords++
 			toolName := ""
 			if len(msg.ToolCalls) == 1 {
@@ -4238,12 +4398,18 @@ func TestProcessMessage_PersistsReasoningToolResponseAsSingleAssistantRecord(t *
 				msg.ReasoningContent != "Read the file before answering." ||
 				len(msg.ToolCalls) != 1 ||
 				toolName != "read_file" {
-				t.Fatalf("assistant jsonl record = %+v, want content+reasoning+tool_calls in one line", msg)
+				t.Fatalf(
+					"assistant jsonl record = %+v, want content+reasoning+tool_calls in one line",
+					msg,
+				)
 			}
 		}
 	}
 	if matchingRecords != 1 {
-		t.Fatalf("matching assistant jsonl records = %d, want exactly 1 canonical assistant record", matchingRecords)
+		t.Fatalf(
+			"matching assistant jsonl records = %d, want exactly 1 canonical assistant record",
+			matchingRecords,
+		)
 	}
 }
 
@@ -4298,10 +4464,16 @@ func TestProcessMessage_DoesNotLeakReasoningContentInToolFeedback(t *testing.T) 
 			t.Fatalf("tool feedback content = %q, want read_file summary", outbound.Content)
 		}
 		if !strings.Contains(outbound.Content, utils.ToolFeedbackContinuationHint) {
-			t.Fatalf("tool feedback content = %q, want continuation hint fallback", outbound.Content)
+			t.Fatalf(
+				"tool feedback content = %q, want continuation hint fallback",
+				outbound.Content,
+			)
 		}
 		if !strings.Contains(outbound.Content, "check reasoning fallback") {
-			t.Fatalf("tool feedback content = %q, want current user intent fallback", outbound.Content)
+			t.Fatalf(
+				"tool feedback content = %q, want current user intent fallback",
+				outbound.Content,
+			)
 		}
 		if !strings.Contains(outbound.Content, "\"path\":") {
 			t.Fatalf("tool feedback content = %q, want serialized tool arguments", outbound.Content)
@@ -4310,7 +4482,10 @@ func TestProcessMessage_DoesNotLeakReasoningContentInToolFeedback(t *testing.T) 
 			t.Fatalf("tool feedback content = %q, want tool argument value", outbound.Content)
 		}
 		if strings.Contains(outbound.Content, "Read README.md first") {
-			t.Fatalf("tool feedback content = %q, should not leak hidden reasoning", outbound.Content)
+			t.Fatalf(
+				"tool feedback content = %q, should not leak hidden reasoning",
+				outbound.Content,
+			)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected outbound tool feedback without leaking reasoning")
@@ -4365,7 +4540,11 @@ func assertToolFeedbackNotPublishedWhenDisabled(t *testing.T, channel string) {
 
 	select {
 	case outbound := <-msgBus.OutboundChan():
-		t.Fatalf("expected no outbound tool feedback for %s when disabled, got %+v", channel, outbound)
+		t.Fatalf(
+			"expected no outbound tool feedback for %s when disabled, got %+v",
+			channel,
+			outbound,
+		)
 	case <-time.After(200 * time.Millisecond):
 	}
 }
@@ -4478,13 +4657,20 @@ func TestRun_PicoPublishesAssistantContentDuringToolCallsWithoutFinalDuplicate(t
 	}
 
 	if outputs[0].Content != "intermediate model text" {
-		t.Fatalf("first outbound content = %q, want %q", outputs[0].Content, "intermediate model text")
+		t.Fatalf(
+			"first outbound content = %q, want %q",
+			outputs[0].Content,
+			"intermediate model text",
+		)
 	}
 	if outputs[1].Context.Raw[metadataKeyMessageKind] != messageKindToolCalls {
 		t.Fatalf("second outbound = %+v, want tool_calls message", outputs[1])
 	}
 	if !strings.Contains(outputs[1].Context.Raw[metadataKeyToolCalls], "tool_limit_test_tool") {
-		t.Fatalf("second outbound tool_calls = %q, want tool name", outputs[1].Context.Raw[metadataKeyToolCalls])
+		t.Fatalf(
+			"second outbound tool_calls = %q, want tool name",
+			outputs[1].Context.Raw[metadataKeyToolCalls],
+		)
 	}
 	if outputs[2].Content != "final model text" {
 		t.Fatalf("third outbound content = %q, want %q", outputs[2].Content, "final model text")
@@ -4620,7 +4806,10 @@ func TestRun_PicoToolFeedbackSuppressesDuplicateInterimAssistantContent(t *testi
 		t.Fatalf("first outbound content = %q, want empty tool_calls content", outputs[0].Content)
 	}
 	if !strings.Contains(outputs[0].Context.Raw[metadataKeyToolCalls], "tool_limit_test_tool") {
-		t.Fatalf("first outbound tool_calls = %q, want tool name", outputs[0].Context.Raw[metadataKeyToolCalls])
+		t.Fatalf(
+			"first outbound tool_calls = %q, want tool name",
+			outputs[0].Context.Raw[metadataKeyToolCalls],
+		)
 	}
 	if outputs[1].Content != "final model text" {
 		t.Fatalf("second outbound content = %q, want %q", outputs[1].Content, "final model text")
@@ -4769,7 +4958,8 @@ func TestResolveMediaRefs_MultiToolCallPreservesOrdering(t *testing.T) {
 	if result[3].Role != "user" {
 		t.Fatalf("result[3] expected user, got %q", result[3].Role)
 	}
-	if len(result[3].Media) != 1 || !strings.HasPrefix(result[3].Media[0], "data:image/png;base64,") {
+	if len(result[3].Media) != 1 ||
+		!strings.HasPrefix(result[3].Media[0], "data:image/png;base64,") {
 		t.Fatal("expected synthetic user message to contain base64 image")
 	}
 }
@@ -5165,8 +5355,14 @@ func TestProcessMessage_ContextOverflowRecovery(t *testing.T) {
 	agent := al.GetRegistry().GetDefaultAgent()
 
 	for i := 0; i < 5; i++ {
-		agent.Sessions.AddFullMessage(sessionKey, providers.Message{Role: "user", Content: "heavy message"})
-		agent.Sessions.AddFullMessage(sessionKey, providers.Message{Role: "assistant", Content: "response"})
+		agent.Sessions.AddFullMessage(
+			sessionKey,
+			providers.Message{Role: "user", Content: "heavy message"},
+		)
+		agent.Sessions.AddFullMessage(
+			sessionKey,
+			providers.Message{Role: "assistant", Content: "response"},
+		)
 	}
 
 	_, err := al.processMessage(context.Background(), testInboundMessage(bus.InboundMessage{

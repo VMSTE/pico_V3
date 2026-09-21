@@ -140,9 +140,19 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 	if err := al.ensureHooksInitialized(ctx); err != nil {
 		return err
 	}
-	if err := al.ensureMCPInitialized(ctx); err != nil {
-		return err
-	}
+	// Волна 113: MCP-серверы always-optional (индустрия: OpenHands #4454,
+	// Google ADK #5025 optional=true; у нас — без флага, всегда). Мёртвый
+	// сервер не убивает цикл: ядро поднимается сразу, тулы дорегистрируются
+	// при готовности сервера. Ошибка инита — в лог + MCPInitError().
+	go func() {
+		if err := al.ensureMCPInitialized(context.Background()); err != nil {
+			logger.ErrorCF(
+				"agent",
+				"MCP init failed; agent runs WITHOUT MCP tools — check tools.mcp.servers config",
+				map[string]any{"error": err.Error()},
+			)
+		}
+	}()
 
 	idleTicker := time.NewTicker(100 * time.Millisecond)
 	defer idleTicker.Stop()
@@ -219,7 +229,8 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				// this becomes a no-op (the key is already gone).
 				defer func() {
 					if actual, ok := al.activeTurnStates.Load(sessionKey); ok {
-						if ts, ok := actual.(*turnState); ok && strings.HasPrefix(ts.turnID, pendingTurnPrefix) {
+						if ts, ok := actual.(*turnState); ok &&
+							strings.HasPrefix(ts.turnID, pendingTurnPrefix) {
 							// Placeholder still present — runTurn never replaced it.
 							al.activeTurnStates.Delete(sessionKey)
 						}
@@ -504,7 +515,11 @@ func (al *AgentLoop) runAgentLoop(
 	turnScope := al.newTurnEventScope(
 		agent.ID,
 		opts.Dispatch.SessionKey,
-		newTurnContext(opts.Dispatch.InboundContext, opts.Dispatch.RouteResult, opts.Dispatch.SessionScope),
+		newTurnContext(
+			opts.Dispatch.InboundContext,
+			opts.Dispatch.RouteResult,
+			opts.Dispatch.SessionScope,
+		),
 	)
 	ts := newTurnState(agent, opts, turnScope)
 	pipeline := NewPipeline(al)

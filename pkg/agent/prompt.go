@@ -147,52 +147,66 @@ func NewPromptRegistry() *PromptRegistry {
 func builtinPromptSources() []PromptSourceDescriptor {
 	return []PromptSourceDescriptor{
 		{
-			ID:              PromptSourceKernel,
-			Owner:           "agent",
-			Description:     "Core AtoMinD identity and hard rules",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerKernel, Slot: PromptSlotIdentity}},
+			ID:          PromptSourceKernel,
+			Owner:       "agent",
+			Description: "Core AtoMinD identity and hard rules",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerKernel, Slot: PromptSlotIdentity},
+			},
 			StableByDefault: true,
 		},
 		{
-			ID:              PromptSourceHierarchy,
-			Owner:           "agent",
-			Description:     "Prompt hierarchy rules",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerKernel, Slot: PromptSlotHierarchy}},
+			ID:          PromptSourceHierarchy,
+			Owner:       "agent",
+			Description: "Prompt hierarchy rules",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerKernel, Slot: PromptSlotHierarchy},
+			},
 			StableByDefault: true,
 		},
 		{
-			ID:              PromptSourceWorkspace,
-			Owner:           "workspace",
-			Description:     "Workspace and agent definition files",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerInstruction, Slot: PromptSlotWorkspace}},
+			ID:          PromptSourceWorkspace,
+			Owner:       "workspace",
+			Description: "Workspace and agent definition files",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerInstruction, Slot: PromptSlotWorkspace},
+			},
 			StableByDefault: true,
 		},
 		{
-			ID:              PromptSourceToolDiscovery,
-			Owner:           "tools",
-			Description:     "Tool discovery instructions",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerCapability, Slot: PromptSlotTooling}},
+			ID:          PromptSourceToolDiscovery,
+			Owner:       "tools",
+			Description: "Tool discovery instructions",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerCapability, Slot: PromptSlotTooling},
+			},
 			StableByDefault: true,
 		},
 		{
-			ID:              PromptSourceToolRegistry,
-			Owner:           "tools",
-			Description:     "Native provider tool definitions",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerCapability, Slot: PromptSlotTooling}},
+			ID:          PromptSourceToolRegistry,
+			Owner:       "tools",
+			Description: "Native provider tool definitions",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerCapability, Slot: PromptSlotTooling},
+			},
 			StableByDefault: true,
 		},
 		{
-			ID:              PromptSourceSkillCatalog,
-			Owner:           "skills",
-			Description:     "Installed skill catalog",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerCapability, Slot: PromptSlotSkillCatalog}},
+			ID:          PromptSourceSkillCatalog,
+			Owner:       "skills",
+			Description: "Installed skill catalog",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerCapability, Slot: PromptSlotSkillCatalog},
+			},
 			StableByDefault: true,
 		},
 		{
-			ID:              PromptSourceActiveSkills,
-			Owner:           "skills",
-			Description:     "Active skill instructions for the current request",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerCapability, Slot: PromptSlotActiveSkill}},
+			ID:          PromptSourceActiveSkills,
+			Owner:       "skills",
+			Description: "Active skill instructions for the current request",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerCapability, Slot: PromptSlotActiveSkill},
+			},
 			StableByDefault: false,
 		},
 		{
@@ -203,17 +217,21 @@ func builtinPromptSources() []PromptSourceDescriptor {
 			StableByDefault: true,
 		},
 		{
-			ID:              PromptSourceRuntime,
-			Owner:           "agent",
-			Description:     "Per-request runtime context",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerContext, Slot: PromptSlotRuntime}},
+			ID:          PromptSourceRuntime,
+			Owner:       "agent",
+			Description: "Per-request runtime context",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerContext, Slot: PromptSlotRuntime},
+			},
 			StableByDefault: false,
 		},
 		{
-			ID:              PromptSourceSummary,
-			Owner:           "context_manager",
-			Description:     "Conversation summary context",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerContext, Slot: PromptSlotSummary}},
+			ID:          PromptSourceSummary,
+			Owner:       "context_manager",
+			Description: "Conversation summary context",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerContext, Slot: PromptSlotSummary},
+			},
 			StableByDefault: false,
 		},
 		{
@@ -224,10 +242,12 @@ func builtinPromptSources() []PromptSourceDescriptor {
 			StableByDefault: true,
 		},
 		{
-			ID:              PromptSourceSubTurnProfile,
-			Owner:           "subturn",
-			Description:     "Child agent profile instructions",
-			Allowed:         []PromptPlacement{{Layer: PromptLayerInstruction, Slot: PromptSlotWorkspace}},
+			ID:          PromptSourceSubTurnProfile,
+			Owner:       "subturn",
+			Description: "Child agent profile instructions",
+			Allowed: []PromptPlacement{
+				{Layer: PromptLayerInstruction, Slot: PromptSlotWorkspace},
+			},
 			StableByDefault: false,
 		},
 		{
@@ -301,7 +321,10 @@ func (r *PromptRegistry) RegisterContributor(contributor PromptContributor) erro
 	return nil
 }
 
-func (r *PromptRegistry) Collect(ctx context.Context, req PromptBuildRequest) ([]PromptPart, error) {
+func (r *PromptRegistry) Collect(
+	ctx context.Context,
+	req PromptBuildRequest,
+) ([]PromptPart, error) {
 	if r == nil {
 		return nil, nil
 	}
@@ -342,12 +365,16 @@ func (r *PromptRegistry) ValidatePart(part PromptPart) error {
 	if !ok {
 		if _, warned := r.warned[sourceID]; !warned {
 			r.warned[sourceID] = struct{}{}
-			logger.WarnCF("agent", "Unregistered prompt source allowed in compatibility mode", map[string]any{
-				"source": sourceID,
-				"layer":  part.Layer,
-				"slot":   part.Slot,
-				"part":   part.ID,
-			})
+			logger.WarnCF(
+				"agent",
+				"Unregistered prompt source allowed in compatibility mode",
+				map[string]any{
+					"source": sourceID,
+					"layer":  part.Layer,
+					"slot":   part.Slot,
+					"part":   part.ID,
+				},
+			)
 		}
 		return nil
 	}

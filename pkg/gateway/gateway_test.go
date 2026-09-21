@@ -94,7 +94,11 @@ func TestRun_StartupFailuresReturnErrorAndEmitStructuredLog(t *testing.T) {
 				t.Fatalf("gateway.log missing structured startup failure log:\n%s", logText)
 			}
 			if !strings.Contains(logText, tt.wantLogSub) {
-				t.Fatalf("gateway.log missing expected failure detail %q:\n%s", tt.wantLogSub, logText)
+				t.Fatalf(
+					"gateway.log missing expected failure detail %q:\n%s",
+					tt.wantLogSub,
+					logText,
+				)
 			}
 		})
 	}

@@ -571,10 +571,12 @@ func TestHardAbortPreservesSession(t *testing.T) {
 		t.Errorf("expected history preserved with 4 messages, got %d", len(finalHistory))
 	}
 
-	if finalHistory[0].Content != "initial message 1" || finalHistory[1].Content != "initial response 1" {
+	if finalHistory[0].Content != "initial message 1" ||
+		finalHistory[1].Content != "initial response 1" {
 		t.Error("initial history content changed after hard abort")
 	}
-	if finalHistory[2].Content != "new user message" || finalHistory[3].Content != "new assistant response" {
+	if finalHistory[2].Content != "new user message" ||
+		finalHistory[3].Content != "new assistant response" {
 		t.Error("turn messages lost after hard abort")
 	}
 }
@@ -1292,7 +1294,12 @@ func TestDeliverSubTurnResult_RaceWithFinish(t *testing.T) {
 	finalOrphan := orphanCount
 	mu.Unlock()
 
-	t.Logf("Delivered: %d, Orphan: %d, Total: %d", finalDelivered, finalOrphan, finalDelivered+finalOrphan)
+	t.Logf(
+		"Delivered: %d, Orphan: %d, Total: %d",
+		finalDelivered,
+		finalOrphan,
+		finalDelivered+finalOrphan,
+	)
 
 	// With the new drainPendingResults behavior, the total events may be >= numResults
 	// because Finish() drains remaining results from the channel and emits them as orphans.

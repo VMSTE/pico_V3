@@ -95,7 +95,10 @@ func mapMCPGuardConfig(resolved config.ResolvedAgentConfig) pika.MCPGuardConfig 
 }
 
 // mapTelemetryConfig builds TelemetryConfig from global Health + per-agent Budget.
-func mapTelemetryConfig(health config.HealthConfig, budget config.BudgetConfig) pika.TelemetryConfig {
+func mapTelemetryConfig(
+	health config.HealthConfig,
+	budget config.BudgetConfig,
+) pika.TelemetryConfig {
 	return pika.TelemetryConfig{
 		DailyBudgetUSD:       budget.DailyUSD,
 		WindowSize:           health.WindowSize,

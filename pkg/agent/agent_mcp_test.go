@@ -11,6 +11,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/mcp"
@@ -177,5 +178,45 @@ func TestEnsureMCPInitialized_LoadFailureSetsInitErr(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to load MCP servers") {
 		t.Fatalf("second ensureMCPInitialized() error = %q, want wrapped load failure", err.Error())
+	}
+}
+
+func TestRun_DeadMCPServersDoNotKillLoop(t *testing.T) {
+	al, cfg, _, _, cleanup := newTestAgentLoop(t)
+	defer cleanup()
+	defer al.Close()
+
+	cfg.Tools = config.ToolsConfig{
+		MCP: config.MCPConfig{
+			ToolConfig: config.ToolConfig{Enabled: true},
+			Servers: map[string]config.MCPServerConfig{
+				"broken": {
+					Enabled: true,
+					Command: "picoclaw-command-that-does-not-exist-for-mcp-tests",
+				},
+			},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- al.Run(ctx) }()
+
+	// Регрессия боя 21 сен: мёртвый MCP не должен убивать цикл —
+	// Run не завершается сам по себе (always-optional, без флага).
+	select {
+	case err := <-runDone:
+		t.Fatalf("Run() завершился сам: %v — MCP убил цикл агента", err)
+	case <-time.After(3 * time.Second):
+	}
+
+	// Ошибка инита кэшируется для диагностики, но не фатальна.
+	deadline := time.Now().Add(5 * time.Second)
+	for al.MCPInitError() == nil && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if al.MCPInitError() == nil {
+		t.Fatal("MCPInitError() = nil, want cached init failure")
 	}
 }
