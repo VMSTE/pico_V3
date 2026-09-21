@@ -511,6 +511,7 @@
         "compose.down": { "level": "critical", "confirm": "always" },
         "data.exfil": { "level": "critical", "confirm": "always" },
         "git.push": { "level": "medium", "confirm": "always" },
+        "mcp.github.write": { "level": "high", "confirm": "always" },
         "files.write": { "level": "high", "confirm": "if_critical_path" }
       }
     },
@@ -547,7 +548,7 @@
       "servers": {
         "github": {
           "trust_level": "external",
-          "allowed_tools": ["get_issue", "list_issues"],
+          "allowed_tools": ["get_file_contents", "search_code", "search_repositories", "list_issues", "get_issue", "list_commits", "create_or_update_file", "push_files", "delete_file", "create_pull_request"],
           "allow_prompts": false,
           "allow_resources": false
         }
