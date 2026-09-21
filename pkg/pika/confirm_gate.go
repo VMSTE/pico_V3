@@ -282,6 +282,11 @@ func (cg *ConfirmGate) notifyHealthBypass(effects []opEffect) {
 // deriveEffects распознаёт эффекты вызова инструмента.
 // Пустой список — read-only операции и инструменты без эффектов.
 func deriveEffects(tool string, args map[string]any) []opEffect {
+	// Волна 110 (ТЗ-110): MCP-тулы внешних систем — запись через confirm
+	// (эффект mcp.<сервер>.write). Имена mcp_<server>_<tool> (D-AUDIT-72).
+	if eff, ok := mcpWriteEffect(tool); ok {
+		return []opEffect{eff}
+	}
 	switch tool {
 	case "write_file", "edit_file", "append_file":
 		p := extractPath(args)
@@ -837,4 +842,46 @@ func summarizeArgs(args map[string]any) string {
 		summary = summary[:97] + "..."
 	}
 	return summary
+}
+
+// mcpWriteEffect — эффект записи для MCP-тулов внешних систем (волна 110,
+// ТЗ-110). Имя тула: mcp_<server>_<tool> (D-AUDIT-72). ok=false для
+// read-only тулов и не-MCP имён. Strict: вооружённый гейт спрашивает,
+// даже если ключа mcp.<сервер>.write нет в таблице.
+// Ограничение: имя сервера без подчёркиваний (Cut по первому "_").
+func mcpWriteEffect(tool string) (opEffect, bool) {
+	if !strings.HasPrefix(tool, "mcp_") {
+		return opEffect{}, false
+	}
+	rest := strings.TrimPrefix(tool, "mcp_")
+	server, _, found := strings.Cut(rest, "_")
+	if !found || server == "" {
+		return opEffect{}, false
+	}
+	if !mcpWriteToolSuffixes[strings.TrimPrefix(rest, server+"_")] {
+		return opEffect{}, false
+	}
+	return opEffect{
+		Key:    "mcp." + server + ".write",
+		Detail: tool,
+		Strict: true,
+	}, true
+}
+
+// mcpWriteToolSuffixes — MCP-тулы, мутирующие внешнюю систему (волна 110).
+// Покрывает официальный github-mcp-server; новые серверы добавляем сюда.
+var mcpWriteToolSuffixes = map[string]bool{
+	// github-mcp-server (официальный):
+	"create_or_update_file": true,
+	"push_files":            true,
+	"delete_file":           true,
+	"create_pull_request":   true,
+	"merge_pull_request":    true,
+	"update_pull_request":   true,
+	"create_branch":         true,
+	"create_issue":          true,
+	"update_issue":          true,
+	"add_issue_comment":     true,
+	"create_repository":     true,
+	"fork_repository":       true,
 }

@@ -1274,3 +1274,10 @@ Each entry maps to a single wave/phase and its merged PR.
 - **pkg/agent/instance.go** — SetCheckpointTaker(NewCheckpointManager(workspace)). **agent_command.go** — перехват /rollback (паттерн /memory): список/откат/force; менеджер стейтless, создаётся на месте. Не тул — модель не видит.
 - **web/backend/api/commands.go** — /rollback в палитре.
 - **Тесты**: checkpoints_test.go (10) + checkpoint_taker_test.go (2). Гейты: gofmt/vet/test зелёные (tools + pika + agent + web/api).
+
+## Волна 110 — MCP-записи под confirm-гейт + политика GitHub (ТЗ-110, D-AUDIT-132) · 21 сен 2026
+
+- **pkg/pika/confirm_gate.go** — deriveEffects распознаёт MCP-тулы (имена mcp_<сервер>_<тул>, D-AUDIT-72): mcpWriteEffect → эффект mcp.<сервер>.write (Strict — вооружённый гейт спрашивает даже без строки в таблице). Список мутирующих тулов официального github-mcp-server (create_or_update_file, push_files, delete_file, PR/issue-операции). До этого MCP-записи проходили гейт МОЛЧА — дыра закрыта.
+- **config/config.example.json** — ops: mcp.github.write → always; ACL-пример github: read+write тулы (запись всё равно через confirm).
+- **Тесты**: confirm_gate_mcp_test.go — write/delete через MCP спрашивают, read молчит, разбор имён.
+- Гейты: gofmt/build/vet + pkg/pika + pkg/agent + pkg/config зелёные.
