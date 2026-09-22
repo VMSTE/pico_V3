@@ -223,6 +223,7 @@ func TestNewAgentLoop_DoesNotRegisterWebSearchTool_WhenNoReadyProviders(t *testi
 	cfg.Tools.Web.Brave.Enabled = true
 	cfg.Tools.Web.Sogou.Enabled = false
 	cfg.Tools.Web.DuckDuckGo.Enabled = false
+	cfg.Tools.Web.SearXNG.Enabled = false // PIKA-V3 (волна 115): изоляция от нового дефолта
 
 	al := NewAgentLoop(cfg, bus.NewMessageBus(), &mockProvider{})
 
