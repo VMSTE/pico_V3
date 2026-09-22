@@ -14,7 +14,7 @@
 
 ### [2026-09-23] fix(pika): loop detection по хэшам аргументов/результата — wave 116
 - **ТЗ:** бой 23 сен: 3× mcp_github-personal_push_files с разными файлами ловились как петля (Operation = 40-символьное превью args, Result = 100-символьное превью — одинаковые у всех записей)
-- **PR:** #TBD
+- **PR:** #164
 - **Files:**
   - `pkg/pika/trail_meta.go` — MODIFIED: TrailEntry += ArgsHash/ResultHash (sha256 полных данных); HasLoopDetection сравнивает хэши, fallback на старые поля (trailResultKey) для обратной совместимости; HashTrailString
   - `pkg/agent/pipeline_execute.go` — MODIFIED: TRAIL-запись считает sha256 полных argsJSON и toolResult.ForLLM
