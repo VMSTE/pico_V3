@@ -231,10 +231,18 @@ func TestBuildPicoURLsPreferXForwardedHost(t *testing.T) {
 	req.Header.Set("X-Forwarded-Port", "443")
 
 	if got := h.buildPicoEventsURL(req); got != "https://vscode-tunnel.example.com:443/pico/events" {
-		t.Fatalf("buildPicoEventsURL() = %q, want %q", got, "https://vscode-tunnel.example.com:443/pico/events")
+		t.Fatalf(
+			"buildPicoEventsURL() = %q, want %q",
+			got,
+			"https://vscode-tunnel.example.com:443/pico/events",
+		)
 	}
 	if got := h.buildPicoSendURL(req); got != "https://vscode-tunnel.example.com:443/pico/send" {
-		t.Fatalf("buildPicoSendURL() = %q, want %q", got, "https://vscode-tunnel.example.com:443/pico/send")
+		t.Fatalf(
+			"buildPicoSendURL() = %q, want %q",
+			got,
+			"https://vscode-tunnel.example.com:443/pico/send",
+		)
 	}
 	if got := h.buildWsURL(req); got != "wss://vscode-tunnel.example.com:443/pico/ws" {
 		t.Fatalf("buildWsURL() = %q, want %q", got, "wss://vscode-tunnel.example.com:443/pico/ws")

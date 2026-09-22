@@ -452,7 +452,11 @@ func TestValidateGatewayPidDataRejectsHealthPidMismatchWhenMatcherInconclusive(t
 		t.Fatalf("validateGatewayPidData() decisive = false, want true")
 	}
 	if !strings.Contains(reason, "health pid mismatch") {
-		t.Fatalf("validateGatewayPidData() reason = %q, want contains %q", reason, "health pid mismatch")
+		t.Fatalf(
+			"validateGatewayPidData() reason = %q, want contains %q",
+			reason,
+			"health pid mismatch",
+		)
 	}
 }
 
@@ -518,7 +522,11 @@ func TestGatewayStartReady_DefaultModelWithoutCredential(t *testing.T) {
 		t.Fatalf("gatewayStartReady() ready = true, want false")
 	}
 	if !strings.Contains(reason, "no credentials configured") {
-		t.Fatalf("gatewayStartReady() reason = %q, want contains %q", reason, "no credentials configured")
+		t.Fatalf(
+			"gatewayStartReady() reason = %q, want contains %q",
+			reason,
+			"no credentials configured",
+		)
 	}
 }
 
@@ -600,7 +608,10 @@ func TestGatewayStartReady_LocalModelWithRunningService(t *testing.T) {
 		t.Fatalf("gatewayStartReady() error = %v", err)
 	}
 	if !ready {
-		t.Fatalf("gatewayStartReady() ready = false, want true with a running local service (reason=%q)", reason)
+		t.Fatalf(
+			"gatewayStartReady() ready = false, want true with a running local service (reason=%q)",
+			reason,
+		)
 	}
 }
 
@@ -636,7 +647,10 @@ func TestGatewayStartReady_RemoteVLLMWithAPIKeyDoesNotProbe(t *testing.T) {
 		t.Fatalf("gatewayStartReady() error = %v", err)
 	}
 	if !ready {
-		t.Fatalf("gatewayStartReady() ready = false, want true for remote vllm with api key (reason=%q)", reason)
+		t.Fatalf(
+			"gatewayStartReady() ready = false, want true for remote vllm with api key (reason=%q)",
+			reason,
+		)
 	}
 }
 
@@ -669,7 +683,10 @@ func TestGatewayStartReady_LocalOllamaUsesDefaultProbeBase(t *testing.T) {
 		t.Fatalf("gatewayStartReady() error = %v", err)
 	}
 	if !ready {
-		t.Fatalf("gatewayStartReady() ready = false, want true with default Ollama probe base (reason=%q)", reason)
+		t.Fatalf(
+			"gatewayStartReady() ready = false, want true with default Ollama probe base (reason=%q)",
+			reason,
+		)
 	}
 }
 
@@ -701,7 +718,11 @@ func TestGatewayStartReady_OAuthModelRequiresStoredCredential(t *testing.T) {
 		t.Fatalf("gatewayStartReady() ready = true, want false without stored credential")
 	}
 	if !strings.Contains(reason, "no credentials configured") {
-		t.Fatalf("gatewayStartReady() reason = %q, want contains %q", reason, "no credentials configured")
+		t.Fatalf(
+			"gatewayStartReady() reason = %q, want contains %q",
+			reason,
+			"no credentials configured",
+		)
 	}
 
 	err = auth.SetCredential(oauthProviderOpenAI, &auth.AuthCredential{
@@ -718,7 +739,10 @@ func TestGatewayStartReady_OAuthModelRequiresStoredCredential(t *testing.T) {
 		t.Fatalf("gatewayStartReady() error = %v", err)
 	}
 	if !ready {
-		t.Fatalf("gatewayStartReady() ready = false, want true with stored credential (reason=%q)", reason)
+		t.Fatalf(
+			"gatewayStartReady() ready = false, want true with stored credential (reason=%q)",
+			reason,
+		)
 	}
 }
 

@@ -116,7 +116,14 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 			workspacePath = defaultAgent.Workspace
 		}
 
-		if err := mcpManager.LoadFromMCPConfig(ctx, al.cfg.Tools.MCP, workspacePath); err != nil {
+		// Волна 114: подстановка OAuth-токенов (${oauth:...}) в заголовки серверов.
+		mcpCfg := al.cfg.Tools.MCP
+		for srvName, srv := range mcpCfg.Servers {
+			srv.Headers = al.cfg.ResolveOAuthPlaceholders(srv.Headers)
+			mcpCfg.Servers[srvName] = srv
+		}
+
+		if err := mcpManager.LoadFromMCPConfig(ctx, mcpCfg, workspacePath); err != nil {
 			al.mcp.setInitErr(fmt.Errorf("failed to load MCP servers: %w", err))
 			logger.WarnCF("agent", "Failed to load MCP servers, MCP tools will not be available",
 				map[string]any{

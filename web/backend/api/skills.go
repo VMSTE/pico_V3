@@ -94,11 +94,15 @@ type installedSkillOriginMeta struct {
 
 var (
 	skillNameSanitizer       = regexp.MustCompile(`[^a-z0-9-]+`)
-	importedSkillFrontmatter = regexp.MustCompile(`(?s)^---(?:\r\n|\n|\r)(.*?)(?:\r\n|\n|\r)---(?:\r\n|\n|\r)*`)
-	skillFrontmatterStripper = regexp.MustCompile(`(?s)^---(?:\r\n|\n|\r)(.*?)(?:\r\n|\n|\r)---(?:\r\n|\n|\r)*`)
-	persistSkillOriginMeta   = writeSkillOriginMeta
-	workspaceSkillWriteMu    sync.Mutex
-	errImportedSkillExists   = errors.New("skill already exists")
+	importedSkillFrontmatter = regexp.MustCompile(
+		`(?s)^---(?:\r\n|\n|\r)(.*?)(?:\r\n|\n|\r)---(?:\r\n|\n|\r)*`,
+	)
+	skillFrontmatterStripper = regexp.MustCompile(
+		`(?s)^---(?:\r\n|\n|\r)(.*?)(?:\r\n|\n|\r)---(?:\r\n|\n|\r)*`,
+	)
+	persistSkillOriginMeta = writeSkillOriginMeta
+	workspaceSkillWriteMu  sync.Mutex
+	errImportedSkillExists = errors.New("skill already exists")
 )
 
 const (
@@ -124,7 +128,11 @@ func (h *Handler) handleListSkills(w http.ResponseWriter, r *http.Request) {
 
 	items, err := buildSkillSupportItems(cfg)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to build skill list: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to build skill list: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -143,7 +151,11 @@ func (h *Handler) handleGetSkill(w http.ResponseWriter, r *http.Request) {
 
 	skillItems, err := buildSkillSupportItems(cfg)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to build skill list: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to build skill list: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	name := r.PathValue("name")
@@ -172,7 +184,11 @@ func (h *Handler) handleGetSkill(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleSearchSkills(w http.ResponseWriter, r *http.Request) {
 	cfg, loadErr := config.LoadConfig(h.configPath)
 	if loadErr != nil {
-		http.Error(w, fmt.Sprintf("Failed to load config: %v", loadErr), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to load config: %v", loadErr),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	if registryErr := ensureSkillRegistryToolEnabled(cfg, "find_skills"); registryErr != nil {
@@ -203,7 +219,11 @@ func (h *Handler) handleSearchSkills(w http.ResponseWriter, r *http.Request) {
 
 	installedSkills, err := buildOccupiedWorkspaceSkillsByDirectory(cfg)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to inspect installed skills: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to inspect installed skills: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -285,7 +305,11 @@ func (h *Handler) handleSearchSkills(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleInstallSkill(w http.ResponseWriter, r *http.Request) {
 	cfg, loadErr := config.LoadConfig(h.configPath)
 	if loadErr != nil {
-		http.Error(w, fmt.Sprintf("Failed to load config: %v", loadErr), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to load config: %v", loadErr),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	if registryErr := ensureSkillRegistryToolEnabled(cfg, "install_skill"); registryErr != nil {
@@ -323,7 +347,11 @@ func (h *Handler) handleInstallSkill(w http.ResponseWriter, r *http.Request) {
 	}
 	dirName, err := registry.ResolveInstallDirName(req.Slug)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("invalid slug %q: error: %s", req.Slug, err.Error()), http.StatusBadRequest)
+		http.Error(
+			w,
+			fmt.Sprintf("invalid slug %q: error: %s", req.Slug, err.Error()),
+			http.StatusBadRequest,
+		)
 		return
 	}
 
@@ -342,17 +370,29 @@ func (h *Handler) handleInstallSkill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !req.Force && targetExists {
-		http.Error(w, fmt.Sprintf("skill %q already installed at %s", dirName, targetDir), http.StatusConflict)
+		http.Error(
+			w,
+			fmt.Sprintf("skill %q already installed at %s", dirName, targetDir),
+			http.StatusConflict,
+		)
 		return
 	}
 	if mkdirErr := os.MkdirAll(skillsRoot, 0o755); mkdirErr != nil {
-		http.Error(w, fmt.Sprintf("Failed to create skills directory: %v", mkdirErr), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to create skills directory: %v", mkdirErr),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
 	stagedWorkspaceRoot, stagedTargetDir, err := createStagedSkillInstall(skillsRoot, dirName)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to prepare staged install: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to prepare staged install: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	defer os.RemoveAll(stagedWorkspaceRoot)
@@ -374,14 +414,21 @@ func (h *Handler) handleInstallSkill(w http.ResponseWriter, r *http.Request) {
 	if findWorkspaceSkillInfoByDirectory(stagedWorkspaceRoot, dirName) == nil {
 		http.Error(
 			w,
-			fmt.Sprintf("Failed to install skill: registry archive for %q is not a valid skill", req.Slug),
+			fmt.Sprintf(
+				"Failed to install skill: registry archive for %q is not a valid skill",
+				req.Slug,
+			),
 			http.StatusBadGateway,
 		)
 		return
 	}
 
 	installedAt := time.Now().UnixMilli()
-	normalizedSlug, registryURL := skills.BuildInstallMetadataForRegistryInstance(registry, req.Slug, result.Version)
+	normalizedSlug, registryURL := skills.BuildInstallMetadataForRegistryInstance(
+		registry,
+		req.Slug,
+		result.Version,
+	)
 	if err := persistSkillOriginMeta(stagedTargetDir, installedSkillOriginMeta{
 		Version:          1,
 		OriginKind:       "third_party",
@@ -391,7 +438,11 @@ func (h *Handler) handleInstallSkill(w http.ResponseWriter, r *http.Request) {
 		InstalledVersion: result.Version,
 		InstalledAt:      installedAt,
 	}); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to persist skill metadata: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to persist skill metadata: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -401,7 +452,11 @@ func (h *Handler) handleInstallSkill(w http.ResponseWriter, r *http.Request) {
 		targetDir,
 		req.Force && targetExists,
 	); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to activate installed skill: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to activate installed skill: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -409,7 +464,10 @@ func (h *Handler) handleInstallSkill(w http.ResponseWriter, r *http.Request) {
 	if validatedSkill == nil {
 		http.Error(
 			w,
-			fmt.Sprintf("Failed to install skill: activated archive for %q is not a valid skill", req.Slug),
+			fmt.Sprintf(
+				"Failed to install skill: activated archive for %q is not a valid skill",
+				req.Slug,
+			),
 			http.StatusBadGateway,
 		)
 		return
@@ -503,7 +561,11 @@ func (h *Handler) handleDeleteSkill(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if err := os.RemoveAll(filepath.Dir(skill.Path)); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to delete skill: %v", err), http.StatusInternalServerError)
+			http.Error(
+				w,
+				fmt.Sprintf("Failed to delete skill: %v", err),
+				http.StatusInternalServerError,
+			)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -572,7 +634,9 @@ func buildWorkspaceSkillItemsByDirectory(cfg *config.Config) (map[string]skillSu
 	return result, nil
 }
 
-func buildOccupiedWorkspaceSkillsByDirectory(cfg *config.Config) (map[string]skillSupportItem, error) {
+func buildOccupiedWorkspaceSkillsByDirectory(
+	cfg *config.Config,
+) (map[string]skillSupportItem, error) {
 	result := make(map[string]skillSupportItem)
 	items, err := buildSkillSupportItems(cfg)
 	if err != nil {
@@ -587,8 +651,13 @@ func buildOccupiedWorkspaceSkillsByDirectory(cfg *config.Config) (map[string]ski
 		if dirName != "" {
 			result[dirName] = skill
 		}
-		if meta, err := readInstalledSkillOriginMeta(skill.Path); err == nil && meta != nil && meta.Slug != "" {
-			key := skills.NormalizeInstallTargetForRegistry(cfg.Tools.Skills, meta.Registry, meta.Slug)
+		if meta, err := readInstalledSkillOriginMeta(skill.Path); err == nil && meta != nil &&
+			meta.Slug != "" {
+			key := skills.NormalizeInstallTargetForRegistry(
+				cfg.Tools.Skills,
+				meta.Registry,
+				meta.Slug,
+			)
 			if key == "" {
 				key = meta.Slug
 			}
@@ -636,12 +705,18 @@ func createStagedSkillInstall(skillsRoot, slug string) (string, string, error) {
 	return stagedWorkspaceRoot, stagedTargetDir, nil
 }
 
-func commitStagedSkillInstall(stagedWorkspaceRoot, stagedTargetDir, targetDir string, replaceExisting bool) error {
+func commitStagedSkillInstall(
+	stagedWorkspaceRoot, stagedTargetDir, targetDir string,
+	replaceExisting bool,
+) error {
 	if !replaceExisting {
 		return os.Rename(stagedTargetDir, targetDir)
 	}
 
-	backupDir, err := reserveTempDirPath(filepath.Dir(targetDir), "."+filepath.Base(targetDir)+"-backup-*")
+	backupDir, err := reserveTempDirPath(
+		filepath.Dir(targetDir),
+		"."+filepath.Base(targetDir)+"-backup-*",
+	)
 	if err != nil {
 		return err
 	}
@@ -652,7 +727,11 @@ func commitStagedSkillInstall(stagedWorkspaceRoot, stagedTargetDir, targetDir st
 
 	if err := os.Rename(stagedTargetDir, targetDir); err != nil {
 		if rollbackErr := os.Rename(backupDir, targetDir); rollbackErr != nil {
-			return fmt.Errorf("failed to activate replacement: %w (rollback failed: %v)", err, rollbackErr)
+			return fmt.Errorf(
+				"failed to activate replacement: %w (rollback failed: %v)",
+				err,
+				rollbackErr,
+			)
 		}
 		return fmt.Errorf("failed to activate replacement: %w", err)
 	}
@@ -774,7 +853,10 @@ func normalizeImportedSkillName(filename string, content []byte) (string, error)
 	return normalizeImportedSkillNameWithHint(filename, "", content)
 }
 
-func normalizeImportedSkillNameWithHint(filename, directoryHint string, content []byte) (string, error) {
+func normalizeImportedSkillNameWithHint(
+	filename, directoryHint string,
+	content []byte,
+) (string, error) {
 	rawContent := strings.ReplaceAll(string(content), "\r\n", "\n")
 	rawContent = strings.ReplaceAll(rawContent, "\r", "\n")
 	metadata, _ := extractImportedSkillMetadata(rawContent)
@@ -839,14 +921,22 @@ func normalizeImportedSkillContent(content []byte, skillName string) []byte {
 	return []byte(builder.String())
 }
 
-func importUploadedSkill(cfg *config.Config, filename string, content []byte) (*skillSupportItem, int, error) {
+func importUploadedSkill(
+	cfg *config.Config,
+	filename string,
+	content []byte,
+) (*skillSupportItem, int, error) {
 	if isImportedSkillArchive(filename, content) {
 		return importUploadedSkillArchive(cfg, filename, content)
 	}
 	return importUploadedMarkdownSkill(cfg, filename, content)
 }
 
-func importUploadedMarkdownSkill(cfg *config.Config, filename string, content []byte) (*skillSupportItem, int, error) {
+func importUploadedMarkdownSkill(
+	cfg *config.Config,
+	filename string,
+	content []byte,
+) (*skillSupportItem, int, error) {
 	skillName, err := normalizeImportedSkillName(filename, content)
 	if err != nil {
 		return nil, http.StatusBadRequest, err
@@ -861,7 +951,10 @@ func importUploadedMarkdownSkill(cfg *config.Config, filename string, content []
 		return nil, statusCodeForImportedSkillWriteError(err), err
 	}
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("Failed to create skill directory: %v", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf(
+			"Failed to create skill directory: %v",
+			err,
+		)
 	}
 	if err := fileutil.WriteFileAtomic(skillFile, normalizedContent, 0o644); err != nil {
 		_ = os.RemoveAll(skillDir)
@@ -871,16 +964,26 @@ func importUploadedMarkdownSkill(cfg *config.Config, filename string, content []
 	return finalizeImportedSkill(cfg, skillDir, skillName, false)
 }
 
-func importUploadedSkillArchive(cfg *config.Config, filename string, content []byte) (*skillSupportItem, int, error) {
+func importUploadedSkillArchive(
+	cfg *config.Config,
+	filename string,
+	content []byte,
+) (*skillSupportItem, int, error) {
 	tmpDir, tempDirErr := os.MkdirTemp("", "picoclaw-skill-import-*")
 	if tempDirErr != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("Failed to create temp directory: %v", tempDirErr)
+		return nil, http.StatusInternalServerError, fmt.Errorf(
+			"Failed to create temp directory: %v",
+			tempDirErr,
+		)
 	}
 	defer os.RemoveAll(tmpDir)
 
 	archivePath := filepath.Join(tmpDir, "import.zip")
 	if writeErr := fileutil.WriteFileAtomic(archivePath, content, 0o600); writeErr != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("Failed to stage uploaded archive: %v", writeErr)
+		return nil, http.StatusInternalServerError, fmt.Errorf(
+			"Failed to stage uploaded archive: %v",
+			writeErr,
+		)
 	}
 
 	extractDir := filepath.Join(tmpDir, "extract")
@@ -896,7 +999,10 @@ func importUploadedSkillArchive(cfg *config.Config, filename string, content []b
 	skillFile := filepath.Join(skillRoot, "SKILL.md")
 	skillContent, err := os.ReadFile(skillFile)
 	if err != nil {
-		return nil, http.StatusBadRequest, fmt.Errorf("failed to read SKILL.md from archive: %w", err)
+		return nil, http.StatusBadRequest, fmt.Errorf(
+			"failed to read SKILL.md from archive: %w",
+			err,
+		)
 	}
 
 	directoryHint := ""
@@ -965,7 +1071,10 @@ func finalizeImportedSkill(
 		InstalledAt: time.Now().UnixMilli(),
 	}); err != nil {
 		_ = os.RemoveAll(skillDir)
-		return nil, http.StatusInternalServerError, fmt.Errorf("Failed to persist skill metadata: %v", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf(
+			"Failed to persist skill metadata: %v",
+			err,
+		)
 	}
 
 	if importedSkill := findWorkspaceSkillByDirectory(cfg, skillName); importedSkill != nil {

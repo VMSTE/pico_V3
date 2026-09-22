@@ -187,10 +187,12 @@ settings:
 
 func TestChannel_YAML_Marshal_OnlySecureFields(t *testing.T) {
 	ch := Channel{
-		Enabled:  true,
-		Type:     ChannelTelegram,
-		name:     "my_telegram",
-		Settings: mustParseRawNode(`{"base_url": "https://api.telegram.org", "token": "123456:SECRET"}`),
+		Enabled: true,
+		Type:    ChannelTelegram,
+		name:    "my_telegram",
+		Settings: mustParseRawNode(
+			`{"base_url": "https://api.telegram.org", "token": "123456:SECRET"}`,
+		),
 	}
 	var cfg testTelegramConfig
 	require.NoError(t, ch.Decode(&cfg))
@@ -757,7 +759,12 @@ func TestChannel_EncryptedToken(t *testing.T) {
 	// Encrypt the token to get an enc:// string
 	encrypted, err := credential.Encrypt(testPassphrase, "", plainToken)
 	require.NoError(t, err)
-	require.True(t, strings.HasPrefix(encrypted, "enc://"), "expected enc:// prefix, got: %s", encrypted)
+	require.True(
+		t,
+		strings.HasPrefix(encrypted, "enc://"),
+		"expected enc:// prefix, got: %s",
+		encrypted,
+	)
 	t.Logf("encrypted token: %s", encrypted)
 
 	// Replace PassphraseProvider so SecureString.fromRaw can decrypt

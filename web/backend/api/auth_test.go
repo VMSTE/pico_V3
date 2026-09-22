@@ -73,7 +73,11 @@ func TestLauncherAuthLoginAndStatus(t *testing.T) {
 
 	t.Run("login_ok", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"password":"`+password+`"}`))
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"/api/auth/login",
+			strings.NewReader(`{"password":"`+password+`"}`),
+		)
 		req.Header.Set("Content-Type", "application/json")
 		req.RemoteAddr = "127.0.0.1:12345"
 		mux.ServeHTTP(rec, req)
@@ -133,7 +137,11 @@ func TestLauncherAuthUninitializedStoreRequiresSetup(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"password":"not-set-yet"}`))
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/auth/login",
+		strings.NewReader(`{"password":"not-set-yet"}`),
+	)
 	req.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusConflict {
@@ -153,7 +161,11 @@ func TestLauncherAuthUninitializedStoreRequiresSetup(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"password":"12345678"}`))
+	req = httptest.NewRequest(
+		http.MethodPost,
+		"/api/auth/login",
+		strings.NewReader(`{"password":"12345678"}`),
+	)
 	req.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

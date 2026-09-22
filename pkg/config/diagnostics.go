@@ -193,7 +193,10 @@ func diagnosticPreviewForOffset(data []byte, offset int64) string {
 
 	if diagnosticsUseColor() {
 		linePrefix := "\x1b[2m" + prefix + "\x1b[0m"
-		caretPrefix := "\x1b[2m" + strings.Repeat(" ", len(fmt.Sprintf("%4d", lineNumber))) + " | " + "\x1b[0m"
+		caretPrefix := "\x1b[2m" + strings.Repeat(
+			" ",
+			len(fmt.Sprintf("%4d", lineNumber)),
+		) + " | " + "\x1b[0m"
 		highlighted := highlightDiagnosticColumn(trimmedLine, caretColumn)
 		caretPad := strings.Repeat(" ", maxRuneCount(trimmedLine, caretColumn-1))
 		return fmt.Sprintf(
@@ -324,7 +327,13 @@ func highlightDiagnosticColumn(line string, column int) string {
 	}
 
 	index := column - 1
-	return string(runes[:index]) + "\x1b[31m" + string(runes[index]) + "\x1b[0m" + string(runes[index+1:])
+	return string(
+		runes[:index],
+	) + "\x1b[31m" + string(
+		runes[index],
+	) + "\x1b[0m" + string(
+		runes[index+1:],
+	)
 }
 
 func maxRuneCount(s string, count int) int {

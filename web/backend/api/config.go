@@ -85,7 +85,11 @@ func (h *Handler) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	// so that security-managed fields (e.g. pico token) are available.
 	err = cfg.SecurityCopyFrom(h.configPath)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to apply security config: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to apply security config: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	applyConfigSecretsFromMap(&cfg, raw)
@@ -191,7 +195,11 @@ func (h *Handler) handlePatchConfig(w http.ResponseWriter, r *http.Request) {
 	// Restore security fields (tokens/keys) from the loaded config before validation,
 	// because private fields are lost during JSON round-trip.
 	if err = newCfg.SecurityCopyFrom(h.configPath); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to apply security config: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to apply security config: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	applyConfigSecretsFromMap(&newCfg, base)
@@ -299,7 +307,10 @@ func validateConfig(cfg *config.Config) []string {
 
 	// Gateway port range
 	if cfg.Gateway.Port != 0 && (cfg.Gateway.Port < 1 || cfg.Gateway.Port > 65535) {
-		errs = append(errs, fmt.Sprintf("gateway.port %d is out of valid range (1-65535)", cfg.Gateway.Port))
+		errs = append(
+			errs,
+			fmt.Sprintf("gateway.port %d is out of valid range (1-65535)", cfg.Gateway.Port),
+		)
 	}
 
 	// Pico channel: token required when enabled
@@ -308,7 +319,10 @@ func validateConfig(cfg *config.Config) []string {
 		if bc != nil && bc.Enabled {
 			if decoded, err := bc.GetDecoded(); err == nil && decoded != nil {
 				if c, ok := decoded.(*config.PicoSettings); ok && c.Token.String() == "" {
-					errs = append(errs, "channels.pico.token is required when pico channel is enabled")
+					errs = append(
+						errs,
+						"channels.pico.token is required when pico channel is enabled",
+					)
 				}
 			}
 		}
@@ -320,7 +334,10 @@ func validateConfig(cfg *config.Config) []string {
 		if bc != nil && bc.Enabled {
 			if decoded, err := bc.GetDecoded(); err == nil && decoded != nil {
 				if c, ok := decoded.(*config.TelegramSettings); ok && c.Token.String() == "" {
-					errs = append(errs, "channels.telegram.token is required when telegram channel is enabled")
+					errs = append(
+						errs,
+						"channels.telegram.token is required when telegram channel is enabled",
+					)
 				}
 			}
 		}
@@ -332,7 +349,10 @@ func validateConfig(cfg *config.Config) []string {
 		if bc != nil && bc.Enabled {
 			if decoded, err := bc.GetDecoded(); err == nil && decoded != nil {
 				if c, ok := decoded.(*config.DiscordSettings); ok && c.Token.String() == "" {
-					errs = append(errs, "channels.discord.token is required when discord channel is enabled")
+					errs = append(
+						errs,
+						"channels.discord.token is required when discord channel is enabled",
+					)
 				}
 			}
 		}
@@ -344,10 +364,16 @@ func validateConfig(cfg *config.Config) []string {
 			if decoded, err := bc.GetDecoded(); err == nil && decoded != nil {
 				if c, ok := decoded.(*config.WeComSettings); ok {
 					if c.BotID == "" {
-						errs = append(errs, "channels.wecom.bot_id is required when wecom channel is enabled")
+						errs = append(
+							errs,
+							"channels.wecom.bot_id is required when wecom channel is enabled",
+						)
 					}
 					if c.Secret.String() == "" {
-						errs = append(errs, "channels.wecom.secret is required when wecom channel is enabled")
+						errs = append(
+							errs,
+							"channels.wecom.secret is required when wecom channel is enabled",
+						)
 					}
 				}
 			}
@@ -358,11 +384,17 @@ func validateConfig(cfg *config.Config) []string {
 		if cfg.Tools.Exec.EnableDenyPatterns {
 			errs = append(
 				errs,
-				validateRegexPatterns("tools.exec.custom_deny_patterns", cfg.Tools.Exec.CustomDenyPatterns)...)
+				validateRegexPatterns(
+					"tools.exec.custom_deny_patterns",
+					cfg.Tools.Exec.CustomDenyPatterns,
+				)...)
 		}
 		errs = append(
 			errs,
-			validateRegexPatterns("tools.exec.custom_allow_patterns", cfg.Tools.Exec.CustomAllowPatterns)...)
+			validateRegexPatterns(
+				"tools.exec.custom_allow_patterns",
+				cfg.Tools.Exec.CustomAllowPatterns,
+			)...)
 	}
 
 	return errs
@@ -372,7 +404,10 @@ func validateRegexPatterns(field string, patterns []string) []string {
 	var errs []string
 	for index, pattern := range patterns {
 		if _, err := regexp.Compile(pattern); err != nil {
-			errs = append(errs, fmt.Sprintf("%s[%d] is not a valid regular expression: %v", field, index, err))
+			errs = append(
+				errs,
+				fmt.Sprintf("%s[%d] is not a valid regular expression: %v", field, index, err),
+			)
 		}
 	}
 	return errs
@@ -408,9 +443,11 @@ func asMapField(value map[string]any, key string) (map[string]any, bool) {
 }
 
 var (
-	allowFromHiddenCharsRe = regexp.MustCompile("[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060-\u2069\uFEFF]")
-	allowFromSplitRe       = regexp.MustCompile("[,\uFF0C、;；\r\n\t]+")
-	conservativeSplitRe    = regexp.MustCompile("[,\uFF0C\r\n\t]+")
+	allowFromHiddenCharsRe = regexp.MustCompile(
+		"[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060-\u2069\uFEFF]",
+	)
+	allowFromSplitRe    = regexp.MustCompile("[,\uFF0C、;；\r\n\t]+")
+	conservativeSplitRe = regexp.MustCompile("[,\uFF0C\r\n\t]+")
 )
 
 type stringArrayParserOptions struct {
@@ -442,9 +479,16 @@ func normalizeChannelArrayFields(raw map[string]any) error {
 
 		if groupTrigger, ok := asMapField(chMap, "group_trigger"); ok {
 			if rawPrefixes, exists := groupTrigger["prefixes"]; exists {
-				normalized, err := normalizeStringArrayValue(rawPrefixes, stringArrayParserOptions{})
+				normalized, err := normalizeStringArrayValue(
+					rawPrefixes,
+					stringArrayParserOptions{},
+				)
 				if err != nil {
-					return fmt.Errorf("channel_list.%s.group_trigger.prefixes: %w", channelName, err)
+					return fmt.Errorf(
+						"channel_list.%s.group_trigger.prefixes: %w",
+						channelName,
+						err,
+					)
 				}
 				groupTrigger["prefixes"] = normalized
 			}

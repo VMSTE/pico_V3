@@ -64,14 +64,18 @@ func TestHandleListTools(t *testing.T) {
 	if gotTools["cron"].Status != "enabled" {
 		t.Fatalf("cron status = %q, want enabled", gotTools["cron"].Status)
 	}
-	if gotTools["spawn"].Status != "blocked" || gotTools["spawn"].ReasonCode != "requires_subagent" {
+	if gotTools["spawn"].Status != "blocked" ||
+		gotTools["spawn"].ReasonCode != "requires_subagent" {
 		t.Fatalf("spawn = %#v, want blocked/requires_subagent", gotTools["spawn"])
 	}
 	if gotTools["find_skills"].Status != "enabled" {
 		t.Fatalf("find_skills status = %q, want enabled", gotTools["find_skills"].Status)
 	}
 	if gotTools["tool_search_tool_regex"].Status != "enabled" {
-		t.Fatalf("tool_search_tool_regex status = %q, want enabled", gotTools["tool_search_tool_regex"].Status)
+		t.Fatalf(
+			"tool_search_tool_regex status = %q, want enabled",
+			gotTools["tool_search_tool_regex"].Status,
+		)
 	}
 	if gotTools["tool_search_tool_regex"].ConfigKey != "mcp.discovery.use_regex" {
 		t.Fatalf(
@@ -80,7 +84,10 @@ func TestHandleListTools(t *testing.T) {
 		)
 	}
 	if gotTools["tool_search_tool_bm25"].Status != "disabled" {
-		t.Fatalf("tool_search_tool_bm25 status = %q, want disabled", gotTools["tool_search_tool_bm25"].Status)
+		t.Fatalf(
+			"tool_search_tool_bm25 status = %q, want disabled",
+			gotTools["tool_search_tool_bm25"].Status,
+		)
 	}
 	if gotTools["tool_search_tool_bm25"].ConfigKey != "mcp.discovery.use_bm25" {
 		t.Fatalf(
@@ -90,10 +97,16 @@ func TestHandleListTools(t *testing.T) {
 	}
 	if runtime.GOOS == "linux" {
 		if gotTools["i2c"].Status != "disabled" {
-			t.Fatalf("i2c status = %q, want disabled on linux when config is off", gotTools["i2c"].Status)
+			t.Fatalf(
+				"i2c status = %q, want disabled on linux when config is off",
+				gotTools["i2c"].Status,
+			)
 		}
 		if gotTools["serial"].Status != "disabled" {
-			t.Fatalf("serial status = %q, want disabled when config is off", gotTools["serial"].Status)
+			t.Fatalf(
+				"serial status = %q, want disabled when config is off",
+				gotTools["serial"].Status,
+			)
 		}
 
 		cfg.Tools.Serial.Enabled = true
@@ -204,7 +217,12 @@ func TestHandleUpdateToolState(t *testing.T) {
 	req2.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
-		t.Fatalf("regex status = %d, want %d, body=%s", rec2.Code, http.StatusOK, rec2.Body.String())
+		t.Fatalf(
+			"regex status = %d, want %d, body=%s",
+			rec2.Code,
+			http.StatusOK,
+			rec2.Body.String(),
+		)
 	}
 
 	rec3 := httptest.NewRecorder()
@@ -226,7 +244,8 @@ func TestHandleUpdateToolState(t *testing.T) {
 	if !updated.Tools.Spawn.Enabled || !updated.Tools.Subagent.Enabled {
 		t.Fatalf("spawn/subagent should both be enabled: %#v", updated.Tools)
 	}
-	if !updated.Tools.MCP.Enabled || !updated.Tools.MCP.Discovery.Enabled || !updated.Tools.MCP.Discovery.UseRegex {
+	if !updated.Tools.MCP.Enabled || !updated.Tools.MCP.Discovery.Enabled ||
+		!updated.Tools.MCP.Discovery.UseRegex {
 		t.Fatalf("mcp regex discovery should be enabled: %#v", updated.Tools.MCP)
 	}
 	if !updated.Tools.Cron.Enabled {
@@ -242,7 +261,12 @@ func TestHandleUpdateToolState(t *testing.T) {
 	req4.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec4, req4)
 	if rec4.Code != http.StatusOK {
-		t.Fatalf("serial status = %d, want %d, body=%s", rec4.Code, http.StatusOK, rec4.Body.String())
+		t.Fatalf(
+			"serial status = %d, want %d, body=%s",
+			rec4.Code,
+			http.StatusOK,
+			rec4.Body.String(),
+		)
 	}
 
 	updated, err = config.LoadConfig(configPath)
@@ -291,7 +315,12 @@ func TestHandleListTools_ReportsWebSearchEnabledWhenToolIsOn(t *testing.T) {
 			mux.ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusOK, rec.Body.String())
+				t.Fatalf(
+					"status = %d, want %d, body=%s",
+					rec.Code,
+					http.StatusOK,
+					rec.Body.String(),
+				)
 			}
 
 			var resp toolSupportResponse
@@ -397,7 +426,10 @@ func TestHandleGetWebSearchConfig_DoesNotExposeNativeAsCurrentService(t *testing
 		t.Fatal("prefer_native should remain true in response")
 	}
 	if resp.CurrentService != "" {
-		t.Fatalf("current_service = %q, want empty when no external provider is ready", resp.CurrentService)
+		t.Fatalf(
+			"current_service = %q, want empty when no external provider is ready",
+			resp.CurrentService,
+		)
 	}
 }
 
@@ -599,6 +631,9 @@ func TestResolveCurrentWebSearchProvider_IgnoresPreferNativeInConfigView(t *test
 	cfg.Tools.Web.Brave.Enabled = true
 
 	if got := resolveCurrentWebSearchProvider(cfg); got != "" {
-		t.Fatalf("resolveCurrentWebSearchProvider() = %q, want empty when only native search would be available", got)
+		t.Fatalf(
+			"resolveCurrentWebSearchProvider() = %q, want empty when only native search would be available",
+			got,
+		)
 	}
 }

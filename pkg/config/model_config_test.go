@@ -17,7 +17,11 @@ func TestGetModelConfig_Found(t *testing.T) {
 		Version: CurrentVersion,
 		ModelList: []*ModelConfig{
 			{ModelName: "test-model", Model: "openai/gpt-4o", APIKeys: SimpleSecureStrings("key1")},
-			{ModelName: "other-model", Model: "anthropic/claude", APIKeys: SimpleSecureStrings("key2")},
+			{
+				ModelName: "other-model",
+				Model:     "anthropic/claude",
+				APIKeys:   SimpleSecureStrings("key2"),
+			},
 		},
 	}
 
@@ -114,8 +118,16 @@ func TestGetModelConfig_RoundRobinStartsFromFirstMatch(t *testing.T) {
 func TestGetModelConfig_Concurrent(t *testing.T) {
 	cfg := &Config{
 		ModelList: []*ModelConfig{
-			{ModelName: "concurrent-model", Model: "openai/gpt-4o-1", APIKeys: SimpleSecureStrings("key1")},
-			{ModelName: "concurrent-model", Model: "openai/gpt-4o-2", APIKeys: SimpleSecureStrings("key2")},
+			{
+				ModelName: "concurrent-model",
+				Model:     "openai/gpt-4o-1",
+				APIKeys:   SimpleSecureStrings("key1"),
+			},
+			{
+				ModelName: "concurrent-model",
+				Model:     "openai/gpt-4o-2",
+				APIKeys:   SimpleSecureStrings("key2"),
+			},
 		},
 	}
 
@@ -254,7 +266,11 @@ func TestConfig_ValidateModelList(t *testing.T) {
 			}
 			if err != nil && tt.errMsg != "" {
 				if !strings.Contains(err.Error(), tt.errMsg) {
-					t.Errorf("ValidateModelList() error = %v, want error containing %q", err, tt.errMsg)
+					t.Errorf(
+						"ValidateModelList() error = %v, want error containing %q",
+						err,
+						tt.errMsg,
+					)
 				}
 			}
 		})

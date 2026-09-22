@@ -248,7 +248,11 @@ func (c *systemVersionCache) waitOrStart(ctx context.Context) (bool, bool) {
 	}
 }
 
-func (c *systemVersionCache) finishResolve(value systemVersionResponse, gatewayPID int, gatewayAlive bool) {
+func (c *systemVersionCache) finishResolve(
+	value systemVersionResponse,
+	gatewayPID int,
+	gatewayAlive bool,
+) {
 	c.mu.Lock()
 	if gatewayAlive && gatewayPID > 0 {
 		c.current = cachedSystemVersion{value: value, gatewayPID: gatewayPID}

@@ -42,7 +42,11 @@ func (h *Handler) loadLauncherConfig() (launcherconfig.Config, error) {
 func (h *Handler) handleGetLauncherConfig(w http.ResponseWriter, r *http.Request) {
 	cfg, err := h.loadLauncherConfig()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to load launcher config: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to load launcher config: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -63,7 +67,11 @@ func (h *Handler) handleUpdateLauncherConfig(w http.ResponseWriter, r *http.Requ
 
 	cfg, err := h.loadLauncherConfig()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to load launcher config: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to load launcher config: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	cfg.Port = payload.Port
@@ -76,7 +84,11 @@ func (h *Handler) handleUpdateLauncherConfig(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := launcherconfig.Save(h.launcherConfigPath(), cfg); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to save launcher config: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to save launcher config: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 

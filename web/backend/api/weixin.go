@@ -68,7 +68,11 @@ func (h *Handler) handleStartWeixinFlow(w http.ResponseWriter, r *http.Request) 
 
 	api, err := weixin.NewApiClient(weixinBaseURL, "", "")
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to create weixin client: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("failed to create weixin client: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -80,7 +84,11 @@ func (h *Handler) handleStartWeixinFlow(w http.ResponseWriter, r *http.Request) 
 
 	dataURI, err := generateQRDataURI(qrResp.QrcodeImgContent)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to generate QR image: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("failed to generate QR image: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -143,7 +151,8 @@ func (h *Handler) handlePollWeixinFlow(w http.ResponseWriter, r *http.Request) {
 		h.setWeixinFlowError(flowID, fmt.Sprintf("client error: %v", err))
 		flow, _ = h.getWeixinFlow(flowID)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(weixinFlowResponse{FlowID: flow.ID, Status: flow.Status, Error: flow.Error})
+		_ = json.NewEncoder(w).
+			Encode(weixinFlowResponse{FlowID: flow.ID, Status: flow.Status, Error: flow.Error})
 		return
 	}
 
@@ -173,7 +182,11 @@ func (h *Handler) handlePollWeixinFlow(w http.ResponseWriter, r *http.Request) {
 		}
 		if saveErr := h.saveWeixinBinding(statusResp.BotToken, statusResp.IlinkBotID); saveErr != nil {
 			h.setWeixinFlowError(flowID, fmt.Sprintf("failed to save token: %v", saveErr))
-			logger.ErrorCF("weixin", "failed to save token", map[string]any{"error": saveErr.Error()})
+			logger.ErrorCF(
+				"weixin",
+				"failed to save token",
+				map[string]any{"error": saveErr.Error()},
+			)
 			break
 		}
 		h.setWeixinFlowConfirmed(flowID, statusResp.IlinkBotID)

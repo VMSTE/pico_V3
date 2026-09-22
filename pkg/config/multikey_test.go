@@ -117,7 +117,10 @@ func TestExpandMultiKeyModels_WithExistingFallbacks(t *testing.T) {
 		ModelName: "gpt-4",
 		Model:     "openai/gpt-4o",
 	}
-	modelCfg.APIKeys = SimpleSecureStrings("key0", "key1") // Use internal field for multi-key testing
+	modelCfg.APIKeys = SimpleSecureStrings(
+		"key0",
+		"key1",
+	) // Use internal field for multi-key testing
 	modelCfg.Fallbacks = []string{"claude-3"}
 	models := []*ModelConfig{modelCfg}
 
@@ -197,7 +200,10 @@ func TestExpandMultiKeyModels_PreservesOtherFields(t *testing.T) {
 		RequestTimeout: 30,
 		ThinkingLevel:  "high",
 	}
-	modelCfg.APIKeys = SimpleSecureStrings("key0", "key1") // Use internal field for multi-key testing
+	modelCfg.APIKeys = SimpleSecureStrings(
+		"key0",
+		"key1",
+	) // Use internal field for multi-key testing
 	models := []*ModelConfig{modelCfg}
 
 	result := expandMultiKeyModels(models)

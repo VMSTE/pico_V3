@@ -944,7 +944,11 @@ func TestHandleWebSocketProxy_AllowsArbitraryOrigin(t *testing.T) {
 	gateway.pidData = &ppid.PidFileData{}
 	gateway.picoToken = "ui-token"
 
-	req := httptest.NewRequest(http.MethodGet, "http://launcher.local/pico/ws?session_id=test-session", nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"http://launcher.local/pico/ws?session_id=test-session",
+		nil,
+	)
 	req.Header.Set("Origin", "http://evil.example")
 	rec := httptest.NewRecorder()
 	handler(rec, req)

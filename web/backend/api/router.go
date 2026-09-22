@@ -40,7 +40,12 @@ func NewHandler(configPath string) *Handler {
 }
 
 // SetServerOptions stores current backend listen options for fallback behavior.
-func (h *Handler) SetServerOptions(port int, public bool, publicExplicit bool, allowedCIDRs []string) {
+func (h *Handler) SetServerOptions(
+	port int,
+	public bool,
+	publicExplicit bool,
+	allowedCIDRs []string,
+) {
 	h.serverPort = port
 	h.serverPublic = public
 	h.serverPublicExplicit = publicExplicit
@@ -92,6 +97,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// MCP servers management (D-AUDIT-84)
 	h.registerMCPRoutes(mux)
+
+	// GitHub OAuth integration (волна 114, ТЗ-114)
+	h.registerIntegrationRoutes(mux)
 	h.registerLogsRoutes(mux) // Волна 106 (ТЗ-106, срез B): файловые логи
 
 	// Named agents CRUD (D-AUDIT-97)

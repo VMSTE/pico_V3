@@ -100,7 +100,11 @@ func (h *Handler) handleStartWecomFlow(w http.ResponseWriter, r *http.Request) {
 
 	dataURI, err := generateQRDataURI(session.Data.AuthURL)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to generate QR image: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("failed to generate QR image: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -184,7 +188,11 @@ func (h *Handler) handlePollWecomFlow(w http.ResponseWriter, r *http.Request) {
 			statusResp.Data.BotInfo.Secret,
 		); saveErr != nil {
 			h.setWecomFlowError(flowID, fmt.Sprintf("failed to save credentials: %v", saveErr))
-			logger.ErrorCF("wecom", "failed to save credentials", map[string]any{"error": saveErr.Error()})
+			logger.ErrorCF(
+				"wecom",
+				"failed to save credentials",
+				map[string]any{"error": saveErr.Error()},
+			)
 			break
 		}
 		h.setWecomFlowConfirmed(flowID, statusResp.Data.BotInfo.BotID)
@@ -249,7 +257,11 @@ func (h *Handler) saveWecomBinding(botID, secret string) error {
 }
 
 func fetchWecomQRCode(ctx context.Context) (wecomQRGenerateResponse, error) {
-	targetURL, err := buildWecomQRGenerateURL(wecomQRGenerateEndpoint, wecomQRSourceID, wecomPlatformCode())
+	targetURL, err := buildWecomQRGenerateURL(
+		wecomQRGenerateEndpoint,
+		wecomQRSourceID,
+		wecomPlatformCode(),
+	)
 	if err != nil {
 		return wecomQRGenerateResponse{}, err
 	}

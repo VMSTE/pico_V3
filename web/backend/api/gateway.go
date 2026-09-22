@@ -115,7 +115,10 @@ var gatewayProcessMatcher = isLikelyGatewayProcess
 
 // getGatewayHealth checks the gateway health endpoint and returns the status response.
 // Returns (*health.StatusResponse, statusCode, error). If error is not nil, the other values are not valid.
-func (h *Handler) getGatewayHealth(cfg *config.Config, timeout time.Duration) (*health.StatusResponse, int, error) {
+func (h *Handler) getGatewayHealth(
+	cfg *config.Config,
+	timeout time.Duration,
+) (*health.StatusResponse, int, error) {
 	// Prefer port/host from pidData when available.
 	var port int
 	var host string
@@ -167,7 +170,13 @@ func isLikelyGatewayProcess(pid int) (bool, bool) {
 			`$p=Get-CimInstance Win32_Process -Filter "ProcessId = %d"; if ($null -eq $p) { "" } else { $p.CommandLine }`,
 			pid,
 		)
-		out, err := launcherExecCommand("powershell", "-NoProfile", "-NonInteractive", "-Command", psCmd).Output()
+		out, err := launcherExecCommand(
+			"powershell",
+			"-NoProfile",
+			"-NonInteractive",
+			"-Command",
+			psCmd,
+		).Output()
 		if err == nil {
 			cmdline := strings.TrimSpace(string(out))
 			if cmdline != "" {
@@ -176,7 +185,14 @@ func isLikelyGatewayProcess(pid int) (bool, bool) {
 		}
 
 		// Fallback: determine only whether the process still exists.
-		out, err = launcherExecCommand("tasklist", "/FI", "PID eq "+strconv.Itoa(pid), "/FO", "CSV", "/NH").Output()
+		out, err = launcherExecCommand(
+			"tasklist",
+			"/FI",
+			"PID eq "+strconv.Itoa(pid),
+			"/FO",
+			"CSV",
+			"/NH",
+		).Output()
 		if err != nil {
 			return false, false
 		}
@@ -218,7 +234,8 @@ func looksLikeGatewayCommandLine(cmdline string) bool {
 	}
 	for _, f := range fields {
 		token := strings.Trim(f, `"'`)
-		if token == "gateway" || strings.HasSuffix(token, "/gateway") || strings.HasSuffix(token, `\gateway`) {
+		if token == "gateway" || strings.HasSuffix(token, "/gateway") ||
+			strings.HasSuffix(token, `\gateway`) {
 			return true
 		}
 	}
@@ -277,12 +294,19 @@ func (h *Handler) validateGatewayPidData(
 		return false, false, fmt.Sprintf("health endpoint returned status %d", statusCode)
 	}
 	if healthResp.PID > 0 && healthResp.PID != pidData.PID {
-		return false, true, fmt.Sprintf("health pid mismatch: pidFile=%d, health=%d", pidData.PID, healthResp.PID)
+		return false, true, fmt.Sprintf(
+			"health pid mismatch: pidFile=%d, health=%d",
+			pidData.PID,
+			healthResp.PID,
+		)
 	}
 	return true, true, ""
 }
 
-func (h *Handler) sanitizeGatewayPidData(pidData *ppid.PidFileData, cfg *config.Config) *ppid.PidFileData {
+func (h *Handler) sanitizeGatewayPidData(
+	pidData *ppid.PidFileData,
+	cfg *config.Config,
+) *ppid.PidFileData {
 	if pidData == nil {
 		return nil
 	}
@@ -331,7 +355,10 @@ func (h *Handler) TryAutoStartGateway() {
 		pid := pidData.PID
 		_, err = h.startGatewayLocked("starting", pid)
 		if err != nil {
-			logger.ErrorC("gateway", fmt.Sprintf("Failed to attach to running gateway (PID: %d): %v", pid, err))
+			logger.ErrorC(
+				"gateway",
+				fmt.Sprintf("Failed to attach to running gateway (PID: %d): %v", pid, err),
+			)
 		} else {
 			gateway.pidData = pidData
 			refreshPicoTokensLocked(h.configPath)
@@ -866,7 +893,10 @@ func (h *Handler) startGatewayLocked(initialStatus string, existingPid int) (int
 		pid = existingPid
 		gateway.cmd = nil // Clear first to ensure clean state
 		if err = attachToGatewayProcessLocked(pid, cfg); err != nil {
-			logger.ErrorC("gateway", fmt.Sprintf("Failed to attach to existing gateway (PID %d): %v", pid, err))
+			logger.ErrorC(
+				"gateway",
+				fmt.Sprintf("Failed to attach to existing gateway (PID %d): %v", pid, err),
+			)
 			return 0, err
 		}
 
@@ -932,7 +962,10 @@ func (h *Handler) startGatewayLocked(initialStatus string, existingPid int) (int
 	gateway.bootConfigSignature = computeConfigSignature(cfg)
 	setGatewayRuntimeStatusLocked(initialStatus)
 	pid = cmd.Process.Pid
-	logger.InfoC("gateway", fmt.Sprintf("Started picoclaw gateway (PID: %d) from %s", pid, execPath))
+	logger.InfoC(
+		"gateway",
+		fmt.Sprintf("Started picoclaw gateway (PID: %d) from %s", pid, execPath),
+	)
 
 	// Capture stdout/stderr in background
 	go scanPipe(stdoutPipe, gateway.logs)
@@ -988,7 +1021,10 @@ func (h *Handler) startGatewayLocked(initialStatus string, existingPid int) (int
 					setGatewayRuntimeStatusLocked("running")
 				}
 				gateway.mu.Unlock()
-				logger.InfoC("gateway", fmt.Sprintf("Gateway pidFile detected (PID: %d, port: %d)", pd.PID, pd.Port))
+				logger.InfoC(
+					"gateway",
+					fmt.Sprintf("Gateway pidFile detected (PID: %d, port: %d)", pd.PID, pd.Port),
+				)
 				return
 			}
 
@@ -1006,7 +1042,10 @@ func (h *Handler) startGatewayLocked(initialStatus string, existingPid int) (int
 				gateway.mu.Unlock()
 				if !healthConfirmed {
 					healthConfirmed = true
-					logger.InfoC("gateway", "Gateway health endpoint reachable; waiting for pid file")
+					logger.InfoC(
+						"gateway",
+						"Gateway health endpoint reachable; waiting for pid file",
+					)
 				}
 				continue
 			}
@@ -1048,8 +1087,15 @@ func (h *Handler) handleGatewayStart(w http.ResponseWriter, r *http.Request) {
 		_, err = h.startGatewayLocked("starting", pid)
 		if err != nil {
 			gateway.mu.Unlock()
-			logger.ErrorC("gateway", fmt.Sprintf("Failed to attach to running gateway (PID: %d): %v", pid, err))
-			http.Error(w, fmt.Sprintf("Failed to attach to gateway: %v", err), http.StatusInternalServerError)
+			logger.ErrorC(
+				"gateway",
+				fmt.Sprintf("Failed to attach to running gateway (PID: %d): %v", pid, err),
+			)
+			http.Error(
+				w,
+				fmt.Sprintf("Failed to attach to gateway: %v", err),
+				http.StatusInternalServerError,
+			)
 			return
 		}
 		gateway.pidData = pidData
@@ -1092,7 +1138,11 @@ func (h *Handler) handleGatewayStart(w http.ResponseWriter, r *http.Request) {
 
 	pid, err := h.startGatewayLocked("starting", 0)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to start gateway: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to start gateway: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -1122,7 +1172,11 @@ func (h *Handler) handleGatewayStop(w http.ResponseWriter, r *http.Request) {
 
 	pid, err := stopGatewayLocked()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to stop gateway (PID %d): %v", pid, err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to stop gateway (PID %d): %v", pid, err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -1152,14 +1206,18 @@ func (h *Handler) RestartGateway() (int, error) {
 	gateway.mu.Unlock()
 
 	if previousCmd != nil && previousCmd.Process != nil && !previousOwned {
-		if isGateway, inspected := gatewayProcessMatcher(previousCmd.Process.Pid); inspected && !isGateway {
+		if isGateway, inspected := gatewayProcessMatcher(previousCmd.Process.Pid); inspected &&
+			!isGateway {
 			logger.Warnf("refuse restarting non-gateway process (PID: %d)", previousCmd.Process.Pid)
 			gateway.mu.Lock()
 			if gateway.cmd == previousCmd {
 				setGatewayRuntimeStatusLocked("running")
 			}
 			gateway.mu.Unlock()
-			return 0, fmt.Errorf("refuse to restart non-gateway process (PID %d)", previousCmd.Process.Pid)
+			return 0, fmt.Errorf(
+				"refuse to restart non-gateway process (PID %d)",
+				previousCmd.Process.Pid,
+			)
 		}
 	}
 
@@ -1228,7 +1286,11 @@ func (h *Handler) handleGatewayRestart(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		http.Error(w, fmt.Sprintf("Failed to restart gateway: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to restart gateway: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -1284,7 +1346,8 @@ func (h *Handler) gatewayStatusData() map[string]any {
 		setGatewayRuntimeStatusLocked("running")
 
 		// Attach if we don't already track this PID.
-		if gateway.cmd == nil || gateway.cmd.Process == nil || gateway.cmd.Process.Pid != pidData.PID {
+		if gateway.cmd == nil || gateway.cmd.Process == nil ||
+			gateway.cmd.Process.Pid != pidData.PID {
 			_ = attachToGatewayProcessLocked(pidData.PID, cfg)
 		}
 

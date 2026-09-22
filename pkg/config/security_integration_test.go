@@ -35,7 +35,10 @@ func TestJSONUnmarshalPrivateFields(t *testing.T) {
 		t.Errorf("PublicField = %q, want 'pub'", s.PublicField)
 	}
 	if s.privateField != "" {
-		t.Errorf("privateField = %q, want empty because unexported fields are ignored", s.privateField)
+		t.Errorf(
+			"privateField = %q, want empty because unexported fields are ignored",
+			s.privateField,
+		)
 	}
 }
 
@@ -401,17 +404,28 @@ skills:
 		// Verify Channel tokens via Key() methods (loaded from config.json settings)
 		// Telegram
 		tgSec := decodeChannel("telegram")
-		assert.Equal(t, "123456789:ABCdefGHIjklMNOpqrsTUVwxyz", secureStr(tgSec.(*TelegramSettings).Token))
+		assert.Equal(
+			t,
+			"123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+			secureStr(tgSec.(*TelegramSettings).Token),
+		)
 		t.Logf("Telegram Token(): %s", secureStr(tgSec.(*TelegramSettings).Token))
 
 		// Feishu
 		feiSec := decodeChannel("feishu")
 		assert.Equal(t, "feishu_test_app_secret", secureStr(feiSec.(*FeishuSettings).AppSecret))
 		assert.Equal(t, "feishu_test_encrypt_key", secureStr(feiSec.(*FeishuSettings).EncryptKey))
-		assert.Equal(t, "feishu_test_verification_token", secureStr(feiSec.(*FeishuSettings).VerificationToken))
+		assert.Equal(
+			t,
+			"feishu_test_verification_token",
+			secureStr(feiSec.(*FeishuSettings).VerificationToken),
+		)
 		t.Logf("Feishu AppSecret(): %s", secureStr(feiSec.(*FeishuSettings).AppSecret))
 		t.Logf("Feishu EncryptKey(): %s", secureStr(feiSec.(*FeishuSettings).EncryptKey))
-		t.Logf("Feishu VerificationToken(): %s", secureStr(feiSec.(*FeishuSettings).VerificationToken))
+		t.Logf(
+			"Feishu VerificationToken(): %s",
+			secureStr(feiSec.(*FeishuSettings).VerificationToken),
+		)
 
 		// Discord
 		discSec := decodeChannel("discord")
@@ -420,7 +434,11 @@ skills:
 
 		// DingTalk
 		dtSec := decodeChannel("dingtalk")
-		assert.Equal(t, "dingtalk_test_client_secret", secureStr(dtSec.(*DingTalkSettings).ClientSecret))
+		assert.Equal(
+			t,
+			"dingtalk_test_client_secret",
+			secureStr(dtSec.(*DingTalkSettings).ClientSecret),
+		)
 		t.Logf("DingTalk ClientSecret(): %s", secureStr(dtSec.(*DingTalkSettings).ClientSecret))
 
 		// Slack
@@ -437,10 +455,21 @@ skills:
 
 		// LINE
 		lineSec := decodeChannel("line")
-		assert.Equal(t, "line_test_channel_secret", secureStr(lineSec.(*LINESettings).ChannelSecret))
-		assert.Equal(t, "line_test_channel_access_token", secureStr(lineSec.(*LINESettings).ChannelAccessToken))
+		assert.Equal(
+			t,
+			"line_test_channel_secret",
+			secureStr(lineSec.(*LINESettings).ChannelSecret),
+		)
+		assert.Equal(
+			t,
+			"line_test_channel_access_token",
+			secureStr(lineSec.(*LINESettings).ChannelAccessToken),
+		)
 		t.Logf("LINE ChannelSecret(): %s", secureStr(lineSec.(*LINESettings).ChannelSecret))
-		t.Logf("LINE ChannelAccessToken(): %s", secureStr(lineSec.(*LINESettings).ChannelAccessToken))
+		t.Logf(
+			"LINE ChannelAccessToken(): %s",
+			secureStr(lineSec.(*LINESettings).ChannelAccessToken),
+		)
 
 		// OneBot
 		obSec := decodeChannel("onebot")
@@ -462,7 +491,11 @@ skills:
 		// IRC
 		ircSec := decodeChannel("irc")
 		assert.Equal(t, "irc_test_password", secureStr(ircSec.(*IRCSettings).Password))
-		assert.Equal(t, "irc_test_nickserv_password", secureStr(ircSec.(*IRCSettings).NickServPassword))
+		assert.Equal(
+			t,
+			"irc_test_nickserv_password",
+			secureStr(ircSec.(*IRCSettings).NickServPassword),
+		)
 		assert.Equal(t, "irc_test_sasl_password", secureStr(ircSec.(*IRCSettings).SASLPassword))
 		t.Logf("IRC Password(): %s", secureStr(ircSec.(*IRCSettings).Password))
 		t.Logf("IRC NickServPassword(): %s", secureStr(ircSec.(*IRCSettings).NickServPassword))

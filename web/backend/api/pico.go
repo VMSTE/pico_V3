@@ -30,7 +30,10 @@ func (h *Handler) registerPicoRoutes(mux *http.ServeMux) {
 
 // createWsProxy creates a reverse proxy to the current gateway WebSocket endpoint.
 // The gateway bind host and port are resolved from the latest configuration.
-func (h *Handler) createWsProxy(origProtocol string, upstreamProtocol string) *httputil.ReverseProxy {
+func (h *Handler) createWsProxy(
+	origProtocol string,
+	upstreamProtocol string,
+) *httputil.ReverseProxy {
 	wsProxy := &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			target := h.gatewayProxyURL()

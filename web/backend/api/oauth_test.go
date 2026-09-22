@@ -34,7 +34,12 @@ func TestOAuthLoginRejectsUnsupportedMethod(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		t.Fatalf(
+			"status = %d, want %d, body=%s",
+			rec.Code,
+			http.StatusBadRequest,
+			rec.Body.String(),
+		)
 	}
 }
 
@@ -85,7 +90,12 @@ func TestOAuthBrowserFlowCreatedAndQueried(t *testing.T) {
 	req2 := httptest.NewRequest(http.MethodGet, "/api/oauth/flows/"+flowID, nil)
 	mux.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
-		t.Fatalf("flow status code = %d, want %d, body=%s", rec2.Code, http.StatusOK, rec2.Body.String())
+		t.Fatalf(
+			"flow status code = %d, want %d, body=%s",
+			rec2.Code,
+			http.StatusOK,
+			rec2.Body.String(),
+		)
 	}
 	var flowResp oauthFlowResponse
 	if err := json.Unmarshal(rec2.Body.Bytes(), &flowResp); err != nil {
@@ -187,7 +197,11 @@ func TestOAuthLogoutClearsCredentialAndConfig(t *testing.T) {
 	h.RegisterRoutes(mux)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/oauth/logout", bytes.NewBufferString(`{"provider":"openai"}`))
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/oauth/logout",
+		bytes.NewBufferString(`{"provider":"openai"}`),
+	)
 	req.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec, req)
 
@@ -245,7 +259,11 @@ func TestOAuthLogoutClearsAuthMethodForExplicitProviderField(t *testing.T) {
 	h.RegisterRoutes(mux)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/oauth/logout", bytes.NewBufferString(`{"provider":"openai"}`))
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/oauth/logout",
+		bytes.NewBufferString(`{"provider":"openai"}`),
+	)
 	req.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec, req)
 

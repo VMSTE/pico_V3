@@ -105,7 +105,12 @@ func TestPutLauncherConfigRejectsInvalidPort(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		t.Fatalf(
+			"status = %d, want %d, body=%s",
+			rec.Code,
+			http.StatusBadRequest,
+			rec.Body.String(),
+		)
 	}
 }
 
@@ -126,6 +131,11 @@ func TestPutLauncherConfigRejectsInvalidCIDR(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		t.Fatalf(
+			"status = %d, want %d, body=%s",
+			rec.Code,
+			http.StatusBadRequest,
+			rec.Body.String(),
+		)
 	}
 }
