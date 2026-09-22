@@ -1,6 +1,8 @@
 package pika
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -18,6 +20,8 @@ type TrailEntry struct {
 	ToolName   string
 	Operation  string // e.g. "restart", "status"
 	Result     string // short result (≤100 chars)
+	ArgsHash   string // PIKA-V3 (волна 116): sha256 полных аргументов
+	ResultHash string // PIKA-V3 (волна 116): sha256 полного результата
 	OK         bool   // success flag
 	DurationMs int    // execution time in ms
 	Timestamp  time.Time
@@ -102,7 +106,8 @@ func (t *Trail) HasLoopDetection(threshold int) bool {
 	newestIdx := (t.count - 1) % TrailSize
 	refName := t.entries[newestIdx].ToolName
 	refOp := t.entries[newestIdx].Operation
-	refResult := t.entries[newestIdx].Result
+	refResult := trailResultKey(t.entries[newestIdx])
+	refArgs := t.entries[newestIdx].ArgsHash
 	refOK := t.entries[newestIdx].OK
 
 	// Check last `threshold` entries from newest backwards
@@ -113,7 +118,8 @@ func (t *Trail) HasLoopDetection(threshold int) bool {
 		}
 		e := t.entries[idx]
 		if e.ToolName != refName || e.Operation != refOp ||
-			e.Result != refResult || e.OK != refOK {
+			e.ArgsHash != refArgs ||
+			trailResultKey(e) != refResult || e.OK != refOK {
 			return false
 		}
 	}
@@ -283,4 +289,20 @@ func (m *Meta) Reset() {
 	m.MsgCount = 0
 	m.ContextPct = 0
 	m.mu.Unlock()
+}
+
+// trailResultKey — ключ сравнения результата: полный хэш, если записан,
+// иначе усечённая строка (обратная совместимость, волна 116).
+func trailResultKey(e TrailEntry) string {
+	if e.ResultHash != "" {
+		return e.ResultHash
+	}
+	return e.Result
+}
+
+// HashTrailString — sha256-hex для ArgsHash/ResultHash (волна 116).
+// Считается в точке записи из ПОЛНЫХ аргументов/результата, не из превью.
+func HashTrailString(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }

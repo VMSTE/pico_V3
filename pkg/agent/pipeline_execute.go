@@ -700,6 +700,8 @@ toolLoop:
 					ToolName:   toolName,
 					Operation:  operation,
 					Result:     utils.Truncate(toolResult.ForLLM, 100),
+					ArgsHash:   pika.HashTrailString(string(argsJSON)),
+					ResultHash: pika.HashTrailString(toolResult.ForLLM),
 					OK:         !toolResult.IsError,
 					DurationMs: int(toolDuration.Milliseconds()),
 					Timestamp:  time.Now(),
