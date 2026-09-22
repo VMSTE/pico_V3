@@ -55,6 +55,9 @@ type Config struct {
 	Onboard       OnboardConfig       `json:"onboard,omitempty"        yaml:"-"`
 	ToolSelection ToolSelectionConfig `json:"tool_selection,omitempty" yaml:"-"`
 
+	// Волна 114: OAuth-интеграции (секреты — только в .security.yml)
+	Integrations IntegrationsConfig `json:"integrations,omitempty" yaml:"integrations,omitempty"`
+
 	// cache for sensitive values and compiled regex (computed once)
 	sensitiveCache *SensitiveDataCache
 }
@@ -1085,7 +1088,11 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if e := json.Unmarshal(data, &versionInfo); e != nil {
 		e = wrapJSONError(data, e, "config.json")
-		logger.ErrorCF("config", formatDiagnosticLogMessage("Malformed config file", e), map[string]any{"path": path})
+		logger.ErrorCF(
+			"config",
+			formatDiagnosticLogMessage("Malformed config file", e),
+			map[string]any{"path": path},
+		)
 		return nil, e
 	}
 	if len(data) <= 10 {
@@ -1095,7 +1102,11 @@ func LoadConfig(path string) (*Config, error) {
 
 	// PIKA-V3: Only support current version, no migration
 	if versionInfo.Version != CurrentVersion {
-		return nil, fmt.Errorf("unsupported config version %d (expected %d)", versionInfo.Version, CurrentVersion)
+		return nil, fmt.Errorf(
+			"unsupported config version %d (expected %d)",
+			versionInfo.Version,
+			CurrentVersion,
+		)
 	}
 
 	cfg, err := loadConfig(data)

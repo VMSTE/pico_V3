@@ -270,7 +270,9 @@ func buildToolSupport(cfg *config.Config) []toolSupportItem {
 		case "web_search":
 			status, reasonCode = resolveWebSearchToolSupport(cfg)
 		case "i2c", "spi":
-			status, reasonCode = resolveHardwareToolSupport(cfg.Tools.IsToolEnabled(entry.ConfigKey))
+			status, reasonCode = resolveHardwareToolSupport(
+				cfg.Tools.IsToolEnabled(entry.ConfigKey),
+			)
 		case "serial":
 			status, reasonCode = resolveSerialToolSupport(cfg.Tools.IsToolEnabled(entry.ConfigKey))
 		default:
@@ -505,7 +507,14 @@ func normalizeWebSearchProvider(provider string) string {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case "", "auto":
 		return "auto"
-	case "sogou", "brave", "tavily", "duckduckgo", "perplexity", "searxng", "glm_search", "baidu_search":
+	case "sogou",
+		"brave",
+		"tavily",
+		"duckduckgo",
+		"perplexity",
+		"searxng",
+		"glm_search",
+		"baidu_search":
 		return strings.ToLower(strings.TrimSpace(provider))
 	default:
 		return ""
@@ -666,7 +675,10 @@ func resolveCurrentWebSearchProvider(cfg *config.Config) string {
 	if cfg == nil || !cfg.Tools.IsToolEnabled("web") {
 		return ""
 	}
-	selected, err := picotools.ResolveWebSearchProviderName(picotools.WebSearchToolOptionsFromConfig(cfg), "")
+	selected, err := picotools.ResolveWebSearchProviderName(
+		picotools.WebSearchToolOptionsFromConfig(cfg),
+		"",
+	)
 	if err != nil {
 		return ""
 	}

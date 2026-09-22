@@ -132,7 +132,11 @@ func (h *Handler) handleListOAuthProviders(w http.ResponseWriter, r *http.Reques
 	for _, provider := range oauthProviderOrder {
 		cred, err := oauthGetCredential(provider)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to load credentials: %v", err), http.StatusInternalServerError)
+			http.Error(
+				w,
+				fmt.Sprintf("failed to load credentials: %v", err),
+				http.StatusInternalServerError,
+			)
 			return
 		}
 
@@ -218,7 +222,11 @@ func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 			AuthMethod:  oauthMethodToken,
 		}
 		if err := h.persistCredentialAndConfig(provider, oauthMethodToken, cred); err != nil {
-			http.Error(w, fmt.Sprintf("token login failed: %v", err), http.StatusInternalServerError)
+			http.Error(
+				w,
+				fmt.Sprintf("token login failed: %v", err),
+				http.StatusInternalServerError,
+			)
 			return
 		}
 
@@ -234,7 +242,11 @@ func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 		cfg := auth.OpenAIOAuthConfig()
 		info, err := oauthRequestDeviceCode(cfg)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to request device code: %v", err), http.StatusInternalServerError)
+			http.Error(
+				w,
+				fmt.Sprintf("failed to request device code: %v", err),
+				http.StatusInternalServerError,
+			)
 			return
 		}
 
@@ -276,12 +288,20 @@ func (h *Handler) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 		pkce, err := oauthGeneratePKCE()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to generate PKCE: %v", err), http.StatusInternalServerError)
+			http.Error(
+				w,
+				fmt.Sprintf("failed to generate PKCE: %v", err),
+				http.StatusInternalServerError,
+			)
 			return
 		}
 		state, err := oauthGenerateState()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to generate state: %v", err), http.StatusInternalServerError)
+			http.Error(
+				w,
+				fmt.Sprintf("failed to generate state: %v", err),
+				http.StatusInternalServerError,
+			)
 			return
 		}
 
@@ -424,7 +444,13 @@ func (h *Handler) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
 	if code == "" {
 		h.setOAuthFlowError(flow.ID, "missing authorization code")
-		renderOAuthCallbackPage(w, flow.ID, oauthFlowError, "Missing authorization code", "missing_code")
+		renderOAuthCallbackPage(
+			w,
+			flow.ID,
+			oauthFlowError,
+			"Missing authorization code",
+			"missing_code",
+		)
 		return
 	}
 
@@ -444,7 +470,13 @@ func (h *Handler) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.persistCredentialAndConfig(flow.Provider, oauthMethodTokenOrOAuth(flow.Method), cred); err != nil {
 		h.setOAuthFlowError(flow.ID, fmt.Sprintf("failed to save credential: %v", err))
-		renderOAuthCallbackPage(w, flow.ID, oauthFlowError, "Failed to save credential", err.Error())
+		renderOAuthCallbackPage(
+			w,
+			flow.ID,
+			oauthFlowError,
+			"Failed to save credential",
+			err.Error(),
+		)
 		return
 	}
 
@@ -475,11 +507,19 @@ func (h *Handler) handleOAuthLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := oauthDeleteCredential(provider); err != nil {
-		http.Error(w, fmt.Sprintf("failed to delete credential: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("failed to delete credential: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	if err := h.syncProviderAuthMethod(provider, ""); err != nil {
-		http.Error(w, fmt.Sprintf("failed to update config: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("failed to update config: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -551,7 +591,10 @@ func oauthConfigForProvider(provider string) (auth.OAuthProviderConfig, error) {
 	case oauthProviderGoogleAntigravity:
 		return auth.GoogleAntigravityOAuthConfig(), nil
 	default:
-		return auth.OAuthProviderConfig{}, fmt.Errorf("provider %q does not support browser oauth", provider)
+		return auth.OAuthProviderConfig{}, fmt.Errorf(
+			"provider %q does not support browser oauth",
+			provider,
+		)
 	}
 }
 
@@ -681,7 +724,8 @@ func (h *Handler) setOAuthFlowError(flowID, errMsg string) {
 
 func (h *Handler) gcOAuthFlowsLocked(now time.Time) {
 	for id, flow := range h.oauthFlows {
-		if flow.Status == oauthFlowPending && !flow.ExpiresAt.IsZero() && now.After(flow.ExpiresAt) {
+		if flow.Status == oauthFlowPending && !flow.ExpiresAt.IsZero() &&
+			now.After(flow.ExpiresAt) {
 			flow.Status = oauthFlowExpired
 			flow.Error = "flow expired"
 			flow.UpdatedAt = now
@@ -699,7 +743,10 @@ func (h *Handler) gcOAuthFlowsLocked(now time.Time) {
 	}
 }
 
-func (h *Handler) persistCredentialAndConfig(provider, authMethod string, cred *auth.AuthCredential) error {
+func (h *Handler) persistCredentialAndConfig(
+	provider, authMethod string,
+	cred *auth.AuthCredential,
+) error {
 	if cred == nil {
 		return fmt.Errorf("empty credential")
 	}
@@ -714,7 +761,10 @@ func (h *Handler) persistCredentialAndConfig(provider, authMethod string, cred *
 		if cp.Email == "" {
 			email, err := oauthFetchGoogleUserEmailFunc(cp.AccessToken)
 			if err != nil {
-				logger.ErrorC("oauth", fmt.Sprintf("oauth warning: could not fetch google email: %v", err))
+				logger.ErrorC(
+					"oauth",
+					fmt.Sprintf("oauth warning: could not fetch google email: %v", err),
+				)
 			} else {
 				cp.Email = email
 			}
@@ -722,7 +772,10 @@ func (h *Handler) persistCredentialAndConfig(provider, authMethod string, cred *
 		if cp.ProjectID == "" {
 			projectID, err := oauthFetchAntigravityProject(cp.AccessToken)
 			if err != nil {
-				logger.ErrorC("oauth", fmt.Sprintf("oauth warning: could not fetch antigravity project id: %v", err))
+				logger.ErrorC(
+					"oauth",
+					fmt.Sprintf("oauth warning: could not fetch antigravity project id: %v", err),
+				)
 			} else {
 				cp.ProjectID = projectID
 			}
@@ -802,7 +855,11 @@ func defaultModelConfigForProvider(provider, authMethod string) *config.ModelCon
 }
 
 func fetchGoogleUserEmail(accessToken string) (string, error) {
-	req, err := http.NewRequest(http.MethodGet, "https://www.googleapis.com/oauth2/v2/userinfo", nil)
+	req, err := http.NewRequest(
+		http.MethodGet,
+		"https://www.googleapis.com/oauth2/v2/userinfo",
+		nil,
+	)
 	if err != nil {
 		return "", err
 	}

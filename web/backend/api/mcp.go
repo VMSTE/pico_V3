@@ -189,6 +189,9 @@ func (h *Handler) handleTestMCPServer(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
+	// Волна 114: подстановка OAuth-токенов (${oauth:...}) перед пробой.
+	srv.Headers = cfg.ResolveOAuthPlaceholders(srv.Headers)
+
 	res, err := picomcp.ProbeServer(ctx, name, srv, cfg.WorkspacePath())
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -385,7 +388,11 @@ func (h *Handler) handlePatchMCPServer(w http.ResponseWriter, r *http.Request) {
 	cfg.Tools.MCP.Servers[name] = srv
 
 	if sErr := config.SaveConfig(h.configPath, cfg); sErr != nil {
-		http.Error(w, fmt.Sprintf("Failed to save config: %v", sErr), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to save config: %v", sErr),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 

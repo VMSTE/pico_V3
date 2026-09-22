@@ -92,7 +92,8 @@ func hasModelConfiguration(m *config.ModelConfig) bool {
 			if err != nil || cred == nil {
 				return false
 			}
-			return strings.TrimSpace(cred.AccessToken) != "" || strings.TrimSpace(cred.RefreshToken) != ""
+			return strings.TrimSpace(cred.AccessToken) != "" ||
+				strings.TrimSpace(cred.RefreshToken) != ""
 		}
 		return true
 	}
@@ -269,7 +270,8 @@ func (s *modelProbeCacheState) setCachedResult(cacheKey string, result bool, now
 
 	entry.nextProbeAt = now.Add(delay)
 
-	shouldRunTTLGC := modelProbeCacheEntryTTL > 0 && (s.nextTTLGCAt.IsZero() || !now.Before(s.nextTTLGCAt))
+	shouldRunTTLGC := modelProbeCacheEntryTTL > 0 &&
+		(s.nextTTLGCAt.IsZero() || !now.Before(s.nextTTLGCAt))
 	if shouldRunTTLGC {
 		s.nextTTLGCAt = now.Add(modelProbeTTLGCInterval)
 	}

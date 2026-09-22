@@ -96,7 +96,11 @@ func TestHandleGetChannelConfig_ReturnsNotFoundForUnknownChannel(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("GET /api/channels/not-a-channel/config status = %d, want %d", rec.Code, http.StatusNotFound)
+		t.Fatalf(
+			"GET /api/channels/not-a-channel/config status = %d, want %d",
+			rec.Code,
+			http.StatusNotFound,
+		)
 	}
 }
 

@@ -131,7 +131,9 @@ func TestHandleListModels_AvailabilityUsesRuntimeProbesForLocalModels(t *testing
 		t.Fatalf("vllm local model available = false, want true when local probe succeeds")
 	}
 	if !gotAvailable["ollama-default"] {
-		t.Fatalf("ollama default model available = false, want true when default local probe succeeds")
+		t.Fatalf(
+			"ollama default model available = false, want true when default local probe succeeds",
+		)
 	}
 	if !gotAvailable["vllm-remote"] {
 		t.Fatalf("remote vllm model available = false, want true with api_key")
@@ -140,19 +142,39 @@ func TestHandleListModels_AvailabilityUsesRuntimeProbesForLocalModels(t *testing
 		t.Fatalf("copilot model available = false, want true when local bridge probe succeeds")
 	}
 	if gotStatus["openai-oauth"] != modelStatusUnconfigured {
-		t.Fatalf("openai oauth model status = %q, want %q", gotStatus["openai-oauth"], modelStatusUnconfigured)
+		t.Fatalf(
+			"openai oauth model status = %q, want %q",
+			gotStatus["openai-oauth"],
+			modelStatusUnconfigured,
+		)
 	}
 	if gotStatus["vllm-local"] != modelStatusAvailable {
-		t.Fatalf("vllm local model status = %q, want %q", gotStatus["vllm-local"], modelStatusAvailable)
+		t.Fatalf(
+			"vllm local model status = %q, want %q",
+			gotStatus["vllm-local"],
+			modelStatusAvailable,
+		)
 	}
 	if gotStatus["ollama-default"] != modelStatusAvailable {
-		t.Fatalf("ollama default model status = %q, want %q", gotStatus["ollama-default"], modelStatusAvailable)
+		t.Fatalf(
+			"ollama default model status = %q, want %q",
+			gotStatus["ollama-default"],
+			modelStatusAvailable,
+		)
 	}
 	if gotStatus["vllm-remote"] != modelStatusAvailable {
-		t.Fatalf("remote vllm model status = %q, want %q", gotStatus["vllm-remote"], modelStatusAvailable)
+		t.Fatalf(
+			"remote vllm model status = %q, want %q",
+			gotStatus["vllm-remote"],
+			modelStatusAvailable,
+		)
 	}
 	if gotStatus["copilot-gpt-5.4"] != modelStatusAvailable {
-		t.Fatalf("copilot model status = %q, want %q", gotStatus["copilot-gpt-5.4"], modelStatusAvailable)
+		t.Fatalf(
+			"copilot model status = %q, want %q",
+			gotStatus["copilot-gpt-5.4"],
+			modelStatusAvailable,
+		)
 	}
 	if len(openAIProbes) != 1 || openAIProbes[0] != "http://127.0.0.1:8000/v1|custom-model|" {
 		t.Fatalf("openAI probes = %#v, want only local vllm probe", openAIProbes)
@@ -328,7 +350,9 @@ func TestHandleListModels_NormalizesWildcardLocalAPIBaseForProbe(t *testing.T) {
 		t.Fatalf("len(models) = %d, want 1", len(resp.Models))
 	}
 	if !resp.Models[0].Available {
-		t.Fatal("wildcard-bound local model available = false, want true after probe host normalization")
+		t.Fatal(
+			"wildcard-bound local model available = false, want true after probe host normalization",
+		)
 	}
 	if gotProbe != "http://127.0.0.1:8000/v1|custom-model|" {
 		t.Fatalf("probe api base = %q, want %q", gotProbe, "http://127.0.0.1:8000/v1|custom-model|")
@@ -385,7 +409,11 @@ func TestHandleListModels_StatusMarksUnreachableLocalModel(t *testing.T) {
 		t.Fatal("unreachable local model available = true, want false")
 	}
 	if resp.Models[0].Status != modelStatusUnreachable {
-		t.Fatalf("unreachable local model status = %q, want %q", resp.Models[0].Status, modelStatusUnreachable)
+		t.Fatalf(
+			"unreachable local model status = %q, want %q",
+			resp.Models[0].Status,
+			modelStatusUnreachable,
+		)
 	}
 	if resp.Models[0].APIKey == "" {
 		t.Fatal("masked API key preview should still be returned when API key is configured")
@@ -616,7 +644,12 @@ func TestHandleUpdateModel_CustomHeadersPreserveAndClear(t *testing.T) {
 	reqPreserve.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(recPreserve, reqPreserve)
 	if recPreserve.Code != http.StatusOK {
-		t.Fatalf("preserve status = %d, want %d, body=%s", recPreserve.Code, http.StatusOK, recPreserve.Body.String())
+		t.Fatalf(
+			"preserve status = %d, want %d, body=%s",
+			recPreserve.Code,
+			http.StatusOK,
+			recPreserve.Body.String(),
+		)
 	}
 
 	afterPreserve, err := config.LoadConfig(configPath)
@@ -637,7 +670,12 @@ func TestHandleUpdateModel_CustomHeadersPreserveAndClear(t *testing.T) {
 	reqClear.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(recClear, reqClear)
 	if recClear.Code != http.StatusOK {
-		t.Fatalf("clear status = %d, want %d, body=%s", recClear.Code, http.StatusOK, recClear.Body.String())
+		t.Fatalf(
+			"clear status = %d, want %d, body=%s",
+			recClear.Code,
+			http.StatusOK,
+			recClear.Body.String(),
+		)
 	}
 
 	afterClear, err := config.LoadConfig(configPath)
@@ -811,7 +849,12 @@ func TestHandleUpdateModel_PreservesLegacyModelPrefixWhenProviderOmitted(t *test
 	mux.ServeHTTP(recList, reqList)
 
 	if recList.Code != http.StatusOK {
-		t.Fatalf("list status = %d, want %d, body=%s", recList.Code, http.StatusOK, recList.Body.String())
+		t.Fatalf(
+			"list status = %d, want %d, body=%s",
+			recList.Code,
+			http.StatusOK,
+			recList.Body.String(),
+		)
 	}
 
 	var listResp struct {
@@ -839,7 +882,12 @@ func TestHandleUpdateModel_PreservesLegacyModelPrefixWhenProviderOmitted(t *test
 	mux.ServeHTTP(recUpdate, reqUpdate)
 
 	if recUpdate.Code != http.StatusOK {
-		t.Fatalf("update status = %d, want %d, body=%s", recUpdate.Code, http.StatusOK, recUpdate.Body.String())
+		t.Fatalf(
+			"update status = %d, want %d, body=%s",
+			recUpdate.Code,
+			http.StatusOK,
+			recUpdate.Body.String(),
+		)
 	}
 
 	updated, err := config.LoadConfig(configPath)
@@ -854,7 +902,9 @@ func TestHandleUpdateModel_PreservesLegacyModelPrefixWhenProviderOmitted(t *test
 	}
 }
 
-func TestHandleUpdateModel_PreservesLegacyModelPrefixWhenProviderOmittedAndModelChanges(t *testing.T) {
+func TestHandleUpdateModel_PreservesLegacyModelPrefixWhenProviderOmittedAndModelChanges(
+	t *testing.T,
+) {
 	configPath, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()
 
@@ -1107,7 +1157,11 @@ func TestMaskAPIKey(t *testing.T) {
 				displayed := strings.Replace(tc.want, "****", "", 1)
 				if len(tc.key) <= 8 {
 					if displayed != "" {
-						t.Fatalf("maskAPIKey(%q) displayed part = %q, want empty", tc.key, displayed)
+						t.Fatalf(
+							"maskAPIKey(%q) displayed part = %q, want empty",
+							tc.key,
+							displayed,
+						)
 					}
 				} else {
 					if len(displayed)*10 > len(tc.key)*6 {

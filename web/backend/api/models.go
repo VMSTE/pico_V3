@@ -210,7 +210,11 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if idx < 0 || idx >= len(cfg.ModelList) {
-		http.Error(w, fmt.Sprintf("Index %d out of range (0-%d)", idx, len(cfg.ModelList)-1), http.StatusNotFound)
+		http.Error(
+			w,
+			fmt.Sprintf("Index %d out of range (0-%d)", idx, len(cfg.ModelList)-1),
+			http.StatusNotFound,
+		)
 		return
 	}
 
@@ -251,7 +255,8 @@ func (h *Handler) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 			existingProtocol, existingModelID := providers.ExtractProtocol(cfg.ModelList[idx])
 			existingRawModel := strings.TrimSpace(cfg.ModelList[idx].Model)
 			incomingModel := strings.TrimSpace(mc.Model)
-			if existingRawModel != "" && existingRawModel != existingModelID && incomingModel != "" {
+			if existingRawModel != "" && existingRawModel != existingModelID &&
+				incomingModel != "" {
 				if incomingModel == existingModelID {
 					mc.Model = existingRawModel
 				} else if strings.Contains(incomingModel, "/") && !strings.Contains(existingModelID, "/") {
@@ -297,7 +302,11 @@ func (h *Handler) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if idx < 0 || idx >= len(cfg.ModelList) {
-		http.Error(w, fmt.Sprintf("Index %d out of range (0-%d)", idx, len(cfg.ModelList)-1), http.StatusNotFound)
+		http.Error(
+			w,
+			fmt.Sprintf("Index %d out of range (0-%d)", idx, len(cfg.ModelList)-1),
+			http.StatusNotFound,
+		)
 		return
 	}
 
@@ -360,11 +369,19 @@ func (h *Handler) handleSetDefaultModel(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	if !found {
-		http.Error(w, fmt.Sprintf("Model %q not found in model_list", req.ModelName), http.StatusNotFound)
+		http.Error(
+			w,
+			fmt.Sprintf("Model %q not found in model_list", req.ModelName),
+			http.StatusNotFound,
+		)
 		return
 	}
 	if isVirtual {
-		http.Error(w, fmt.Sprintf("Cannot set virtual model %q as default", req.ModelName), http.StatusBadRequest)
+		http.Error(
+			w,
+			fmt.Sprintf("Cannot set virtual model %q as default", req.ModelName),
+			http.StatusBadRequest,
+		)
 		return
 	}
 

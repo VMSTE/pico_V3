@@ -39,7 +39,11 @@ func (h *Handler) registerStartupRoutes(mux *http.ServeMux) {
 func (h *Handler) handleGetAutoStart(w http.ResponseWriter, r *http.Request) {
 	enabled, supported, message, err := h.getAutoStartStatus()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read startup setting: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to read startup setting: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -64,13 +68,21 @@ func (h *Handler) handleSetAutoStart(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		http.Error(w, fmt.Sprintf("Failed to update startup setting: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to update startup setting: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
 	enabled, supported, message, err := h.getAutoStartStatus()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to verify startup setting: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to verify startup setting: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -277,7 +289,13 @@ func windowsCommandLine(exePath string, args []string) string {
 }
 
 func windowsRunKeyExists() (bool, error) {
-	cmd := exec.Command("reg", "query", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", autoStartEntryName)
+	cmd := exec.Command(
+		"reg",
+		"query",
+		`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
+		"/v",
+		autoStartEntryName,
+	)
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
@@ -292,7 +310,18 @@ func setWindowsAutoStart(enabled bool, exePath string, args []string) error {
 	key := `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
 	if enabled {
 		commandLine := windowsCommandLine(exePath, args)
-		cmd := exec.Command("reg", "add", key, "/v", autoStartEntryName, "/t", "REG_SZ", "/d", commandLine, "/f")
+		cmd := exec.Command(
+			"reg",
+			"add",
+			key,
+			"/v",
+			autoStartEntryName,
+			"/t",
+			"REG_SZ",
+			"/d",
+			commandLine,
+			"/f",
+		)
 		return cmd.Run()
 	}
 

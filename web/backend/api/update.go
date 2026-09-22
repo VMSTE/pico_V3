@@ -25,7 +25,8 @@ type updateResponse struct {
 func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		_ = json.NewEncoder(w).Encode(updateResponse{Status: "error", Message: "method not allowed"})
+		_ = json.NewEncoder(w).
+			Encode(updateResponse{Status: "error", Message: "method not allowed"})
 		return
 	}
 
@@ -33,7 +34,8 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	var req updateRequest
 	if err := dec.Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(updateResponse{Status: "error", Message: "invalid request body"})
+		_ = json.NewEncoder(w).
+			Encode(updateResponse{Status: "error", Message: "invalid request body"})
 		return
 	}
 
@@ -55,5 +57,6 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(updateResponse{Status: "ok", Message: "update applied; restart to use new version"})
+	_ = json.NewEncoder(w).
+		Encode(updateResponse{Status: "ok", Message: "update applied; restart to use new version"})
 }

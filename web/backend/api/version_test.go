@@ -165,7 +165,11 @@ func TestParsePicoclawVersionOutputAcceptsLetterOnlyHashVersion(t *testing.T) {
 		t.Fatalf("version = %q, want %q", got.Version, "abcdefa")
 	}
 	if got.GitCommit != "abcdefabcdefabcdefabcdefabcdefabcdefabcd" {
-		t.Fatalf("git_commit = %q, want %q", got.GitCommit, "abcdefabcdefabcdefabcdefabcdefabcdefabcd")
+		t.Fatalf(
+			"git_commit = %q, want %q",
+			got.GitCommit,
+			"abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+		)
 	}
 }
 
@@ -248,7 +252,11 @@ func TestResolveSystemVersionInfoInvalidatesCacheWhenGatewayStops(t *testing.T) 
 	second := h.resolveSystemVersionInfo(context.Background())
 
 	if first.Version != "v2.0.1" || second.Version != "v2.0.1" {
-		t.Fatalf("expected cached version v2.0.1, got first=%q second=%q", first.Version, second.Version)
+		t.Fatalf(
+			"expected cached version v2.0.1, got first=%q second=%q",
+			first.Version,
+			second.Version,
+		)
 	}
 	if runCount != 1 {
 		t.Fatalf("run count after cache hit = %d, want %d", runCount, 1)

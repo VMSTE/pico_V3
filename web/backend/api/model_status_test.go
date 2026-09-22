@@ -383,12 +383,18 @@ func TestOllamaModelMatches_WithTagRequiresExactTag(t *testing.T) {
 		t.Fatal("ollamaModelMatches() = false, want true for exact tagged match")
 	}
 	if ollamaModelMatches("llama3:8b", "llama3") {
-		t.Fatal("ollamaModelMatches() = true, want false when request omits tag (defaults to latest)")
+		t.Fatal(
+			"ollamaModelMatches() = true, want false when request omits tag (defaults to latest)",
+		)
 	}
 	if !ollamaModelMatches("llama3:latest", "llama3") {
-		t.Fatal("ollamaModelMatches() = false, want true when request omits tag and candidate is latest")
+		t.Fatal(
+			"ollamaModelMatches() = false, want true when request omits tag and candidate is latest",
+		)
 	}
 	if !ollamaModelMatches("llama3", "llama3") {
-		t.Fatal("ollamaModelMatches() = false, want true when both candidate and request omit tag (latest)")
+		t.Fatal(
+			"ollamaModelMatches() = false, want true when both candidate and request omit tag (latest)",
+		)
 	}
 }

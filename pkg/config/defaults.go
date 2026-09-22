@@ -504,7 +504,12 @@ func DefaultConfig() *Config {
 		},
 		Security: SecurityConfig{
 			DangerousOps: DangerousOpsConfig{ConfirmTimeoutMin: 30},
-			RAD:          RADConfig{Enabled: true, DriftThreshold: 0.2, BlockScore: 3, WarnScore: 2},
+			RAD: RADConfig{
+				Enabled:        true,
+				DriftThreshold: 0.2,
+				BlockScore:     3,
+				WarnScore:      2,
+			},
 			MCP: MCPSecurityConfig{
 				TaintResetPolicy: "explicit_only", StdioUser: "mcp-sandbox",
 				StdioIsolation: "user", PerServerRPM: 60,
@@ -548,7 +553,11 @@ func defaultChannels() ChannelsConfig {
 			"typing":      map[string]any{"enabled": true},
 			"placeholder": map[string]any{"enabled": true, "text": []string{"Thinking..."}},
 			"settings": map[string]any{
-				"streaming":       map[string]any{"enabled": true, "throttle_seconds": 3, "min_growth_chars": 200},
+				"streaming": map[string]any{
+					"enabled":          true,
+					"throttle_seconds": 3,
+					"min_growth_chars": 200,
+				},
 				"use_markdown_v2": false,
 			},
 		},

@@ -261,7 +261,8 @@ func TestAgentConfig_ParsesDispatchRules(t *testing.T) {
 	if rule.Name != "support-vip" || rule.Agent != "support" {
 		t.Fatalf("rule = %+v", rule)
 	}
-	if rule.When.Channel != "telegram" || rule.When.Chat != "group:-100123" || rule.When.Sender != "12345" {
+	if rule.When.Channel != "telegram" || rule.When.Chat != "group:-100123" ||
+		rule.When.Sender != "12345" {
 		t.Fatalf("rule.When = %+v", rule.When)
 	}
 	if rule.When.Mentioned == nil || !*rule.When.Mentioned {
@@ -447,7 +448,9 @@ func TestSaveConfig_PreservesDisabledTelegramPlaceholder(t *testing.T) {
 	}
 	bc := loaded.Channels.Get("telegram")
 	if bc != nil && bc.Placeholder.Enabled {
-		t.Fatal("telegram placeholder should remain disabled after SaveConfig/LoadConfig round-trip")
+		t.Fatal(
+			"telegram placeholder should remain disabled after SaveConfig/LoadConfig round-trip",
+		)
 	}
 }
 
@@ -572,10 +575,14 @@ func TestLoadConfig_ToolFeedbackDefaultsFalseWhenUnset(t *testing.T) {
 		t.Fatalf("LoadConfig() error: %v", err)
 	}
 	if cfg.Agents.Defaults.ToolFeedback.Enabled {
-		t.Fatal("agents.defaults.tool_feedback.enabled should remain false when unset in config file")
+		t.Fatal(
+			"agents.defaults.tool_feedback.enabled should remain false when unset in config file",
+		)
 	}
 	if cfg.Agents.Defaults.ToolFeedback.SeparateMessages {
-		t.Fatal("agents.defaults.tool_feedback.separate_messages should remain false when unset in config file")
+		t.Fatal(
+			"agents.defaults.tool_feedback.separate_messages should remain false when unset in config file",
+		)
 	}
 }
 
@@ -882,7 +889,10 @@ func TestLoadConfig_HooksProcessConfig(t *testing.T) {
 func TestDefaultConfig_SummarizationThresholds(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.Agents.Defaults.SummarizeMessageThreshold != 20 {
-		t.Errorf("SummarizeMessageThreshold = %d, want 20", cfg.Agents.Defaults.SummarizeMessageThreshold)
+		t.Errorf(
+			"SummarizeMessageThreshold = %d, want 20",
+			cfg.Agents.Defaults.SummarizeMessageThreshold,
+		)
 	}
 	if cfg.Agents.Defaults.SummarizeTokenPercent != 75 {
 		t.Errorf("SummarizeTokenPercent = %d, want 75", cfg.Agents.Defaults.SummarizeTokenPercent)
@@ -918,7 +928,11 @@ func TestDefaultConfig_WorkspacePath_WithPicoclawHome(t *testing.T) {
 	cfg := DefaultConfig()
 	want := filepath.Join("/custom/picoclaw/home", "workspace")
 	if cfg.Agents.Defaults.Workspace != want {
-		t.Errorf("Workspace path with PICOCLAW_HOME = %q, want %q", cfg.Agents.Defaults.Workspace, want)
+		t.Errorf(
+			"Workspace path with PICOCLAW_HOME = %q, want %q",
+			cfg.Agents.Defaults.Workspace,
+			want,
+		)
 	}
 }
 
@@ -948,7 +962,8 @@ func TestConfig_UnmarshalIsolation(t *testing.T) {
 	if len(cfg.Isolation.ExposePaths) != 1 {
 		t.Fatalf("ExposePaths len = %d, want 1", len(cfg.Isolation.ExposePaths))
 	}
-	if got := cfg.Isolation.ExposePaths[0]; got.Source != "/src" || got.Target != "/dst" || got.Mode != "ro" {
+	if got := cfg.Isolation.ExposePaths[0]; got.Source != "/src" || got.Target != "/dst" ||
+		got.Mode != "ro" {
 		t.Fatalf("ExposePaths[0] = %+v, want source=/src target=/dst mode=ro", got)
 	}
 }
@@ -988,7 +1003,12 @@ func TestFlexibleStringSlice_UnmarshalText(t *testing.T) {
 				return
 			}
 			if len(f) != len(tt.expected) {
-				t.Errorf("UnmarshalText(%q) length = %d, want %d", tt.input, len(f), len(tt.expected))
+				t.Errorf(
+					"UnmarshalText(%q) length = %d, want %d",
+					tt.input,
+					len(f),
+					len(tt.expected),
+				)
 				return
 			}
 			for i, v := range tt.expected {
@@ -1033,7 +1053,11 @@ func TestFlexibleStringSlice_UnmarshalJSON(t *testing.T) {
 		{"null", `null`, nil},
 		{"single string", `"Thinking..."`, []string{"Thinking..."}},
 		{"single number", `123`, []string{"123"}},
-		{"string array", `["Thinking...", "Still working..."]`, []string{"Thinking...", "Still working..."}},
+		{
+			"string array",
+			`["Thinking...", "Still working..."]`,
+			[]string{"Thinking...", "Still working..."},
+		},
 		{"mixed array", `["123", 456]`, []string{"123", "456"}},
 	}
 	for _, tt := range tests {
