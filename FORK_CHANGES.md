@@ -1,3 +1,17 @@
+### [2026-09-22] feat(pika): веб-поиск из коробки — launcher-managed SearXNG + рантайм-фолбэк — wave 115
+- **ТЗ:** ТЗ-115: Веб-ресёрч из коробки — дефолтный провайдер без ключа + онбординг
+- **PR:** #163
+- **Files:**
+  - `pkg/tools/integration/web.go` — MODIFIED: рантайм-цепочка фолбэка провайдеров в Execute (primary → остальные в auto-порядке → честная ошибка); ошибка провайдера → logger.ErrorCF → errors.log (волна 106)
+  - `pkg/tools/integration/web_test.go` — MODIFIED: failingSearchProvider + тесты фолбэка и честной ошибки; resolver-тест на новую сигнатуру
+  - `pkg/config/defaults.go` — MODIFIED: SearXNG enabled + base_url http://localhost:4000, DuckDuckGo enabled — дефолты свежей установки
+  - `pkg/config/defaults_wave115_test.go` — NEW: юнит на DefaultConfig (дефолт SearXNG + DDG)
+  - `web/backend/searxng.go` — NEW: ensureSearXNG — идемпотентный автоподъём контейнера searxng при старте лаунчера (docker inspect → start / settings.yml + run --restart unless-stopped); нефатально, только localhost base_url
+  - `web/backend/searxng_test.go` — NEW: 6 тестов (disabled/no-docker/start/create+идемпотентность/remote-skip/parse порта)
+  - `web/backend/main.go` — MODIFIED: хук go ensureSearXNG(absPath) при старте лаунчера
+  - `web/backend/api/tools_test.go` — MODIFIED: изоляция 6 тестов от нового дефолта (SearXNG.Enabled=false)
+- **Breaking:** None — дефолты влияют только на свежие установки; существующие config.json не меняются
+
 ## Волна 81 — Фикс пустой ленты Recent requests: NULL-safe scan error (D-AUDIT-86 latent bug) · 19 авг 2026
 - **Волна 114, срез 3** (22 сен 2026): remote endpoint api.githubcopilot.com отверг и PAT, и OAuth-токен (403 дважды, бой; индустрия подтверждает: remote OAuth = только VS Code, 403-болото issue #672/#153) → локальный официальный github-mcp-server (stdio, токен в env через ${oauth:github}); резолв плейсхолдера расширен на env
 - **Волна 114, срез 2** (22 сен 2026): кнопка «Подключить GitHub» на странице /mcp — карточка статуса (connect/disconnect, login), api/integrations.ts; путь пользователя без терминала

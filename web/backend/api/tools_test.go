@@ -400,6 +400,7 @@ func TestHandleGetWebSearchConfig_DoesNotExposeNativeAsCurrentService(t *testing
 	cfg.Tools.Web.Provider = "brave"
 	cfg.Tools.Web.Sogou.Enabled = false
 	cfg.Tools.Web.DuckDuckGo.Enabled = false
+	cfg.Tools.Web.SearXNG.Enabled = false // PIKA-V3 (волна 115): изоляция от нового дефолта
 	cfg.Tools.Web.Brave.Enabled = true
 	cfg.Tools.Web.Brave.SetAPIKeys(nil)
 	if err := config.SaveConfig(configPath, cfg); err != nil {
@@ -574,6 +575,7 @@ func TestHandleUpdateWebSearchConfig_PreservesAndReplacesMultiKeys(t *testing.T)
 
 func TestResolveCurrentWebSearchProvider_PrefersConfiguredProvidersBeforeSogou(t *testing.T) {
 	cfg := config.DefaultConfig()
+	cfg.Tools.Web.SearXNG.Enabled = false // PIKA-V3 (волна 115): изоляция от нового дефолта
 	cfg.Tools.Web.Provider = "auto"
 	cfg.Tools.Web.Sogou.Enabled = true
 	cfg.Tools.Web.Brave.Enabled = true
@@ -586,6 +588,7 @@ func TestResolveCurrentWebSearchProvider_PrefersConfiguredProvidersBeforeSogou(t
 
 func TestResolveCurrentWebSearchProvider_FallsBackWhenExplicitProviderUnavailable(t *testing.T) {
 	cfg := config.DefaultConfig()
+	cfg.Tools.Web.SearXNG.Enabled = false // PIKA-V3 (волна 115): изоляция от нового дефолта
 	cfg.Tools.Web.Provider = "brave"
 	cfg.Tools.Web.Brave.Enabled = true
 	cfg.Tools.Web.Sogou.Enabled = true
@@ -597,6 +600,7 @@ func TestResolveCurrentWebSearchProvider_FallsBackWhenExplicitProviderUnavailabl
 
 func TestResolveCurrentWebSearchProvider_FallsBackWhenProviderIsUnknown(t *testing.T) {
 	cfg := config.DefaultConfig()
+	cfg.Tools.Web.SearXNG.Enabled = false // PIKA-V3 (волна 115): изоляция от нового дефолта
 	cfg.Tools.Web.Provider = "totally_unknown"
 	cfg.Tools.Web.Sogou.Enabled = true
 
@@ -607,6 +611,7 @@ func TestResolveCurrentWebSearchProvider_FallsBackWhenProviderIsUnknown(t *testi
 
 func TestResolveCurrentWebSearchProvider_PrefersStableDefaultForSogouAndDuckDuckGo(t *testing.T) {
 	cfg := config.DefaultConfig()
+	cfg.Tools.Web.SearXNG.Enabled = false // PIKA-V3 (волна 115): изоляция от нового дефолта
 	cfg.Tools.Web.Provider = "auto"
 	cfg.Tools.Web.Sogou.Enabled = true
 	cfg.Tools.Web.DuckDuckGo.Enabled = true
@@ -618,6 +623,7 @@ func TestResolveCurrentWebSearchProvider_PrefersStableDefaultForSogouAndDuckDuck
 
 func TestResolveCurrentWebSearchProvider_IgnoresPreferNativeInConfigView(t *testing.T) {
 	cfg := config.DefaultConfig()
+	cfg.Tools.Web.SearXNG.Enabled = false // PIKA-V3 (волна 115): изоляция от нового дефолта
 	cfg.ModelList = []*config.ModelConfig{{
 		ModelName: "custom-default",
 		Model:     "openai/gpt-4o",

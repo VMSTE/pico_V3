@@ -341,7 +341,7 @@ func DefaultConfig() *Config {
 					MaxResults: 5,
 				},
 				DuckDuckGo: DuckDuckGoConfig{
-					Enabled:    false,
+					Enabled:    true,
 					MaxResults: 5,
 				},
 				Perplexity: PerplexityConfig{
@@ -349,8 +349,8 @@ func DefaultConfig() *Config {
 					MaxResults: 5,
 				},
 				SearXNG: SearXNGConfig{
-					Enabled:    false,
-					BaseURL:    "",
+					Enabled:    true,
+					BaseURL:    "http://localhost:4000",
 					MaxResults: 5,
 				},
 				GLMSearch: GLMSearchConfig{

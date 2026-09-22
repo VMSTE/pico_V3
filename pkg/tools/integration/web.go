@@ -1053,10 +1053,17 @@ func (p *BaiduSearchProvider) Search(
 	return strings.Join(lines, "\n"), nil
 }
 
+// PIKA-V3 (волна 115): один провайдер в рантайм-цепочке фолбэка web_search.
+type webSearchChainEntry struct {
+	name       string
+	provider   SearchProvider
+	maxResults int
+}
+
 type WebSearchTool struct {
 	provider         SearchProvider
 	maxResults       int
-	providerResolver func(query string) (SearchProvider, int)
+	providerResolver func(query string) []webSearchChainEntry
 }
 
 type WebSearchToolOptions struct {
@@ -1408,7 +1415,7 @@ func prefersDuckDuckGoQuery(text string) bool {
 	return false
 }
 
-func (opts WebSearchToolOptions) buildProviderResolver() (func(query string) (SearchProvider, int), error) {
+func (opts WebSearchToolOptions) buildProviderResolver() (func(query string) []webSearchChainEntry, error) {
 	providersByName := make(map[string]SearchProvider, len(knownWebSearchProviders))
 	maxResultsByName := make(map[string]int, len(knownWebSearchProviders))
 
@@ -1427,16 +1434,44 @@ func (opts WebSearchToolOptions) buildProviderResolver() (func(query string) (Se
 		maxResultsByName[name] = maxResults
 	}
 
-	return func(query string) (SearchProvider, int) {
-		name, err := opts.resolveProviderName(query)
-		if err != nil {
-			return nil, 0
+	// PIKA-V3 (волна 115): цепочка = выбранный резолвером провайдер первым,
+	// далее остальные готовые в auto-порядке (дедуп по имени).
+	chainOrder := append(
+		append(append([]string{}, autoPrimaryWebSearchProviders...), "duckduckgo", "sogou"),
+		autoFallbackWebSearchProviders...,
+	)
+
+	return func(query string) []webSearchChainEntry {
+		primaryName, err := opts.resolveProviderName(query)
+		if err != nil || primaryName == "" {
+			return nil
 		}
-		provider, ok := providersByName[name]
-		if !ok {
-			return nil, 0
+		if _, ok := providersByName[primaryName]; !ok {
+			return nil
 		}
-		return provider, maxResultsByName[name]
+
+		seen := map[string]bool{primaryName: true}
+		chain := []webSearchChainEntry{{
+			name:       primaryName,
+			provider:   providersByName[primaryName],
+			maxResults: maxResultsByName[primaryName],
+		}}
+		for _, name := range chainOrder {
+			if seen[name] {
+				continue
+			}
+			provider, ok := providersByName[name]
+			if !ok {
+				continue
+			}
+			seen[name] = true
+			chain = append(chain, webSearchChainEntry{
+				name:       name,
+				provider:   provider,
+				maxResults: maxResultsByName[name],
+			})
+		}
+		return chain
 	}, nil
 }
 
@@ -1445,14 +1480,14 @@ func NewWebSearchTool(opts WebSearchToolOptions) (*WebSearchTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	provider, maxResults := resolver("")
-	if provider == nil {
+	chain := resolver("")
+	if len(chain) == 0 {
 		return nil, nil
 	}
 
 	return &WebSearchTool{
-		provider:         provider,
-		maxResults:       maxResults,
+		provider:         chain[0].provider,
+		maxResults:       chain[0].maxResults,
 		providerResolver: resolver,
 	}, nil
 }
@@ -1496,14 +1531,20 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) *ToolR
 	}
 	query = strings.TrimSpace(query)
 
-	provider := t.provider
-	maxResults := t.maxResults
+	// PIKA-V3 (волна 115): цепочка фолбэка вместо одиночного провайдера.
+	chain := []webSearchChainEntry{{
+		name:       "primary",
+		provider:   t.provider,
+		maxResults: t.maxResults,
+	}}
 	if t.providerResolver != nil {
-		provider, maxResults = t.providerResolver(query)
+		chain = t.providerResolver(query)
 	}
-	if provider == nil {
+	if len(chain) == 0 || chain[0].provider == nil {
 		return ErrorResult("search provider is not configured")
 	}
+
+	maxResults := chain[0].maxResults
 
 	count64, err := getInt64Arg(args, "count", int64(maxResults))
 	if err != nil {
@@ -1529,15 +1570,29 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) *ToolR
 		}
 	}
 
-	result, err := provider.Search(ctx, query, count, rangeCode)
-	if err != nil {
-		return ErrorResult(fmt.Sprintf("search failed: %v", err))
+	// PIKA-V3 (волна 115): провайдер упал → error в errors.log → следующий из
+	// цепочки. Все упали → честное сообщение. Никогда не молчим.
+	failures := make([]string, 0, len(chain))
+	for _, entry := range chain {
+		result, searchErr := entry.provider.Search(ctx, query, count, rangeCode)
+		if searchErr == nil {
+			return &ToolResult{
+				ForLLM:  result,
+				ForUser: result,
+			}
+		}
+		logger.ErrorCF(
+			"tools",
+			fmt.Sprintf("web_search: provider %q failed: %v", entry.name, searchErr),
+			map[string]any{"provider": entry.name, "query": query},
+		)
+		failures = append(failures, fmt.Sprintf("%s: %v", entry.name, searchErr))
 	}
 
-	return &ToolResult{
-		ForLLM:  result,
-		ForUser: result,
-	}
+	return ErrorResult(fmt.Sprintf(
+		"web search unavailable (%s). Configure a provider in the web UI (Tools)",
+		strings.Join(failures, "; "),
+	))
 }
 
 type WebFetchTool struct {
