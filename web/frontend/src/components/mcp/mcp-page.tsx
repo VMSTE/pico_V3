@@ -81,7 +81,7 @@ function GitHubIntegrationCard() {
           <span className="text-sm font-semibold">GitHub</span>
           <span className="text-muted-foreground text-xs">
             {st?.connected
-              ? t("pages.mcp.github_connected_as", {
+              ? t("pages.mcp.github_connected_as", "Подключён: {{login}}", {
                   login: st.login || "connected",
                 })
               : t(
