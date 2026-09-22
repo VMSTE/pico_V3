@@ -1,5 +1,6 @@
 import {
   IconActivity,
+  IconBrandGithub,
   IconLoader2,
   IconPencil,
   IconPlug,
@@ -11,6 +12,10 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
+import {
+  disconnectGitHubIntegration,
+  getGitHubIntegrationStatus,
+} from "@/api/integrations"
 import {
   deleteMCPServer,
   getMCPServers,
@@ -47,6 +52,74 @@ function mapToLines(map: Record<string, string> | undefined, sep: string): strin
   return Object.entries(map ?? {})
     .map(([k, v]) => k + sep + v)
     .join("\n")
+}
+
+function GitHubIntegrationCard() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const statusQuery = useQuery({
+    queryKey: ["github-integration"],
+    queryFn: getGitHubIntegrationStatus,
+  })
+  const disconnectMutation = useMutation({
+    mutationFn: disconnectGitHubIntegration,
+    onSuccess: () => {
+      toast.success(t("pages.mcp.github_disconnected", "GitHub отключён"))
+      void queryClient.invalidateQueries({ queryKey: ["github-integration"] })
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "disconnect error")
+    },
+  })
+
+  const st = statusQuery.data
+  return (
+    <div className="border-border/60 bg-muted/10 flex items-center justify-between gap-3 rounded-xl border p-4">
+      <div className="flex items-center gap-3">
+        <IconBrandGithub className="size-5" />
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold">GitHub</span>
+          <span className="text-muted-foreground text-xs">
+            {st?.connected
+              ? t("pages.mcp.github_connected_as", {
+                  login: st.login || "connected",
+                })
+              : t(
+                  "pages.mcp.github_hint",
+                  "Подключи аккаунт в пару кликов: Пика сможет читать и писать в твои репо (запись — с твоего подтверждения)",
+                )}
+          </span>
+        </div>
+      </div>
+      {st?.connected ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disconnectMutation.isPending}
+          onClick={() => {
+            if (
+              window.confirm(
+                t("pages.mcp.github_disconnect_confirm", "Отключить GitHub?"),
+              )
+            ) {
+              disconnectMutation.mutate()
+            }
+          }}
+        >
+          {t("pages.mcp.github_disconnect", "Отключить")}
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          onClick={() => {
+            window.location.href = "/api/integrations/github/connect"
+          }}
+        >
+          {t("pages.mcp.github_connect", "Подключить GitHub")}
+        </Button>
+      )}
+    </div>
+  )
 }
 
 export function MCPPage() {
@@ -208,6 +281,8 @@ export function MCPPage() {
         <p className="text-muted-foreground text-sm">
           {t("pages.mcp.description")}
         </p>
+
+        <GitHubIntegrationCard />
 
         {serversQuery.data && !serversQuery.data.enabled && (
           <div className="border-yellow-500/40 bg-yellow-500/10 rounded-md border px-3 py-2 text-sm">
