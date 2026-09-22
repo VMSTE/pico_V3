@@ -654,6 +654,9 @@ func main() {
 		apiHandler.TryAutoStartGateway()
 	}()
 
+	// PIKA-V3 (волна 115): автоподъём локального SearXNG (идемпотентно, нефатально).
+	go ensureSearXNG(absPath)
+
 	// Start the server(s) in goroutines.
 	servers = make([]*http.Server, 0, len(listeners))
 	for _, ln := range listeners {
