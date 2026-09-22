@@ -116,10 +116,12 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 			workspacePath = defaultAgent.Workspace
 		}
 
-		// Волна 114: подстановка OAuth-токенов (${oauth:...}) в заголовки серверов.
+		// Волна 114: подстановка OAuth-токенов (${oauth:...}) в заголовки и env серверов
+		// (env — для stdio: локальный github-mcp-server читает токен из env).
 		mcpCfg := al.cfg.Tools.MCP
 		for srvName, srv := range mcpCfg.Servers {
 			srv.Headers = al.cfg.ResolveOAuthPlaceholders(srv.Headers)
+			srv.Env = al.cfg.ResolveOAuthPlaceholders(srv.Env)
 			mcpCfg.Servers[srvName] = srv
 		}
 

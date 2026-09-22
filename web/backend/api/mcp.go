@@ -189,8 +189,9 @@ func (h *Handler) handleTestMCPServer(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	// Волна 114: подстановка OAuth-токенов (${oauth:...}) перед пробой.
+	// Волна 114: подстановка OAuth-токенов (${oauth:...}) в headers и env перед пробой.
 	srv.Headers = cfg.ResolveOAuthPlaceholders(srv.Headers)
+	srv.Env = cfg.ResolveOAuthPlaceholders(srv.Env)
 
 	res, err := picomcp.ProbeServer(ctx, name, srv, cfg.WorkspacePath())
 	if err != nil {
