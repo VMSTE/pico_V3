@@ -12,6 +12,15 @@
   - `web/backend/api/tools_test.go` — MODIFIED: изоляция 6 тестов от нового дефолта (SearXNG.Enabled=false)
 - **Breaking:** None — дефолты влияют только на свежие установки; существующие config.json не меняются
 
+### [2026-09-23] fix(pika): loop detection по хэшам аргументов/результата — wave 116
+- **ТЗ:** бой 23 сен: 3× mcp_github-personal_push_files с разными файлами ловились как петля (Operation = 40-символьное превью args, Result = 100-символьное превью — одинаковые у всех записей)
+- **PR:** #164
+- **Files:**
+  - `pkg/pika/trail_meta.go` — MODIFIED: TrailEntry += ArgsHash/ResultHash (sha256 полных данных); HasLoopDetection сравнивает хэши, fallback на старые поля (trailResultKey) для обратной совместимости; HashTrailString
+  - `pkg/agent/pipeline_execute.go` — MODIFIED: TRAIL-запись считает sha256 полных argsJSON и toolResult.ForLLM
+  - `pkg/pika/trail_meta_test.go` — MODIFIED: TestTrailLoopDetection_ArgsHashAware (разные аргументы → не петля; разный commit SHA → не петля; полное совпадение → петля)
+- **Breaking:** None — safety net не ослаблен: идентичные вызовы (та же команда, тот же вывод) по-прежнему ловятся
+
 ## Волна 81 — Фикс пустой ленты Recent requests: NULL-safe scan error (D-AUDIT-86 latent bug) · 19 авг 2026
 - **Волна 114, срез 3** (22 сен 2026): remote endpoint api.githubcopilot.com отверг и PAT, и OAuth-токен (403 дважды, бой; индустрия подтверждает: remote OAuth = только VS Code, 403-болото issue #672/#153) → локальный официальный github-mcp-server (stdio, токен в env через ${oauth:github}); резолв плейсхолдера расширен на env
 - **Волна 114, срез 2** (22 сен 2026): кнопка «Подключить GitHub» на странице /mcp — карточка статуса (connect/disconnect, login), api/integrations.ts; путь пользователя без терминала

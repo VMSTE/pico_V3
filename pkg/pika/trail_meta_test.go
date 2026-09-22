@@ -363,3 +363,45 @@ func TestConcurrencyMeta(t *testing.T) {
 		t.Errorf("MsgCount = %d, want 500", m.GetMsgCount())
 	}
 }
+
+// Волна 116 (бой 23 сен): 3× push_files с РАЗНЫМИ файлами ловились как цикл —
+// Operation/Result срезаны до превью и совпадали. Хэши видят различие.
+func TestTrailLoopDetection_ArgsHashAware(t *testing.T) {
+	// Одинаковые имя+операция+превью результата, но разные аргументы — не петля.
+	tr := NewTrail()
+	for _, h := range []string{"a1", "b2", "c3"} {
+		tr.Add(TrailEntry{
+			ToolName: "mcp_github_push_files", Operation: `{"branch":"main","files":[{`,
+			Result: "pushed", OK: true,
+			ArgsHash: h, ResultHash: "r-" + h,
+		})
+	}
+	if tr.HasLoopDetection(3) {
+		t.Error("different args hashes must NOT be a loop")
+	}
+
+	// Те же аргументы, но разный полный результат (commit SHA) — не петля.
+	tr2 := NewTrail()
+	for _, rh := range []string{"sha-1", "sha-2", "sha-3"} {
+		tr2.Add(TrailEntry{
+			ToolName: "mcp_github_push_files", Operation: "same",
+			Result: "pushed", OK: true,
+			ArgsHash: "same-args", ResultHash: rh,
+		})
+	}
+	if tr2.HasLoopDetection(3) {
+		t.Error("same args + different result hash must NOT be a loop")
+	}
+
+	// Полное совпадение включая хэши — петля (safety net не ослаблен).
+	tr3 := NewTrail()
+	for i := 0; i < 3; i++ {
+		tr3.Add(TrailEntry{
+			ToolName: "exec", Operation: "run", Result: "ok", OK: true,
+			ArgsHash: "h", ResultHash: "h",
+		})
+	}
+	if !tr3.HasLoopDetection(3) {
+		t.Error("identical calls incl. hashes must be a loop")
+	}
+}
