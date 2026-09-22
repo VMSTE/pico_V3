@@ -1,4 +1,5 @@
 ## Волна 81 — Фикс пустой ленты Recent requests: NULL-safe scan error (D-AUDIT-86 latent bug) · 19 авг 2026
+- **Волна 114, срез 2** (22 сен 2026): кнопка «Подключить GitHub» на странице /mcp — карточка статуса (connect/disconnect, login), api/integrations.ts; путь пользователя без терминала
 - **Волна 114** (22 сен 2026): GitHub OAuth «в пару кликов» — GitHub App (AtoMinD APP), эндпоинты connect/callback/status/disconnect, токены в .security.yml, плейсхолдер ${oauth:github} в MCP-заголовках (config_integrations.go, integrations.go, agent_mcp.go, mcp.go, router.go)
 - **Волна 113** (21 сен 2026): MCP always-optional — инит в фоне, мёртвый сервер не убивает цикл агента; смерть цикла логируется gateway вразумительно; MCPInitError() для диагностики (agent.go, agent_mcp.go, gateway.go; регрессия боя 21 сен; индустрия: OpenHands #4454, Google ADK #5025)
 - **Баг:** strOrNil пишет пустой error как NULL; скан NULL в string в queryPikaRequests молча выкидывал строку — лента показывала только записи с ошибками. При нуле ошибок — пустая таблица. Найден в бою на /pika после D-AUDIT-108
