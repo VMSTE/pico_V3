@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -1966,11 +1967,19 @@ func TestWebTool_AutoProviderRoutesQueryLanguageBetweenSogouAndDuckDuckGo(t *tes
 	tool := &WebSearchTool{
 		provider:   sogouProvider,
 		maxResults: 5,
-		providerResolver: func(query string) (SearchProvider, int) {
+		providerResolver: func(query string) []webSearchChainEntry {
 			if prefersDuckDuckGoQuery(query) {
-				return duckProvider, 3
+				return []webSearchChainEntry{{
+					name:       "duckduckgo",
+					provider:   duckProvider,
+					maxResults: 3,
+				}}
 			}
-			return sogouProvider, 5
+			return []webSearchChainEntry{{
+				name:       "sogou",
+				provider:   sogouProvider,
+				maxResults: 5,
+			}}
 		},
 	}
 
@@ -1998,4 +2007,73 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
+}
+
+// PIKA-V3 (волна 115): падающий провайдер для тестов фолбэка.
+type failingSearchProvider struct {
+	err   error
+	calls []string
+}
+
+func (s *failingSearchProvider) Search(
+	ctx context.Context,
+	query string,
+	count int,
+	rangeCode string,
+) (string, error) {
+	s.calls = append(s.calls, query)
+	return "", s.err
+}
+
+// PIKA-V3 (волна 115): основной провайдер упал → ответ от следующего в цепочке.
+func TestWebTool_FallsBackToNextProviderOnError(t *testing.T) {
+	primary := &failingSearchProvider{err: errors.New("connection refused")}
+	fallback := &stubSearchProvider{result: "via duckduckgo"}
+	tool := &WebSearchTool{
+		provider:   primary,
+		maxResults: 5,
+		providerResolver: func(query string) []webSearchChainEntry {
+			return []webSearchChainEntry{
+				{name: "searxng", provider: primary, maxResults: 5},
+				{name: "duckduckgo", provider: fallback, maxResults: 3},
+			}
+		},
+	}
+
+	res := tool.Execute(context.Background(), map[string]any{"query": "test"})
+	if res.IsError {
+		t.Fatalf("expected fallback success, got error: %s", res.ForLLM)
+	}
+	if !strings.Contains(res.ForLLM, "via duckduckgo") {
+		t.Fatalf("expected fallback provider result, got: %s", res.ForLLM)
+	}
+	if len(primary.calls) != 1 || len(fallback.calls) != 1 {
+		t.Fatalf("calls: primary=%v fallback=%v", primary.calls, fallback.calls)
+	}
+}
+
+// PIKA-V3 (волна 115): все провайдеры упали → честная ошибка, не молчим.
+func TestWebTool_AllProvidersFailHonestError(t *testing.T) {
+	primary := &failingSearchProvider{err: errors.New("connection refused")}
+	fallback := &failingSearchProvider{err: errors.New("ddg blocked")}
+	tool := &WebSearchTool{
+		provider:   primary,
+		maxResults: 5,
+		providerResolver: func(query string) []webSearchChainEntry {
+			return []webSearchChainEntry{
+				{name: "searxng", provider: primary, maxResults: 5},
+				{name: "duckduckgo", provider: fallback, maxResults: 3},
+			}
+		},
+	}
+
+	res := tool.Execute(context.Background(), map[string]any{"query": "test"})
+	if !res.IsError {
+		t.Fatalf("expected error when all providers fail, got: %s", res.ForLLM)
+	}
+	if !strings.Contains(res.ForLLM, "web search unavailable") ||
+		!strings.Contains(res.ForLLM, "searxng") ||
+		!strings.Contains(res.ForLLM, "duckduckgo") {
+		t.Fatalf("honest error should list failed providers, got: %s", res.ForLLM)
+	}
 }
