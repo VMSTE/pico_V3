@@ -308,3 +308,18 @@ func TestNewSessionLifecycle_Defaults(t *testing.T) {
 		)
 	}
 }
+
+// Волна 120: контракт единиц — contextPct в ПРОЦЕНТАХ (95 = 95%).
+// Вызыватель (pipeline_llm.go) передаёт usage/window*100; до волны 120
+// передавалась доля 0-1 — триггер по контексту не мог сработать никогда.
+func TestCheckRotationTriggers_PercentContract(t *testing.T) {
+	_, sl := setupTestSessionLifecycle(t)
+	sl.EnsureSession("tg:1")
+
+	if !sl.CheckRotationTriggers(95.0, 0) {
+		t.Error("95% should trigger rotation")
+	}
+	if sl.CheckRotationTriggers(0.95, 0) {
+		t.Error("fraction 0.95 must NOT trigger (contract: percent 0-100)")
+	}
+}

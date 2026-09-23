@@ -475,13 +475,12 @@ func (p *Pipeline) CallLLM(
 	}
 
 	// PIKA-V3: wire CheckRotationTriggers after LLM response
-	if ps, ok := ts.agent.Sessions.(*pika.PikaSessionStore); ok {
-		if exec.response.Usage != nil && ts.agent.ContextWindow > 0 {
-			ctxPct := float64(exec.response.Usage.PromptTokens) /
-				float64(ts.agent.ContextWindow)
-			sl := ps.Session(ts.sessionKey)
-			sl.CheckRotationTriggers(ctxPct, iteration)
-		}
+	// Волна 120 (срез 3): сигнал -> действие (§2.6/D-56: ротация, не стоп).
+	// Контракт единиц: CheckRotationTriggers ждёт ПРОЦЕНТЫ (0-100).
+	if exec.response.Usage != nil && ts.agent.ContextWindow > 0 {
+		ctxPct := float64(exec.response.Usage.PromptTokens) * 100 /
+			float64(ts.agent.ContextWindow)
+		al.checkAndRotateSession(ctx, ts, ctxPct, iteration)
 	}
 
 	llmResponseFields := map[string]any{
@@ -598,4 +597,51 @@ func (p *Pipeline) CallLLM(
 	}
 
 	return ControlToolLoop, nil
+}
+
+// Волна 120 (срез 3): ротация по сигналу датчика — действие вместо WARN.
+// Архитектура §2.6: Go закрывает сессию -> новая -> уведомление юзеру.
+// D-107: бриф Архивариуса инвалидируется через OnRotate (Фаза 6,
+// context_pika.go) — следующий buildPrompt пересобирает его полным вызовом.
+func (al *AgentLoop) checkAndRotateSession(
+	ctx context.Context, ts *turnState, ctxPct float64, chainCalls int,
+) {
+	ps, ok := ts.agent.Sessions.(*pika.PikaSessionStore)
+	if !ok {
+		return
+	}
+	sl := ps.Session(ts.sessionKey)
+	if !sl.CheckRotationTriggers(ctxPct, chainCalls) {
+		return
+	}
+	al.rotateSessionWithNotice(ctx, ts, sl,
+		fmt.Sprintf("контекст %.0f%% окна, %d звеньев цепочки", ctxPct, chainCalls))
+}
+
+// rotateSessionBySignal — форс-ротация без проверки порогов (предиктивный
+// переполн в pipeline_setup.go). false = стор не Pika, ротация пропущена.
+func (al *AgentLoop) rotateSessionBySignal(
+	ctx context.Context, ts *turnState, reason string,
+) bool {
+	ps, ok := ts.agent.Sessions.(*pika.PikaSessionStore)
+	if !ok {
+		return false
+	}
+	al.rotateSessionWithNotice(ctx, ts, ps.Session(ts.sessionKey), reason)
+	return true
+}
+
+func (al *AgentLoop) rotateSessionWithNotice(
+	ctx context.Context, ts *turnState, sl *pika.SessionLifecycle, reason string,
+) {
+	oldID := sl.RotateSession()
+	logger.InfoCF("agent", "Session rotated", map[string]any{
+		"session_key":  ts.sessionKey,
+		"old_session":  oldID,
+		"reason":       reason,
+		"close_reason": "rotation",
+	})
+	notice := "🔄 Начал новую сессию (" + reason +
+		"). Память сохранена — продолжаю."
+	_ = al.bus.PublishOutbound(ctx, outboundMessageForTurn(ts, notice))
 }
