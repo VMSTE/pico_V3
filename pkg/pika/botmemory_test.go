@@ -839,3 +839,38 @@ func TestSetSpanPreviews(t *testing.T) {
 		t.Errorf("previews = %q/%q", in, out)
 	}
 }
+
+// Волна 120 (бой 23 сен): архив messages падал на Scan pika_session_id
+// TEXT ("sk_v1_...:<unix>") в int — повтор бага волны 93, тогда починили
+// только archivist.go. На старом коде тест падает с "archive scan msg".
+func TestArchiveAndDeleteTurns_NonNumericSessionID(t *testing.T) {
+	bm := setupTestDB(t)
+	ctx := context.Background()
+
+	sid := "sk_v1_b0cb:1790047026"
+	if _, err := bm.SaveMessage(ctx, MessageRow{
+		ChatID: "s1", PikaSessionID: sid, Role: "user",
+		Content: "архив меня", Tokens: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := bm.ArchiveAndDeleteTurns(ctx, "s1", []string{sid}); err != nil {
+		t.Fatalf("ArchiveAndDeleteTurns: %v", err)
+	}
+
+	var archCount int
+	if err := bm.db.QueryRow(
+		`SELECT COUNT(*) FROM messages_archive WHERE pika_session_id=?`, sid,
+	).Scan(&archCount); err != nil {
+		t.Fatal(err)
+	}
+	if archCount != 1 {
+		t.Errorf("messages_archive = %d, want 1", archCount)
+	}
+
+	msgs, _ := bm.GetMessages(ctx, "s1")
+	if len(msgs) != 0 {
+		t.Errorf("hot messages = %d, want 0 (delete не сработал)", len(msgs))
+	}
+}

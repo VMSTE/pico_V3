@@ -180,13 +180,17 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 	if !ts.opts.NoHistory {
 		toolDefs := ts.agent.Tools.ToProviderDefs()
 		if isOverContextBudget(ts.agent.ContextWindow, messages, toolDefs, ts.agent.MaxTokens) {
-			// PIKA-V3: legacy proactive CompressReasonProactive removed (Phase C, wave 2b).
-			// Context rotation via SessionLifecycle will handle budget overflow (wave 4).
-			logger.WarnCF(
-				"agent",
-				"PIKA-V3: context budget exceeded before LLM call, legacy compression removed; pending session rotation (wave 4)",
-				map[string]any{"session_key": ts.sessionKey},
-			)
+			// Волна 120 (срез 3): предиктивный переполн -> форс-ротация ДО вызова
+			// (§2.6). GetHistory session-scoped -> следующий ход чистый, память —
+			// брифом Архивариуса (isRotation, D-107). Этот вызов ещё идёт по старой
+			// сборке и может упасть на провайдере — следующий уже чистый.
+			if !p.al.rotateSessionBySignal(ctx, ts, "контекст не влезает в окно (прогноз до вызова)") {
+				logger.WarnCF(
+					"agent",
+					"PIKA-V3: context budget exceeded, no PikaSessionStore — rotation skipped",
+					map[string]any{"session_key": ts.sessionKey},
+				)
+			}
 		}
 	}
 
