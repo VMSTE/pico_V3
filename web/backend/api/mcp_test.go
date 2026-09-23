@@ -186,3 +186,103 @@ func TestPutMCPServer_RestoresMaskedSecrets(t *testing.T) {
 		t.Errorf("new value lost, got %q", srv.Env["NEW"])
 	}
 }
+
+func TestPutMCPServer_MergeKeepsUnsentSecrets(t *testing.T) {
+	configPath := writeMCPServerConfig(t)
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.registerMCPRoutes(mux)
+
+	// env не прислан вообще: сохранённый секрет не должен пропасть (ТЗ-117c, срез В).
+	body := `{"enabled":true,"command":"npx"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/mcp/servers/fs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Tools.MCP.Servers["fs"].Env["K"]; got != "secret" {
+		t.Errorf("unsent env key lost, got %q", got)
+	}
+}
+
+func TestPutMCPServer_MergeEmptyEnvKeepsSecrets(t *testing.T) {
+	configPath := writeMCPServerConfig(t)
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.registerMCPRoutes(mux)
+
+	// env: {} — пустая мапа от фронта не должна затирать секреты.
+	body := `{"enabled":true,"command":"npx","env":{}}`
+	req := httptest.NewRequest(http.MethodPut, "/api/mcp/servers/fs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Tools.MCP.Servers["fs"].Env["K"]; got != "secret" {
+		t.Errorf("env wiped by empty map, got %q", got)
+	}
+}
+
+func TestPutMCPServer_MergeEmptyStringDeletesKey(t *testing.T) {
+	configPath := writeMCPServerConfig(t)
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.registerMCPRoutes(mux)
+
+	// Явная очистка: пустая строка удаляет ключ.
+	body := `{"enabled":true,"command":"npx","env":{"K":""}}`
+	req := httptest.NewRequest(http.MethodPut, "/api/mcp/servers/fs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.Tools.MCP.Servers["fs"].Env["K"]; ok {
+		t.Error("empty string should delete the key")
+	}
+}
+
+func TestPutMCPServer_MergeDropsUnknownMask(t *testing.T) {
+	configPath := writeMCPServerConfig(t)
+	h := NewHandler(configPath)
+	mux := http.NewServeMux()
+	h.registerMCPRoutes(mux)
+
+	// Маска без сохранённого значения не пишется в конфиг.
+	body := `{"enabled":true,"command":"npx","env":{"GHOST":"[NOT_HERE]"}}`
+	req := httptest.NewRequest(http.MethodPut, "/api/mcp/servers/fs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := cfg.Tools.MCP.Servers["fs"]
+	if _, ok := srv.Env["GHOST"]; ok {
+		t.Error("mask without stored value must not be persisted")
+	}
+	if got := srv.Env["K"]; got != "secret" {
+		t.Errorf("existing key lost, got %q", got)
+	}
+}
