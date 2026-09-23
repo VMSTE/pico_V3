@@ -871,6 +871,23 @@ func mcpWriteEffect(tool string) (opEffect, bool) {
 // mcpWriteToolSuffixes — MCP-тулы, мутирующие внешнюю систему (волна 110).
 // Покрывает официальный github-mcp-server; новые серверы добавляем сюда.
 var mcpWriteToolSuffixes = map[string]bool{
+	// Волна 117-fix: Notion MCP — записи и сессионные мутации.
+	"notion-create-file-upload":      true,
+	"notion-create-attachment":       true,
+	"notion-create-pages":            true,
+	"notion-update-page":             true,
+	"notion-convert-page-to-skill":   true,
+	"notion-move-pages":              true,
+	"notion-duplicate-page":          true,
+	"notion-create-database":         true,
+	"notion-create-folder":           true,
+	"notion-update-data-source":      true,
+	"notion-create-view":             true,
+	"notion-update-view":             true,
+	"notion-create-comment":          true,
+	"notion-spawn-session":           true,
+	"notion-stop-session":            true,
+	"notion-send-message-to-session": true,
 	// github-mcp-server (официальный):
 	"create_or_update_file": true,
 	"push_files":            true,

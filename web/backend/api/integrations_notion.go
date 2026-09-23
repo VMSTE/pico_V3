@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/config"
+	picomcp "github.com/sipeed/picoclaw/pkg/mcp"
 )
 
 const (
@@ -219,6 +220,11 @@ func (h *Handler) handleNotionCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg.Integrations.Notion = n
 	upsertNotionMCPServer(cfg)
+	// Волна 117-fix: ACL-политика пишется сама при connect — иначе
+	// deny-by-default (волна 110) прячет все тулы сервера (бой 23 сен).
+	// Записи в списке тоже видны агенту: их сдерживает confirm-гейт
+	// (mcpWriteToolSuffixes), не ACL.
+	writeNotionACL(cfg, notionToolLister(r.Context(), token))
 
 	if err := config.SaveConfig(h.configPath, cfg); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to save config: %v", err), http.StatusInternalServerError)
@@ -331,4 +337,75 @@ func exchangeNotionCode(
 		return "", "", "", fmt.Errorf("notion: empty access_token (http %d)", resp.StatusCode)
 	}
 	return out.AccessToken, out.RefreshToken, out.WorkspaceName, nil
+}
+
+// writeNotionACL: сервер notion получает политику автоматически.
+// external + явный список (паттерн github). Пустой вход (живой list не
+// удался) → встроенный снапшот документированных тулов.
+func writeNotionACL(cfg *config.Config, toolNames []string) {
+	if len(toolNames) == 0 {
+		toolNames = notionKnownTools
+	}
+	if cfg.Security.MCP.Servers == nil {
+		cfg.Security.MCP.Servers = map[string]config.MCPServerACLConfig{}
+	}
+	pol := cfg.Security.MCP.Servers["notion"]
+	pol.TrustLevel = "external"
+	pol.AllowedTools = toolNames
+	cfg.Security.MCP.Servers["notion"] = pol
+}
+
+// notionToolLister — точка подмены для тестов.
+var notionToolLister = listNotionToolNamesLive
+
+// listNotionToolNamesLive — живой tools/list сразу после OAuth (токен уже на
+// руках, плейсхолдер не нужен). Ошибка → nil → fallback на notionKnownTools.
+func listNotionToolNamesLive(ctx context.Context, token string) []string {
+	mgr := picomcp.NewManager()
+	defer func() { _ = mgr.Close() }()
+	server := config.MCPServerConfig{
+		Enabled: true,
+		Type:    "http",
+		URL:     notionMCPURL,
+		Headers: map[string]string{"Authorization": "Bearer " + token},
+	}
+	mcpCfg := config.MCPConfig{
+		ToolConfig: config.ToolConfig{Enabled: true},
+		Servers:    map[string]config.MCPServerConfig{"notion": server},
+	}
+	if err := mgr.LoadFromMCPConfig(ctx, mcpCfg, ""); err != nil {
+		return nil
+	}
+	conn, ok := mgr.GetServer("notion")
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(conn.Tools))
+	for _, t := range conn.Tools {
+		if t != nil && t.Name != "" {
+			names = append(names, t.Name)
+		}
+	}
+	return names
+}
+
+// notionKnownTools — снапшот документированного списка Notion MCP
+// (developers.notion.com/guides/mcp/mcp-supported-tools, 23 сен 2026).
+var notionKnownTools = []string{
+	// чтение
+	"notion-search", "notion-ai-search", "notion-get-tool-access",
+	"notion-search-skills", "notion-download-skill", "notion-fetch",
+	"notion-download-attachment", "notion-query-data-sources",
+	"notion-query-meeting-notes", "notion-get-comments", "notion-get-teams",
+	"notion-get-users", "notion-get-async-task", "notion-list-agents",
+	"notion-search-agents", "notion-query-sessions", "notion-search-sessions",
+	"notion-get-session-status", "notion-wait-session",
+	"notion-list-session-events", "notion-read-session-event",
+	// запись (дополнительно сдерживаются confirm-гейтом)
+	"notion-create-file-upload", "notion-create-attachment",
+	"notion-create-pages", "notion-update-page", "notion-convert-page-to-skill",
+	"notion-move-pages", "notion-duplicate-page", "notion-create-database",
+	"notion-create-folder", "notion-update-data-source", "notion-create-view",
+	"notion-update-view", "notion-create-comment", "notion-spawn-session",
+	"notion-stop-session", "notion-send-message-to-session",
 }
