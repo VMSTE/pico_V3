@@ -110,7 +110,7 @@ func (h *Handler) handlePutMCPServer(w http.ResponseWriter, r *http.Request) {
 	if cfg.Tools.MCP.Servers == nil {
 		cfg.Tools.MCP.Servers = map[string]config.MCPServerConfig{}
 	}
-	oldSrv, hadOld := cfg.Tools.MCP.Servers[name]
+	oldSrv := cfg.Tools.MCP.Servers[name]
 	newSrv := config.MCPServerConfig{
 		Enabled:  req.Enabled,
 		Deferred: req.Deferred,
@@ -122,10 +122,8 @@ func (h *Handler) handlePutMCPServer(w http.ResponseWriter, r *http.Request) {
 		URL:      strings.TrimSpace(req.URL),
 		Headers:  req.Headers,
 	}
-	if hadOld {
-		// D-AUDIT-88: клиент мог вернуть маску — восстановить реальные значения.
-		restoreMaskedServerValues(&newSrv, oldSrv)
-	}
+	// ТЗ-117c (срез В): PUT — merge поверх сохранённого, а не полная замена.
+	mergeMCPServerSecrets(&newSrv, oldSrv)
 	cfg.Tools.MCP.Servers[name] = newSrv
 	cfg.Tools.MCP.Enabled = true
 
@@ -401,21 +399,38 @@ func (h *Handler) handlePatchMCPServer(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-// restoreMaskedServerValues copies real values from oldSrv where the client
-// echoed the [NOT_HERE] mask (D-AUDIT-88).
-func restoreMaskedServerValues(newSrv *config.MCPServerConfig, oldSrv config.MCPServerConfig) {
-	for k, v := range newSrv.Env {
-		if v == mcpMaskedSecret {
-			if oldV, exists := oldSrv.Env[k]; exists {
-				newSrv.Env[k] = oldV
-			}
+// mergeMCPServerSecrets сливает env/headers поверх сохранённой конфигурации
+// (ТЗ-117c, срез В; заменяет D-AUDIT-88 restoreMaskedServerValues):
+//   - ключ не прислан или значение == маске [NOT_HERE] -> сохранить текущее;
+//   - значение == "" -> удалить ключ;
+//   - иначе -> записать новое значение.
+//
+// Маска без сохранённого значения в конфиг не пишется (защита от порчи секрета).
+func mergeMCPServerSecrets(newSrv *config.MCPServerConfig, oldSrv config.MCPServerConfig) {
+	newSrv.Env = mergeSecretMap(newSrv.Env, oldSrv.Env)
+	newSrv.Headers = mergeSecretMap(newSrv.Headers, oldSrv.Headers)
+}
+
+func mergeSecretMap(incoming, old map[string]string) map[string]string {
+	if len(incoming) == 0 && len(old) == 0 {
+		return nil
+	}
+	merged := make(map[string]string, len(old)+len(incoming))
+	for k, v := range old {
+		merged[k] = v
+	}
+	for k, v := range incoming {
+		switch v {
+		case mcpMaskedSecret:
+			// Уже в merged, если ключ был в old; иначе маску не пишем.
+		case "":
+			delete(merged, k)
+		default:
+			merged[k] = v
 		}
 	}
-	for k, v := range newSrv.Headers {
-		if v == mcpMaskedSecret {
-			if oldV, exists := oldSrv.Headers[k]; exists {
-				newSrv.Headers[k] = oldV
-			}
-		}
+	if len(merged) == 0 {
+		return nil
 	}
+	return merged
 }
