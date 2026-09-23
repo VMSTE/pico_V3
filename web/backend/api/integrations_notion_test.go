@@ -131,8 +131,8 @@ func TestNotionStatusAndDisconnect(t *testing.T) {
 	cfg.Integrations.Notion.AccessToken = *config.NewSecureString("ntn_x")
 	cfg.Integrations.Notion.WorkspaceName = "VECTR"
 	upsertNotionMCPServer(cfg)
-	if err := config.SaveConfig(path, cfg); err != nil {
-		t.Fatal(err)
+	if saveErr := config.SaveConfig(path, cfg); saveErr != nil {
+		t.Fatal(saveErr)
 	}
 
 	h := NewHandler(path)

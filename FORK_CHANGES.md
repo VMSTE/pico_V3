@@ -23,7 +23,7 @@
 
 ### [2026-09-23] feat(integrations): Notion MCP OAuth «в пару кликов» + универсальная IntegrationCard — wave 117
 - **ТЗ:** ТЗ-117: Notion MCP в пару кликов — hosted OAuth без своего приложения
-- **PR:** #TBD
+- **PR:** #165
 - **Files:**
   - `pkg/config/config_integrations.go` — MODIFIED: IntegrationsConfig += Notion (DCR client_id, токены SecureString, workspace_name); resolveOAuthValue — реестр провайдеров (switch github/notion)
   - `web/backend/api/integrations_notion.go` — NEW: connect (DCR при первом запуске + PKCE S256), callback (code+verifier → токен → .security.yml + автозапись tools.mcp.servers.notion http mcp.notion.com/mcp с ${oauth:notion}), status (workspace), disconnect (токен стёрт + сервер выключен)

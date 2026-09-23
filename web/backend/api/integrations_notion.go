@@ -147,8 +147,8 @@ func (h *Handler) handleNotionConnect(w http.ResponseWriter, r *http.Request) {
 		}
 		clientID = id
 		cfg.Integrations.Notion.ClientID = id
-		if err := config.SaveConfig(h.configPath, cfg); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to save config: %v", err),
+		if saveErr := config.SaveConfig(h.configPath, cfg); saveErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to save config: %v", saveErr),
 				http.StatusInternalServerError)
 			return
 		}
