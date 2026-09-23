@@ -3,6 +3,7 @@ package api
 // Волна 117 (ТЗ-117): Notion OAuth flow — DCR + PKCE + автозапись MCP-сервера.
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -45,6 +46,11 @@ func TestNotionConnectCallbackFlow(t *testing.T) {
 	path, cleanup := setupOAuthTestEnv(t)
 	defer cleanup()
 	setupNotionMock(t)
+	oldLister := notionToolLister
+	notionToolLister = func(_ context.Context, _ string) []string {
+		return []string{"notion-search", "notion-create-pages"}
+	}
+	t.Cleanup(func() { notionToolLister = oldLister })
 
 	h := NewHandler(path)
 	mux := http.NewServeMux()
@@ -117,6 +123,14 @@ func TestNotionConnectCallbackFlow(t *testing.T) {
 	}
 	if srv.Headers["Authorization"] != "Bearer ${oauth:notion}" {
 		t.Fatalf("headers = %v", srv.Headers)
+	}
+	// 117-fix: ACL-политика записалась автоматически
+	pol, ok := cfg.Security.MCP.Servers["notion"]
+	if !ok {
+		t.Fatal("ACL policy для notion не записана (deny-by-default скроет тулы)")
+	}
+	if pol.TrustLevel != "external" || len(pol.AllowedTools) != 2 {
+		t.Fatalf("policy = %+v", pol)
 	}
 }
 

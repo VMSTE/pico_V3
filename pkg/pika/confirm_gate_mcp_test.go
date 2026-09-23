@@ -78,3 +78,42 @@ func TestMCPWriteEffect_Parsing(t *testing.T) {
 		t.Error("unknown write-less tool must not match")
 	}
 }
+
+// Волна 117-fix: mcp_notion_notion-create-pages → спросить (запись в Notion).
+func TestEffectGate_MCPNotionWriteAsks(t *testing.T) {
+	sender := &effectMockSender{}
+	sender.approved = true
+	cg := effectTestGate(sender, StateHealthy)
+
+	_, err := cg.ApproveTool(context.Background(), &ConfirmApprovalRequest{
+		Tool:      "mcp_notion_notion-create-pages",
+		Arguments: map[string]any{"parent": map[string]any{"page_id": "x"}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !sender.called {
+		t.Error("notion write via MCP must require confirmation")
+	}
+}
+
+// Волна 117-fix: mcp_notion_notion-search (чтение) → молча пропускаем.
+func TestEffectGate_MCPNotionReadSilent(t *testing.T) {
+	sender := &effectMockSender{}
+	sender.approved = true
+	cg := effectTestGate(sender, StateHealthy)
+
+	decision, err := cg.ApproveTool(context.Background(), &ConfirmApprovalRequest{
+		Tool:      "mcp_notion_notion-search",
+		Arguments: map[string]any{"query": "x"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !decision.Approved {
+		t.Error("read should be approved")
+	}
+	if sender.called {
+		t.Error("notion read must NOT require confirmation")
+	}
+}
