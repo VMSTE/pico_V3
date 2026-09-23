@@ -1,6 +1,7 @@
 import {
   IconActivity,
   IconBrandGithub,
+  IconBrandNotion,
   IconLoader2,
   IconPencil,
   IconPlug,
@@ -8,13 +9,13 @@ import {
   IconTrash,
 } from "@tabler/icons-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
 import {
-  disconnectGitHubIntegration,
-  getGitHubIntegrationStatus,
+  disconnectIntegration,
+  getIntegrationStatus,
 } from "@/api/integrations"
 import {
   deleteMCPServer,
@@ -54,18 +55,28 @@ function mapToLines(map: Record<string, string> | undefined, sep: string): strin
     .join("\n")
 }
 
-function GitHubIntegrationCard() {
+interface IntegrationCardProps {
+  provider: string
+  title: string
+  icon: ReactNode
+  hint: string
+}
+
+// Волна 117 (ТЗ-117): универсальная карточка OAuth-интеграции.
+// GitHub/Notion/... — частные случаи; провайдер = сегмент /api/integrations/<provider>/*.
+function IntegrationCard({ provider, title, icon, hint }: IntegrationCardProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const statusQuery = useQuery({
-    queryKey: ["github-integration"],
-    queryFn: getGitHubIntegrationStatus,
+    queryKey: ["integration", provider],
+    queryFn: () => getIntegrationStatus(provider),
   })
   const disconnectMutation = useMutation({
-    mutationFn: disconnectGitHubIntegration,
+    mutationFn: () => disconnectIntegration(provider),
     onSuccess: () => {
-      toast.success(t("pages.mcp.github_disconnected", "GitHub отключён"))
-      void queryClient.invalidateQueries({ queryKey: ["github-integration"] })
+      toast.success(t("pages.mcp.integration_disconnected", "Отключено"))
+      void queryClient.invalidateQueries({ queryKey: ["integration", provider] })
+      void queryClient.invalidateQueries({ queryKey: ["mcp-servers"] })
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "disconnect error")
@@ -73,21 +84,21 @@ function GitHubIntegrationCard() {
   })
 
   const st = statusQuery.data
+  const connectedAs = st?.login || st?.workspace || "connected"
   return (
     <div className="border-border/60 bg-muted/10 flex items-center justify-between gap-3 rounded-xl border p-4">
       <div className="flex items-center gap-3">
-        <IconBrandGithub className="size-5" />
+        {icon}
         <div className="flex flex-col">
-          <span className="text-sm font-semibold">GitHub</span>
+          <span className="text-sm font-semibold">{title}</span>
           <span className="text-muted-foreground text-xs">
             {st?.connected
-              ? t("pages.mcp.github_connected_as", "Подключён: {{login}}", {
-                  login: st.login || "connected",
-                })
-              : t(
-                  "pages.mcp.github_hint",
-                  "Подключи аккаунт в пару кликов: Пика сможет читать и писать в твои репо (запись — с твоего подтверждения)",
-                )}
+              ? t(
+                  "pages.mcp.integration_connected_as",
+                  "Подключён: {{name}} · подхватится после перезапуска гейтвея",
+                  { name: connectedAs },
+                )
+              : hint}
           </span>
         </div>
       </div>
@@ -99,23 +110,23 @@ function GitHubIntegrationCard() {
           onClick={() => {
             if (
               window.confirm(
-                t("pages.mcp.github_disconnect_confirm", "Отключить GitHub?"),
+                t("pages.mcp.integration_disconnect_confirm", "Отключить?"),
               )
             ) {
               disconnectMutation.mutate()
             }
           }}
         >
-          {t("pages.mcp.github_disconnect", "Отключить")}
+          {t("pages.mcp.integration_disconnect", "Отключить")}
         </Button>
       ) : (
         <Button
           size="sm"
           onClick={() => {
-            window.location.href = "/api/integrations/github/connect"
+            window.location.href = `/api/integrations/${provider}/connect`
           }}
         >
-          {t("pages.mcp.github_connect", "Подключить GitHub")}
+          {t("pages.mcp.integration_connect", "Подключить")}
         </Button>
       )}
     </div>
@@ -282,7 +293,24 @@ export function MCPPage() {
           {t("pages.mcp.description")}
         </p>
 
-        <GitHubIntegrationCard />
+        <IntegrationCard
+          provider="github"
+          title="GitHub"
+          icon={<IconBrandGithub className="size-5" />}
+          hint={t(
+            "pages.mcp.github_hint",
+            "Подключи аккаунт в пару кликов: Пика сможет читать и писать в твои репо (запись — с твоего подтверждения)",
+          )}
+        />
+        <IntegrationCard
+          provider="notion"
+          title="Notion"
+          icon={<IconBrandNotion className="size-5" />}
+          hint={t(
+            "pages.mcp.notion_hint",
+            "Подключи Notion в пару кликов: Пика сможет читать и писать разрешённые страницы (запись — с твоего подтверждения)",
+          )}
+        />
 
         {serversQuery.data && !serversQuery.data.enabled && (
           <div className="border-yellow-500/40 bg-yellow-500/10 rounded-md border px-3 py-2 text-sm">
