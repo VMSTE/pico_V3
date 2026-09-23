@@ -9,6 +9,21 @@ import "strings"
 
 type IntegrationsConfig struct {
 	GitHub GitHubIntegrationConfig `json:"github,omitempty" yaml:"github"`
+	Notion NotionIntegrationConfig `json:"notion,omitempty" yaml:"notion"`
+}
+
+// NotionIntegrationConfig (волна 117): client_id из dynamic client
+// registration — публичен, живёт в config.json; токены — SecureString
+// (только .security.yml). client_secret не существует (public client + PKCE).
+type NotionIntegrationConfig struct {
+	ClientID      string       `json:"client_id,omitempty"    yaml:"client_id,omitempty"`
+	AccessToken   SecureString `json:"access_token,omitzero"  yaml:"access_token,omitempty"`
+	RefreshToken  SecureString `json:"refresh_token,omitzero" yaml:"refresh_token,omitempty"`
+	WorkspaceName string       `json:"-"                      yaml:"workspace_name,omitempty"`
+}
+
+func (n *NotionIntegrationConfig) Connected() bool {
+	return n.AccessToken.String() != ""
 }
 
 type GitHubIntegrationConfig struct {
@@ -55,9 +70,13 @@ func (c *Config) resolveOAuthValue(v string) string {
 		return v
 	}
 	name := rest[:j]
-	token := ""
-	if name == "github" {
+	// Волна 117: реестр провайдеров ${oauth:*}.
+	var token string
+	switch name {
+	case "github":
 		token = c.Integrations.GitHub.AccessToken.String()
+	case "notion":
+		token = c.Integrations.Notion.AccessToken.String()
 	}
 	if token == "" {
 		return v

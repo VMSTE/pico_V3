@@ -65,6 +65,11 @@ func (h *Handler) registerIntegrationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/integrations/github/connect", h.handleGitHubConnect)
 	mux.HandleFunc("GET /api/integrations/github/callback", h.handleGitHubCallback)
 	mux.HandleFunc("POST /api/integrations/github/disconnect", h.handleGitHubDisconnect)
+	// Волна 117: Notion.
+	mux.HandleFunc("GET /api/integrations/notion/status", h.handleNotionStatus)
+	mux.HandleFunc("GET /api/integrations/notion/connect", h.handleNotionConnect)
+	mux.HandleFunc("GET /api/integrations/notion/callback", h.handleNotionCallback)
+	mux.HandleFunc("POST /api/integrations/notion/disconnect", h.handleNotionDisconnect)
 }
 
 // handleGitHubConnect: редирект на экран авторизации GitHub App.

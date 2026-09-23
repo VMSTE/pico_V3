@@ -21,6 +21,18 @@
   - `pkg/pika/trail_meta_test.go` — MODIFIED: TestTrailLoopDetection_ArgsHashAware (разные аргументы → не петля; разный commit SHA → не петля; полное совпадение → петля)
 - **Breaking:** None — safety net не ослаблен: идентичные вызовы (та же команда, тот же вывод) по-прежнему ловятся
 
+### [2026-09-23] feat(integrations): Notion MCP OAuth «в пару кликов» + универсальная IntegrationCard — wave 117
+- **ТЗ:** ТЗ-117: Notion MCP в пару кликов — hosted OAuth без своего приложения
+- **PR:** #165
+- **Files:**
+  - `pkg/config/config_integrations.go` — MODIFIED: IntegrationsConfig += Notion (DCR client_id, токены SecureString, workspace_name); resolveOAuthValue — реестр провайдеров (switch github/notion)
+  - `web/backend/api/integrations_notion.go` — NEW: connect (DCR при первом запуске + PKCE S256), callback (code+verifier → токен → .security.yml + автозапись tools.mcp.servers.notion http mcp.notion.com/mcp с ${oauth:notion}), status (workspace), disconnect (токен стёрт + сервер выключен)
+  - `web/backend/api/integrations.go` — MODIFIED: роуты notion
+  - `web/frontend/src/api/integrations.ts` — REWRITE: обобщённые getIntegrationStatus/disconnectIntegration(provider)
+  - `web/frontend/src/components/mcp/mcp-page.tsx` — MODIFIED: GitHubIntegrationCard → универсальная IntegrationCard; карточки GitHub + Notion
+  - тесты: integrations_notion_test.go (DCR/PKCE flow, автозапись сервера, disconnect), config_integrations_notion_test.go (резолв плейсхолдера)
+- **Breaking:** None — GitHub-карточка работает как раньше
+
 ## Волна 81 — Фикс пустой ленты Recent requests: NULL-safe scan error (D-AUDIT-86 latent bug) · 19 авг 2026
 - **Волна 114, срез 3** (22 сен 2026): remote endpoint api.githubcopilot.com отверг и PAT, и OAuth-токен (403 дважды, бой; индустрия подтверждает: remote OAuth = только VS Code, 403-болото issue #672/#153) → локальный официальный github-mcp-server (stdio, токен в env через ${oauth:github}); резолв плейсхолдера расширен на env
 - **Волна 114, срез 2** (22 сен 2026): кнопка «Подключить GitHub» на странице /mcp — карточка статуса (connect/disconnect, login), api/integrations.ts; путь пользователя без терминала
