@@ -846,7 +846,10 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 	for mRows.Next() {
 		var id int64
 		var sessID string
-		var turnID, tokens int
+		// Волна 120: pika_session_id в проде TEXT (sk_v1_...:<unix>),
+		// int-скан ронял весь архив (повтор бага волны 93).
+		var turnID string
+		var tokens int
 		var ts, role string
 		var content, meta sql.NullString
 		scanErr := mRows.Scan(&id, &sessID, &turnID, &ts, &role, &content, &tokens, &meta)
