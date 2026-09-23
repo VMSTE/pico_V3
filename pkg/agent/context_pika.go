@@ -221,6 +221,24 @@ func pikaContextManagerFactory(
 	return adapter, nil
 }
 
+// satelliteRequestTimeoutSec — дефолтный HTTP-таймаут фоновых субагентов
+// (Архивариус/Атомизатор/Рефлексор), волна 120 срез 1. Бой 23 сен:
+// общий дефолт 120s душил жирные чанки атомизации (deadline exceeded
+// while reading body). 600s = ~5x. Явный request_timeout в конфиге
+// имеет приоритет.
+const satelliteRequestTimeoutSec = 600
+
+// withSatelliteTimeout возвращает копию ModelConfig с дефолтным
+// таймаутом спутника, если явный request_timeout не задан.
+func withSatelliteTimeout(mc *config.ModelConfig) *config.ModelConfig {
+	if mc == nil || mc.RequestTimeout != 0 {
+		return mc
+	}
+	cp := *mc
+	cp.RequestTimeout = satelliteRequestTimeoutSec
+	return &cp
+}
+
 // resolveArchivistProvider creates an LLM provider for the
 // "background" model from config. Returns nil if the model
 // is not configured.
@@ -231,7 +249,7 @@ func resolveArchivistProvider(
 	if err != nil {
 		return nil
 	}
-	p, _, pErr := providers.CreateProviderFromConfig(mc)
+	p, _, pErr := providers.CreateProviderFromConfig(withSatelliteTimeout(mc))
 	if pErr != nil {
 		logger.WarnCF(
 			"pika",
