@@ -22,8 +22,18 @@ type mcpRuntime struct {
 	mu       sync.Mutex
 	manager  *mcp.Manager
 	initErr  error
+	// Волна 121 (срез А): путь к config.json — освежение ${oauth:*} на 401.
+	configPath string
 	// D-AUDIT-72: журнал list_changed для flood-guard (unix-время).
 	listChangedLog map[string][]int64
+}
+
+// SetMCPConfigPath (волна 121, срез А): один раз при сборке агента (cmd),
+// до первой инициализации MCP. Пустой путь → 401-освежение выключено.
+func (al *AgentLoop) SetMCPConfigPath(path string) {
+	al.mcp.mu.Lock()
+	defer al.mcp.mu.Unlock()
+	al.mcp.configPath = path
 }
 
 func (r *mcpRuntime) reset() *mcp.Manager {
@@ -109,6 +119,28 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 
 	al.mcp.initOnce.Do(func() {
 		mcpManager := mcp.NewManager()
+
+		// Волна 121 (срез А): на 401 менеджер просит свежий конфиг сервера —
+		// читаем config.json с диска (токен мог рефрешнуть лаунчер) и
+		// перерезолвим ${oauth:*}. Тот же Bearer → reconnect не делаем (manager).
+		if al.mcp.configPath != "" {
+			configPath := al.mcp.configPath
+			mcpManager.SetServerConfigRefresher(func(
+				serverName string, current config.MCPServerConfig,
+			) (config.MCPServerConfig, error) {
+				freshCfg, err := config.LoadConfig(configPath)
+				if err != nil {
+					return current, err
+				}
+				srv, ok := freshCfg.Tools.MCP.Servers[serverName]
+				if !ok {
+					return current, fmt.Errorf("server %s not in config", serverName)
+				}
+				srv.Headers = freshCfg.ResolveOAuthPlaceholders(srv.Headers)
+				srv.Env = freshCfg.ResolveOAuthPlaceholders(srv.Env)
+				return srv, nil
+			})
+		}
 
 		defaultAgent := al.registry.GetDefaultAgent()
 		workspacePath := al.cfg.WorkspacePath()

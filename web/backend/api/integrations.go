@@ -154,6 +154,7 @@ func (h *Handler) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 			Format(time.RFC3339)
 	}
 	gh.Login = fetchGitHubLogin(r.Context(), token)
+	gh.AuthError = "" // волна 121: успешный connect сбрасывает фатальный статус
 	cfg.Integrations.GitHub = gh
 
 	if err := config.SaveConfig(h.configPath, cfg); err != nil {
@@ -184,6 +185,7 @@ func (h *Handler) handleGitHubStatus(w http.ResponseWriter, r *http.Request) {
 		"connected":  gh.Connected(),
 		"login":      gh.Login,
 		"expires_at": gh.ExpiresAt,
+		"auth_error": gh.AuthError, // волна 121: карточка видит reconnect_required
 	})
 }
 
@@ -200,6 +202,7 @@ func (h *Handler) handleGitHubDisconnect(w http.ResponseWriter, r *http.Request)
 	cfg.Integrations.GitHub.RefreshToken = config.SecureString{}
 	cfg.Integrations.GitHub.ExpiresAt = ""
 	cfg.Integrations.GitHub.Login = ""
+	cfg.Integrations.GitHub.AuthError = ""
 	if err := config.SaveConfig(h.configPath, cfg); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to save config: %v", err), http.StatusInternalServerError)
 		return
@@ -242,11 +245,18 @@ func refreshGitHubToken(ctx context.Context, gh *config.GitHubIntegrationConfig)
 	return nil
 }
 
+// postGitHubTokenForm — обёртка общего механизма (волна 121, срез А).
 func postGitHubTokenForm(ctx context.Context, form url.Values) (string, string, int, error) {
+	return postOAuthTokenForm(ctx, "github", githubTokenURL, form)
+}
+
+// postOAuthTokenForm — общий POST к token endpoint'у интеграций
+// (волна 121, срез А): один механизм на провайдера, не копипаста.
+func postOAuthTokenForm(ctx context.Context, provider, tokenURL string, form url.Values) (string, string, int, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		githubTokenURL,
+		tokenURL,
 		strings.NewReader(form.Encode()),
 	)
 	if err != nil {
@@ -274,10 +284,10 @@ func postGitHubTokenForm(ctx context.Context, form url.Values) (string, string, 
 		return "", "", 0, fmt.Errorf("bad token response: %w", err)
 	}
 	if out.Error != "" {
-		return "", "", 0, fmt.Errorf("github: %s (%s)", out.Error, out.ErrorDesc)
+		return "", "", 0, fmt.Errorf("%s: %s (%s)", provider, out.Error, out.ErrorDesc)
 	}
 	if out.AccessToken == "" {
-		return "", "", 0, fmt.Errorf("github: empty access_token (http %d)", resp.StatusCode)
+		return "", "", 0, fmt.Errorf("%s: empty access_token (http %d)", provider, resp.StatusCode)
 	}
 	return out.AccessToken, out.RefreshToken, out.ExpiresIn, nil
 }

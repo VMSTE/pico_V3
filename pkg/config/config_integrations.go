@@ -20,6 +20,10 @@ type NotionIntegrationConfig struct {
 	AccessToken   SecureString `json:"access_token,omitzero"  yaml:"access_token,omitempty"`
 	RefreshToken  SecureString `json:"refresh_token,omitzero" yaml:"refresh_token,omitempty"`
 	WorkspaceName string       `json:"-"                      yaml:"workspace_name,omitempty"`
+	// Волна 121 (срез А): срок жизни access-токена (RFC3339) + фатальная
+	// ошибка авторизации для карточки (invalid_grant → reconnect_required).
+	ExpiresAt string `json:"-" yaml:"expires_at,omitempty"`
+	AuthError string `json:"-" yaml:"auth_error,omitempty"`
 }
 
 func (n *NotionIntegrationConfig) Connected() bool {
@@ -33,6 +37,8 @@ type GitHubIntegrationConfig struct {
 	RefreshToken SecureString `json:"refresh_token,omitzero" yaml:"refresh_token,omitempty"`
 	ExpiresAt    string       `json:"-"                      yaml:"expires_at,omitempty"`
 	Login        string       `json:"-"                      yaml:"login,omitempty"`
+	// Волна 121 (срез А): invalid_grant → reconnect_required для карточки.
+	AuthError string `json:"-" yaml:"auth_error,omitempty"`
 }
 
 func (g *GitHubIntegrationConfig) Connected() bool {

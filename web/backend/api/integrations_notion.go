@@ -202,7 +202,7 @@ func (h *Handler) handleNotionCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	callbackURL := "http://" + r.Host + notionCallbackPath
 
-	token, refreshToken, workspace, err := exchangeNotionCode(
+	token, refreshToken, workspace, expiresIn, err := exchangeNotionCode(
 		r.Context(), clientID, code, verifier, callbackURL,
 	)
 	if err != nil {
@@ -218,6 +218,11 @@ func (h *Handler) handleNotionCallback(w http.ResponseWriter, r *http.Request) {
 	if workspace != "" {
 		n.WorkspaceName = workspace
 	}
+	// Волна 121 (срез А): срок жизни для тикера + сброс фатального статуса.
+	if expiresIn > 0 {
+		n.ExpiresAt = time.Now().Add(time.Duration(expiresIn) * time.Second).UTC().Format(time.RFC3339)
+	}
+	n.AuthError = ""
 	cfg.Integrations.Notion = n
 	upsertNotionMCPServer(cfg)
 	// Волна 117-fix: ACL-политика пишется сама при connect — иначе
@@ -263,8 +268,10 @@ func (h *Handler) handleNotionStatus(w http.ResponseWriter, r *http.Request) {
 	n := cfg.Integrations.Notion
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"connected": n.Connected(),
-		"workspace": n.WorkspaceName,
+		"connected":  n.Connected(),
+		"workspace":  n.WorkspaceName,
+		"expires_at": n.ExpiresAt, // волна 121
+		"auth_error": n.AuthError, // волна 121: карточка видит reconnect_required
 	})
 }
 
@@ -280,6 +287,8 @@ func (h *Handler) handleNotionDisconnect(w http.ResponseWriter, r *http.Request)
 	cfg.Integrations.Notion.AccessToken = config.SecureString{}
 	cfg.Integrations.Notion.RefreshToken = config.SecureString{}
 	cfg.Integrations.Notion.WorkspaceName = ""
+	cfg.Integrations.Notion.ExpiresAt = ""
+	cfg.Integrations.Notion.AuthError = ""
 	if srv, ok := cfg.Tools.MCP.Servers["notion"]; ok {
 		srv.Enabled = false
 		cfg.Tools.MCP.Servers["notion"] = srv
@@ -295,7 +304,7 @@ func (h *Handler) handleNotionDisconnect(w http.ResponseWriter, r *http.Request)
 func exchangeNotionCode(
 	ctx context.Context,
 	clientID, code, verifier, redirectURI string,
-) (string, string, string, error) {
+) (string, string, string, int, error) {
 	form := url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
@@ -307,36 +316,59 @@ func exchangeNotionCode(
 		ctx, http.MethodPost, notionTokenURL, strings.NewReader(form.Encode()),
 	)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", 0, err
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", 0, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", 0, err
 	}
 	var out struct {
 		AccessToken   string `json:"access_token"`
 		RefreshToken  string `json:"refresh_token"`
 		WorkspaceName string `json:"workspace_name"`
+		ExpiresIn     int    `json:"expires_in"`
 		Error         string `json:"error"`
 		ErrorDesc     string `json:"error_description"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
-		return "", "", "", fmt.Errorf("bad token response: %w", err)
+		return "", "", "", 0, fmt.Errorf("bad token response: %w", err)
 	}
 	if out.Error != "" {
-		return "", "", "", fmt.Errorf("notion: %s (%s)", out.Error, out.ErrorDesc)
+		return "", "", "", 0, fmt.Errorf("notion: %s (%s)", out.Error, out.ErrorDesc)
 	}
 	if out.AccessToken == "" {
-		return "", "", "", fmt.Errorf("notion: empty access_token (http %d)", resp.StatusCode)
+		return "", "", "", 0, fmt.Errorf("notion: empty access_token (http %d)", resp.StatusCode)
 	}
-	return out.AccessToken, out.RefreshToken, out.WorkspaceName, nil
+	return out.AccessToken, out.RefreshToken, out.WorkspaceName, out.ExpiresIn, nil
+}
+
+// refreshNotionToken (волна 121, срез А): public client — refresh grant
+// с client_id БЕЗ client_secret. Ротация: новый refresh всегда перезаписывает,
+// пустой новый → сохраняем старый.
+func refreshNotionToken(ctx context.Context, n *config.NotionIntegrationConfig) error {
+	token, refreshToken, expiresIn, err := postOAuthTokenForm(ctx, "notion", notionTokenURL, url.Values{
+		"client_id":     {n.ClientID},
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {n.RefreshToken.String()},
+	})
+	if err != nil {
+		return err
+	}
+	n.AccessToken = *config.NewSecureString(token)
+	if refreshToken != "" {
+		n.RefreshToken = *config.NewSecureString(refreshToken)
+	}
+	if expiresIn > 0 {
+		n.ExpiresAt = time.Now().Add(time.Duration(expiresIn) * time.Second).UTC().Format(time.RFC3339)
+	}
+	return nil
 }
 
 // writeNotionACL: сервер notion получает политику автоматически.
