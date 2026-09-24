@@ -53,6 +53,8 @@ func agentCmd(message, sessionKey, model string, debug bool) error {
 	defer msgBus.Close()
 	agentLoop := agent.NewAgentLoop(cfg, msgBus, provider)
 	defer agentLoop.Close()
+	// Волна 121 (срез А): путь к config.json для освежения OAuth-конфигов MCP на 401.
+	agentLoop.SetMCPConfigPath(internal.GetConfigPath())
 
 	// Print agent startup info (only for interactive mode)
 	startupInfo := agentLoop.GetStartupInfo()

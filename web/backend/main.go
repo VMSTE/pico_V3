@@ -588,6 +588,9 @@ func main() {
 	apiHandler.SetServerBindHost(hostInput, hostOverrideActive)
 	apiHandler.RegisterRoutes(mux)
 
+	// Волна 121 (срез А): фоновый рефреш OAuth-токенов интеграций (github, notion).
+	apiHandler.StartIntegrationRefresher()
+
 	// Frontend Embedded Assets
 	registerEmbedRoutes(mux)
 

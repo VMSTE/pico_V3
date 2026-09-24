@@ -31,6 +31,19 @@ var toolsListChangedHook atomic.Value // func(serverName string)
 
 // SetOnToolsListChanged подписывает на уведомления tools/list_changed от всех
 // серверов. Вызывается один раз при wiring (event-driven Rug Pull Guard).
+
+// ServerConfigRefresher возвращает свежий конфиг сервера (волна 121, срез А):
+// гейтвар читает config.json с диска и перерезолвит ${oauth:*} — токен мог
+// рефрешнуть лаунчер, пока гейтвар жил со старым in-memory конфигом.
+type ServerConfigRefresher func(serverName string, current config.MCPServerConfig) (config.MCPServerConfig, error)
+
+// SetServerConfigRefresher подключает освежатель (один раз при сборке агента).
+func (m *Manager) SetServerConfigRefresher(fn ServerConfigRefresher) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.configRefresher = fn
+}
+
 func (m *Manager) SetOnToolsListChanged(fn func(serverName string)) {
 	if fn != nil {
 		toolsListChangedHook.Store(fn)
@@ -166,9 +179,12 @@ type Manager struct {
 	// D-AUDIT-73: per-server RPM limiters (security.mcp).
 	limiters map[string]*rate.Limiter
 	servers  map[string]*ServerConnection
-	mu       sync.RWMutex
-	closed   atomic.Bool    // changed from bool to atomic.Bool to avoid TOCTOU race
-	wg       sync.WaitGroup // tracks in-flight CallTool calls
+	// Волна 121 (срез А): освежатель конфига сервера перед reconnect на 401.
+	// nil → reconnect со старым конфигом (поведение до волны 121).
+	configRefresher ServerConfigRefresher
+	mu              sync.RWMutex
+	closed          atomic.Bool    // changed from bool to atomic.Bool to avoid TOCTOU race
+	wg              sync.WaitGroup // tracks in-flight CallTool calls
 }
 
 var connectServerFunc = connectServer
@@ -581,6 +597,32 @@ func (m *Manager) CallTool(
 			}
 		}
 
+		if isAuthCallError(err) {
+			// Волна 121 (срез А): токен мог рефрешнуть лаунчер — перечитываем
+			// конфиг сервера с диска. Тот же Bearer → не переподключаемся.
+			if freshCfg, ok := m.freshServerConfig(serverName, conn.Config); ok {
+				oldAuth := conn.Config.Headers["Authorization"]
+				if newAuth := freshCfg.Headers["Authorization"]; oldAuth != "" && newAuth != oldAuth {
+					logger.WarnCF("mcp", "MCP server auth error, reconnecting with refreshed token",
+						map[string]any{
+							"server": serverName,
+							"tool":   toolName,
+							"error":  err.Error(),
+						})
+
+					reconnectedConn, reconnectErr := m.reconnectServerWithConfig(ctx, serverName, conn, freshCfg)
+					if reconnectErr != nil {
+						return nil, fmt.Errorf("failed to reconnect MCP server with refreshed token: %w", reconnectErr)
+					}
+
+					result, err = reconnectedConn.Session.CallTool(ctx, params)
+					if err == nil {
+						return result, nil
+					}
+				}
+			}
+		}
+
 		return nil, fmt.Errorf("failed to call tool: %w", err)
 	}
 
@@ -641,6 +683,37 @@ func listServerTools(
 	return tools, nil
 }
 
+// isAuthCallError (волна 121, срез А): ошибка класса «токен мёртв».
+// Отдельно от shouldReconnectCallError: stdio-сервер с потерянной сессией
+// reconnect'ится с тем же env легально, а http 401 без смены Bearer
+// переподключать бессмысленно.
+func isAuthCallError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unauthorized") ||
+		strings.Contains(msg, "401") ||
+		strings.Contains(msg, "invalid_token")
+}
+
+// freshServerConfig: свежий конфиг сервера через колбэк гейтвара (волна 121).
+func (m *Manager) freshServerConfig(serverName string, current config.MCPServerConfig) (config.MCPServerConfig, bool) {
+	m.mu.RLock()
+	fn := m.configRefresher
+	m.mu.RUnlock()
+	if fn == nil {
+		return current, false
+	}
+	fresh, err := fn(serverName, current)
+	if err != nil {
+		logger.WarnCF("mcp", "MCP server config refresh failed",
+			map[string]any{"server": serverName, "error": err.Error()})
+		return current, false
+	}
+	return fresh, true
+}
+
 func shouldReconnectCallError(err error) bool {
 	if err == nil {
 		return false
@@ -655,6 +728,20 @@ func (m *Manager) reconnectServer(
 	ctx context.Context,
 	serverName string,
 	staleConn *ServerConnection,
+) (*ServerConnection, error) {
+	if staleConn == nil {
+		return nil, fmt.Errorf("server %s not found", serverName)
+	}
+	return m.reconnectServerWithConfig(ctx, serverName, staleConn, staleConn.Config)
+}
+
+// reconnectServerWithConfig: reconnect с явным конфигом (волна 121, срез А) —
+// 401-путь передаёт освежённый с диска конфиг вместо staleConn.Config.
+func (m *Manager) reconnectServerWithConfig(
+	ctx context.Context,
+	serverName string,
+	staleConn *ServerConnection,
+	freshCfg config.MCPServerConfig,
 ) (*ServerConnection, error) {
 	if staleConn == nil {
 		return nil, fmt.Errorf("server %s not found", serverName)
@@ -677,7 +764,7 @@ func (m *Manager) reconnectServer(
 		return currentConn, nil
 	}
 
-	freshConn, err := connectServerFunc(ctx, serverName, staleConn.Config)
+	freshConn, err := connectServerFunc(ctx, serverName, freshCfg)
 	if err != nil {
 		return nil, err
 	}
