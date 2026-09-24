@@ -188,10 +188,14 @@ type turnState struct {
 	userMessage string
 	media       []string
 
-	phase        TurnPhase
-	iteration    int
-	startedAt    time.Time
-	finalContent string
+	phase     TurnPhase
+	iteration int
+	startedAt time.Time
+
+	// Волна 120-fix: база отсчёта звеньев цепочки — обнуляется при
+	// ротации, иначе каждая итерация за порогом триггерит ротацию снова.
+	rotationBaseIteration int
+	finalContent          string
 
 	followUps []bus.InboundMessage
 
