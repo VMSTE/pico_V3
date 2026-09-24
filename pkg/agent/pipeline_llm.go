@@ -643,11 +643,15 @@ func (al *AgentLoop) checkAndRotateSession(
 		return
 	}
 	sl := ps.Session(ts.sessionKey)
-	if !sl.CheckRotationTriggers(ctxPct, chainCalls) {
+	// Волна 120-fix: отсчёт от последней ротации — ротация = новая цепочка
+	// (D-56). Без сброса каждая итерация за порогом ротировала бы снова.
+	chainSinceRotation := chainCalls - ts.rotationBaseIteration
+	if !sl.CheckRotationTriggers(ctxPct, chainSinceRotation) {
 		return
 	}
+	ts.rotationBaseIteration = chainCalls
 	al.rotateSessionWithNotice(ctx, ts, sl,
-		fmt.Sprintf("контекст %.0f%% окна, %d звеньев цепочки", ctxPct, chainCalls))
+		fmt.Sprintf("контекст %.0f%% окна, %d звеньев цепочки", ctxPct, chainSinceRotation))
 }
 
 // rotateSessionBySignal — форс-ротация без проверки порогов (предиктивный
