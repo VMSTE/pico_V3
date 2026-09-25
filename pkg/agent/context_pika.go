@@ -150,7 +150,7 @@ func pikaContextManagerFactory(
 		al.autoEvent = autoHandler
 		_ = al.MountHook(HookRegistration{
 			Name: "autoevent",
-			Hook: &autoEventAdapter{handler: autoHandler},
+			Hook: &autoEventAdapter{handler: autoHandler, parseMCPTool: al.parseMCPTool},
 		})
 	}
 	if arch == nil {

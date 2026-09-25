@@ -146,7 +146,10 @@ func TestAutoEvent_WriteOp(t *testing.T) {
 	}
 }
 
-func TestAutoEvent_ReadOpSkipped(t *testing.T) {
+// Волна 121 (срез Б): контракт изменён решением founder'а (25 сен) —
+// неизвестный ключ больше НЕ дропается: generic-fallback пишет tool_call
+// (D-AUDIT-121: журнал всех тулов). До этого read-опы молча терялись.
+func TestAutoEvent_GenericFallbackWritesUnknownKey(t *testing.T) {
 	h, db := setupAutoEventTest(t)
 	ctx := context.Background()
 	sid := "test-read-skip"
@@ -157,8 +160,12 @@ func TestAutoEvent_ReadOpSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c := countEvents(t, db, sid); c != 0 {
-		t.Fatalf("expected 0 events, got %d", c)
+	if c := countEvents(t, db, sid); c != 1 {
+		t.Fatalf("expected 1 event (generic fallback), got %d", c)
+	}
+	types := getEventTypes(t, db, sid)
+	if types[0] != "tool_call" {
+		t.Fatalf("expected tool_call, got %q", types[0])
 	}
 }
 
@@ -422,7 +429,8 @@ func TestBuildAutoEventConfig_EndToEnd(t *testing.T) {
 		{"mcp.srv", "call", false},
 		{"mcp.srv", "blocked", true},
 		{"rad", "blocked", true},
-		{"unknown", "op", false}, // неизвестный ключ — тишина, не пишется
+		// Волна 121 (срез Б): неизвестный ключ — generic tool_call (D-AUDIT-121).
+		{"unknown", "op", false},
 	} {
 		if herr := h.HandleToolResult(ctx, tc.tool, tc.op, tc.isErr, "s1", "1"); herr != nil {
 			t.Fatal(herr)
@@ -433,10 +441,10 @@ func TestBuildAutoEventConfig_EndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(evts) != 3 {
-		t.Fatalf("expected 3 events, got %d", len(evts))
+	if len(evts) != 4 {
+		t.Fatalf("expected 4 events, got %d", len(evts))
 	}
-	wantTypes := []string{"mcp_call", "mcp_blocked", "rad_anomaly"}
+	wantTypes := []string{"mcp_call", "mcp_blocked", "rad_anomaly", "tool_call"}
 	for i, w := range wantTypes {
 		if evts[i].Type != w {
 			t.Errorf("event %d type = %q, want %q", i, evts[i].Type, w)

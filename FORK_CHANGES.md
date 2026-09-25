@@ -1320,3 +1320,18 @@ Each entry maps to a single wave/phase and its merged PR.
 - **config/config.example.json** — ops: mcp.github.write → always; ACL-пример github: read+write тулы (запись всё равно через confirm).
 - **Тесты**: confirm_gate_mcp_test.go — write/delete через MCP спрашивают, read молчит, разбор имён.
 - Гейты: gofmt/build/vet + pkg/pika + pkg/agent + pkg/config зелёные.
+
+## Волна 120 — Контур памяти: архив, ротация сессий, таймауты спутников, empty=transient (ТЗ-120) · 24 сен 2026
+
+- withSatelliteTimeout 600s для Архивариуса/Атомизатора/Рефлексора (общий background-провайдер; был общий дефолт 120s → deadline exceeded у атомизатора).
+- botmemory.go ArchiveAndDeleteTurns: messages-скан pika_session_id int→string (в проде TEXT sk_v1_...:<unix>) — архив был мёртв всю жизнь базы (messages=3199, messages_archive=0; повтор бага волны 93).
+- Ротация подключена по архитектуре (§2.6, D-56, D-107): checkAndRotateSession/rotateSessionBySignal/rotateSessionWithNotice в pipeline_llm.go + форс-ротация при предиктивном переполнении (pipeline_setup.go). Фикс единиц: ctxPct слался долей 0–1, датчик ждал проценты — триггер по контексту не мог сработать никогда.
+- isEmptyLLMResponse: пустой 200 → 2 ретрая (2s/4s) + лог finish_reason/usage, потом честная заглушка.
+- 120-fix: turnState.rotationBaseIteration — счётчик цепочки обнуляется после ротации (регрессионный тест: 8→ротация, 9→нет, 16→ротация). До фикса каждая итерация после ротации триггерила новую.
+- Калибровка боя: context_window step-3.5-flash = 262144 в конфиге (фолбэк maxTokens×4=131072 давал ложные ротации «прогноз до вызова»; факт окна из первоисточника OpenRouter/StepFun).
+## Волна 121 — OAuth refresh-контур + MCP health/events/единый парсер имён (ТЗ-121) · 24–25 сен 2026
+
+- Срез А (OAuth): фоновый тикер лаунчера (5 мин + первый прогон на старте) рефрешит токены github/notion за буфер 5 мин до ExpiresAt; invalid_grant → auth_error=reconnect_required в карточке (тик по провайдеру стоп). Корень боя: refreshGitHubToken существовал, но триггерился только поллом карточки. Обобщённый postOAuthTokenForm; Notion += ExpiresAt + refreshNotionToken (public client, без secret); ротация refresh-токена всегда перезаписывает. Гейтвар: 401/Unauthorized от MCP → SetServerConfigRefresher перечитывает конфиг с диска → reconnectServerWithConfig → 1 ретрай; тот же Bearer → без reconnect. Single-writer: пишет только лаунчер, атомарно (WriteFileAtomic).
+- Срез Б (security): ProcessToolOutput парсил сервер по «__», реальные имена mcp_<srv>_<tool> — весь MCP-вывод шёл по профилю «unknown»: per-server политики sanitize и taint молчали с рождения. Единый ParseMCPToolName по реестру серверов (longest-prefix, одна sanitize-конвенция) — потребители: гарда, журнал событий, подсказки not-found.
+- Срез Б (events=0): три рассинхрона конвенций («__»-гейт, точки vs подчёркивания в ключах, operation из несуществующего args["operation"]). Один писатель — EventBus/autoEventAdapter; мёртвый inline-писатель в pipeline_execute снесён (решение founder'а). Generic tool_call/tool_call_fail для ВСЕХ тулов (D-AUDIT-121; старый контракт «неизвестный ключ → дроп» отменён, тесты-сторожа переписаны). Payload += Blocked/Sanitized — события mcp.<srv>.blocked/sanitized живы.
+- Срез Б (health для модели): Manager.ServerStatuses (connect/reconnect/fail с причиной); mcpServerPromptContributor с живым statusFn; настроенные, но недоступные серверы видны модели как «CONFIGURED but UNAVAILABLE → переподключи в карточке /mcp» — контракт «НЕ утверждай, что не установлено» (бой 24 сен). Tool not found → список зарегистрированных MCP-тулов + причины-кандидаты (disconnect/ACL).

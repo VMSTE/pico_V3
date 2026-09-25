@@ -182,9 +182,12 @@ type Manager struct {
 	// Волна 121 (срез А): освежатель конфига сервера перед reconnect на 401.
 	// nil → reconnect со старым конфигом (поведение до волны 121).
 	configRefresher ServerConfigRefresher
-	mu              sync.RWMutex
-	closed          atomic.Bool    // changed from bool to atomic.Bool to avoid TOCTOU race
-	wg              sync.WaitGroup // tracks in-flight CallTool calls
+	// Волна 121 (срез Б): живые статусы серверов (connected/failed+причина) —
+	// читает prompt-контрибьютор, модель видит здоровье MCP.
+	statuses map[string]*ServerStatus
+	mu       sync.RWMutex
+	closed   atomic.Bool    // changed from bool to atomic.Bool to avoid TOCTOU race
+	wg       sync.WaitGroup // tracks in-flight CallTool calls
 }
 
 var connectServerFunc = connectServer
@@ -192,7 +195,8 @@ var connectServerFunc = connectServer
 // NewManager creates a new MCP manager
 func NewManager() *Manager {
 	return &Manager{
-		servers: make(map[string]*ServerConnection),
+		servers:  make(map[string]*ServerConnection),
+		statuses: make(map[string]*ServerStatus),
 	}
 }
 
@@ -312,6 +316,38 @@ func (m *Manager) LoadFromMCPConfig(
 	return nil
 }
 
+// ServerStatus — живое состояние MCP-сервера (волна 121, срез Б).
+type ServerStatus struct {
+	Name      string
+	Connected bool
+	Tools     int
+	LastError string
+}
+
+// setStatus / setStatusLocked: пишут все точки коннекта/ошибок.
+func (m *Manager) setStatus(name string, connected bool, tools int, errMsg string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.setStatusLocked(name, connected, tools, errMsg)
+}
+
+func (m *Manager) setStatusLocked(name string, connected bool, tools int, errMsg string) {
+	m.statuses[name] = &ServerStatus{
+		Name: name, Connected: connected, Tools: tools, LastError: errMsg,
+	}
+}
+
+// ServerStatuses: снапшот состояний всех известных серверов.
+func (m *Manager) ServerStatuses() []ServerStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]ServerStatus, 0, len(m.statuses))
+	for _, s := range m.statuses {
+		out = append(out, *s)
+	}
+	return out
+}
+
 // ConnectServer connects to a single MCP server
 func (m *Manager) ConnectServer(
 	ctx context.Context,
@@ -320,6 +356,7 @@ func (m *Manager) ConnectServer(
 ) error {
 	conn, err := connectServerFunc(ctx, name, cfg)
 	if err != nil {
+		m.setStatus(name, false, 0, err.Error())
 		return err
 	}
 
@@ -332,6 +369,7 @@ func (m *Manager) ConnectServer(
 	}
 
 	m.servers[name] = conn
+	m.setStatusLocked(name, true, len(conn.Tools), "")
 	return nil
 }
 
@@ -785,6 +823,7 @@ func (m *Manager) reconnectServerWithConfig(
 
 	if currentConn == staleConn {
 		m.servers[serverName] = freshConn
+		m.setStatusLocked(serverName, true, len(freshConn.Tools), "")
 		staleToClose := staleConn
 		m.mu.Unlock()
 		_ = staleToClose.Session.Close()

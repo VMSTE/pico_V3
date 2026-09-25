@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
@@ -236,6 +235,8 @@ toolLoop:
 							ForUserLen: len(hookResult.ForUser),
 							IsError:    hookResult.IsError,
 							Async:      hookResult.Async,
+							// Blocked/Sanitized: hook-ветка sanitize не проходит —
+							// разрыв зафиксирован в ТЗ-121 (срез Б), отдельный фикс.
 						},
 					)
 
@@ -486,34 +487,28 @@ toolLoop:
 			return ToolControlBreak
 		}
 
-		// PIKA-V3: журнал событий для MCP-вызовов (D-SEC-MCP слой 5,
-		// D-AUDIT-59). Ключи mcp.<сервер>.call/call_fail/blocked. Пишет Go.
-		mcpEventBlocked := false
-		mcpEventServer, isMCPTool := mcpServerFromToolName(toolName)
-
 		// PIKA-V3: MCP Security — sanitize MCP tool output (TZ-v2-9b).
+		// Волна 121 (срез Б): сервер/тул — единый парсер по реестру серверов.
+		// Inline-писатель events СНЕСЁН (мёртвый дубль, "__"-гейт): журнал пишет
+		// ТОЛЬКО EventBus (autoEventAdapter, D-136a); флаги — в ToolExecEndPayload.
+		mcpEventServer, mcpToolName, isMCP := al.parseMCPTool(toolName)
+		if !isMCP {
+			mcpEventServer, mcpToolName = "unknown", toolName
+		}
+		toolBlocked := false
+		toolSanitized := false
 		if al.mcpSecurity != nil && toolResult != nil && !toolResult.IsError {
-			output, blocked := al.mcpSecurity.ProcessToolOutput(toolName, toolResult.ForLLM)
+			output, blocked := al.mcpSecurity.ProcessToolOutput(mcpEventServer, mcpToolName, toolResult.ForLLM)
+			if output != toolResult.ForLLM {
+				toolSanitized = true
+			}
 			toolResult.ForLLM = output
 			if blocked {
 				toolResult.IsError = true
-				mcpEventBlocked = true
+				toolBlocked = true
 			}
 		}
 
-		if isMCPTool && al.autoEvent != nil {
-			op := "call"
-			if toolResult.IsError {
-				op = "call_fail"
-			}
-			if mcpEventBlocked {
-				op = "blocked"
-			}
-			_ = al.autoEvent.HandleToolResult(
-				ctx, "mcp."+mcpEventServer, op, toolResult.IsError,
-				ts.sessionKey, ts.scope.turnID,
-			)
-		}
 		if al.hooks != nil {
 			toolResp, decision := al.hooks.AfterTool(turnCtx, &ToolResultHookResponse{
 				Meta:      ts.eventMeta("runTurn", "turn.tool.after"),
@@ -738,6 +733,8 @@ toolLoop:
 				ForUserLen: len(toolResult.ForUser),
 				IsError:    toolResult.IsError,
 				Async:      toolResult.Async,
+				Blocked:    toolBlocked,   // волна 121 (срез Б)
+				Sanitized:  toolSanitized, // волна 121 (срез Б)
 			},
 		)
 		messages = append(messages, toolResultMsg)
@@ -898,14 +895,4 @@ toolLoop:
 func toolOperationArg(args map[string]any) string {
 	op, _ := args["operation"].(string)
 	return op
-}
-
-// mcpServerFromToolName выделяет имя MCP-сервера из имени инструмента
-// вида "<сервер>__<инструмент>" (та же конвенция, что ProcessToolOutput).
-func mcpServerFromToolName(toolName string) (string, bool) {
-	parts := strings.SplitN(toolName, "__", 2)
-	if len(parts) != 2 || parts[0] == "" {
-		return "", false
-	}
-	return parts[0], true
 }

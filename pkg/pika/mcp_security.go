@@ -394,14 +394,11 @@ func (p *MCPSecurityPipeline) GetTaint() TaintState {
 
 // ProcessToolOutput is a wiring facade: runs SanitizeOutput + applies verdict.
 // toolID is the tool registry name; if it contains "__", splits as server__tool.
-func (p *MCPSecurityPipeline) ProcessToolOutput(toolID string, raw string) (string, bool) {
-	parts := strings.SplitN(toolID, "__", 2)
-	var serverName, toolName string
-	if len(parts) == 2 {
-		serverName, toolName = parts[0], parts[1]
-	} else {
-		serverName, toolName = "unknown", toolID
-	}
+// ProcessToolOutput: serverName/toolName передаёт ВЫЗЫВАЮЩИЙ, разобрав имя
+// через ParseMCPToolName по реестру серверов (волна 121, срез Б). До этого
+// здесь был парсер по "__", не совпадавший с реальными mcp_<srv>_<tool> —
+// весь вывод шёл по профилю "unknown", per-server политики и taint молчали.
+func (p *MCPSecurityPipeline) ProcessToolOutput(serverName, toolName, raw string) (string, bool) {
 	san := p.SanitizeOutput(serverName, toolName, raw)
 	switch san.Verdict {
 	case VerdictBlock:

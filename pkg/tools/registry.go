@@ -199,6 +199,38 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, args map[string
 	return r.ExecuteWithContext(ctx, name, args, "", "", nil)
 }
 
+// toolNotFoundMessage (волна 121, срез Б): честная ошибка со списком
+// доступных MCP-тулов. Бой 24 сен: модель гадала имена по шаблону.
+func toolNotFoundMessage(name string, registered []string) string {
+	if len(name) < 4 || name[:4] != "mcp_" {
+		return fmt.Sprintf("tool %q not found", name)
+	}
+	var mcpNames []string
+	for _, n := range registered {
+		if len(n) >= 4 && n[:4] == "mcp_" {
+			mcpNames = append(mcpNames, n)
+		}
+	}
+	const maxListed = 20
+	if len(mcpNames) > maxListed {
+		mcpNames = mcpNames[:maxListed]
+	}
+	joined := ""
+	for i, n := range mcpNames {
+		if i > 0 {
+			joined += ", "
+		}
+		joined += n
+	}
+	return fmt.Sprintf(
+		"tool %q not found. Registered MCP tools: [%s]. If the one you need is missing: "+
+			"the server may be disconnected (check the /mcp card) or the tool is not in "+
+			"security.mcp.servers allowed_tools (ACL deny-by-default). "+
+			"Do NOT invent tool names — pick from the list.",
+		name, joined,
+	)
+}
+
 // ExecuteWithContext executes a tool with channel/chatID context and optional async callback.
 // If the tool implements AsyncExecutor and a non-nil callback is provided,
 // ExecuteAsync is called instead of Execute — the callback is a parameter,
@@ -222,7 +254,7 @@ func (r *ToolRegistry) ExecuteWithContext(
 			map[string]any{
 				"tool": name,
 			})
-		return ErrorResult(fmt.Sprintf("tool %q not found", name)).WithError(fmt.Errorf("tool not found"))
+		return ErrorResult(toolNotFoundMessage(name, r.List())).WithError(fmt.Errorf("tool not found"))
 	}
 
 	// Validate arguments against the tool's declared schema.

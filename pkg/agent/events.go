@@ -203,6 +203,10 @@ type ToolExecEndPayload struct {
 	ForUserLen int
 	IsError    bool
 	Async      bool
+	// Волна 121 (срез Б): исход MCP-гарды для журнала событий
+	// (mcp.<srv>.blocked / mcp.<srv>.sanitized).
+	Blocked   bool
+	Sanitized bool
 }
 
 // ToolExecSkippedPayload describes a skipped tool call.

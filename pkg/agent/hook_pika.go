@@ -174,6 +174,23 @@ func (a *progressAdapter) OnEvent(
 // Translates EventKindToolExecEnd -> HandleToolResult (D-136a, TZ-v2-8i).
 type autoEventAdapter struct {
 	handler *pika.AutoEventHandler
+	// Волна 121 (срез Б): единый парсер имён MCP-тулов (реестр серверов).
+	parseMCPTool func(toolName string) (server, tool string, ok bool)
+}
+
+// defaultEventOperation (волна 121, срез Б): у большинства тулов нет
+// args["operation"] — без дефолта ключ не совпадал с картой (events=0).
+func defaultEventOperation(toolName string) string {
+	switch toolName {
+	case "search_memory", "search_logs":
+		return "search"
+	case "registry_write":
+		return "write"
+	case "clarify":
+		return "ask"
+	default:
+		return "call"
+	}
 }
 
 func (a *autoEventAdapter) OnEvent(ctx context.Context, evt Event) error {
@@ -184,10 +201,30 @@ func (a *autoEventAdapter) OnEvent(ctx context.Context, evt Event) error {
 	if !ok {
 		return nil
 	}
-	// D-AUDIT-59: настоящие операция/сессия/ход — до этого ключи
-	// никогда не совпадали с таблицей, журнал писал ноль строк.
+	// Волна 121 (срез Б): единственный писатель журнала. Ключи — из реестра
+	// серверов, не строковой магии: mcp.<srv>.call/call_fail/blocked/sanitized
+	// для MCP; brain-дефолты по имени тула; остальные — generic tool.call.
+	toolName, op := p.Tool, p.Operation
+	if a.parseMCPTool != nil {
+		if server, _, isMCP := a.parseMCPTool(p.Tool); isMCP {
+			toolName = "mcp." + server
+			switch {
+			case p.Blocked:
+				op = "blocked"
+			case p.Sanitized:
+				op = "sanitized"
+			case p.IsError:
+				op = "call_fail"
+			default:
+				op = "call"
+			}
+		}
+	}
+	if op == "" {
+		op = defaultEventOperation(p.Tool)
+	}
 	return a.handler.HandleToolResult(
-		ctx, p.Tool, p.Operation, p.IsError,
+		ctx, toolName, op, p.IsError,
 		evt.Meta.SessionKey, evt.Meta.TurnID,
 	)
 }

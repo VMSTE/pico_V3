@@ -45,6 +45,9 @@ var brainAutoEventMap = map[string]string{
 	"registry_write.write_fail": "registry_write_fail",
 	"clarify.ask":               "clarify_ask",
 	"clarify.ask_manager":       "clarify_ask_manager",
+	// Волна 121 (срез Б): generic — любой тул без своей записи (D-AUDIT-121).
+	"tool.call":      "tool_call",
+	"tool.call_fail": "tool_call_fail",
 }
 
 // brainAutoTagMap: hardcoded BRAIN tool -> tags.
@@ -60,6 +63,9 @@ var brainAutoTagMap = map[string][]string{
 	},
 	"clarify.ask":         {"tool:clarify", "op:ask"},
 	"clarify.ask_manager": {"tool:clarify", "op:ask_manager"},
+	// Волна 121 (срез Б): generic-ключи — журнал пишет ВСЕ тулы (D-AUDIT-121).
+	"tool.call":      {"op:call"},
+	"tool.call_fail": {"op:call", "result:fail"},
 }
 
 // NewAutoEventHandler creates handler with merged mappings.
@@ -134,7 +140,17 @@ func (h *AutoEventHandler) HandleToolResult(
 	// 2. Lookup eventType
 	eventType, ok := h.toolTypeMap[key]
 	if !ok {
-		return nil
+		// Волна 121 (срез Б): fallback на generic-ключ — событие не
+		// теряется, даже если у тула нет своей записи в карте.
+		// summary ниже сохраняет настоящее имя тула.
+		genericKey := "tool.call"
+		if isError {
+			genericKey = "tool.call_fail"
+		}
+		eventType, ok = h.toolTypeMap[genericKey]
+		if !ok {
+			return nil
+		}
 	}
 
 	// 3. Runtime guard
@@ -376,6 +392,9 @@ func BuildAutoEventConfig(
 	classes.Diagnostic["registry_write"] = true
 	classes.Diagnostic["clarify_ask"] = true
 	classes.Diagnostic["clarify_ask_manager"] = true
+	// Волна 121 (срез Б): generic tool_call — диагностика (все тулы).
+	classes.Diagnostic["tool_call"] = true
+	classes.Diagnostic["tool_call_fail"] = true
 	classes.Critical["registry_write_fail"] = true
 	if len(serverNames) == 0 {
 		// Без MCP-серверов mcp-классы висят сиротами — убираем,
