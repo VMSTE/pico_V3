@@ -48,6 +48,8 @@ type mcpServerPromptContributor struct {
 	serverName string
 	toolCount  int
 	deferred   bool
+	// Волна 121 (срез Б): живой статус сервера (nil → поведение как раньше).
+	statusFn func(serverName string) (connected bool, tools int, lastError string, ok bool)
 }
 
 func (c mcpServerPromptContributor) PromptSource() PromptSourceDescriptor {
@@ -65,7 +67,38 @@ func (c mcpServerPromptContributor) ContributePrompt(
 	_ PromptBuildRequest,
 ) ([]PromptPart, error) {
 	serverName := strings.TrimSpace(c.serverName)
-	if serverName == "" || c.toolCount <= 0 {
+	if serverName == "" {
+		return nil, nil
+	}
+
+	// Волна 121 (срез Б): настроен, но недоступен → модель обязана сказать
+	// «переподключи в карточке /mcp», а НЕ «интеграция не установлена»
+	// (бой 24 сен: агент честно врал «Notion не подключён» при мёртвом токене).
+	if c.statusFn != nil {
+		if connected, _, lastError, ok := c.statusFn(serverName); ok && !connected {
+			reason := strings.TrimSpace(lastError)
+			if reason == "" {
+				reason = "unknown"
+			}
+			return []PromptPart{{
+				ID:     "capability.mcp." + promptSourceComponent(serverName),
+				Layer:  PromptLayerCapability,
+				Slot:   PromptSlotMCP,
+				Source: PromptSource{ID: mcpPromptSourceID(serverName), Name: "mcp:" + serverName},
+				Title:  "MCP server UNAVAILABLE",
+				Content: fmt.Sprintf(
+					"MCP server `%s` is CONFIGURED but currently UNAVAILABLE (last error: %s). "+
+						"Do NOT claim it is not installed. Instruct the user: open /mcp and reconnect the card; "+
+						"if the card shows reconnect_required, re-authentication is required.",
+					serverName, reason,
+				),
+				Stable: false,
+				Cache:  PromptCacheEphemeral,
+			}}, nil
+		}
+	}
+
+	if c.toolCount <= 0 {
 		return nil, nil
 	}
 

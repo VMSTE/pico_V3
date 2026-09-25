@@ -184,6 +184,28 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 		agentIDs := al.registry.ListAgentIDs()
 		agentCount := len(agentIDs)
 
+		// Волна 121 (срез Б): статус-контрибьютор для настроенных, но НЕ
+		// подключившихся серверов — модель видит «configured but UNAVAILABLE»
+		// вместо полного молчания (бой 24 сен: «Notion не подключён»).
+		for cfgName := range al.cfg.Tools.MCP.Servers {
+			if _, connected := servers[cfgName]; connected {
+				continue
+			}
+			for _, agentID := range agentIDs {
+				agent, ok := al.registry.GetAgent(agentID)
+				if !ok || agent.ContextBuilder == nil {
+					continue
+				}
+				if err := agent.ContextBuilder.RegisterPromptContributor(mcpServerPromptContributor{
+					serverName: cfgName,
+					statusFn:   mcpStatusFn(mcpManager),
+				}); err != nil {
+					logger.WarnCF("agent", "Failed to register MCP status contributor",
+						map[string]any{"agent_id": agentID, "server": cfgName, "error": err.Error()})
+				}
+			}
+		}
+
 		for serverName, conn := range servers {
 			uniqueTools += len(conn.Tools)
 
@@ -225,6 +247,7 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 					serverName: serverName,
 					toolCount:  len(aclAllow),
 					deferred:   registerAsHidden,
+					statusFn:   mcpStatusFn(mcpManager),
 				}); err != nil {
 					logger.WarnCF("agent", "Failed to register MCP prompt contributor",
 						map[string]any{

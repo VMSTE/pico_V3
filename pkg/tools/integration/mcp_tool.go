@@ -128,6 +128,34 @@ func (t *MCPTool) Name() string {
 	return MCPToolName(t.serverName, t.tool.Name)
 }
 
+// ParseMCPToolName разбирает mcp_<server>_<tool> обратно в сервер и тул —
+// по РЕЕСТРУ известных серверов (longest-prefix с границей "_"), а не
+// строковой магией. Волна 121 (срез Б): заменяет три протухших парсера
+// ("__" в pipeline_execute и ProcessToolOutput, точки в карте событий).
+// Конвенция санитизации одна — та, что в MCPToolName.
+func ParseMCPToolName(name string, serverNames []string) (server, tool string, ok bool) {
+	const pfx = "mcp_"
+	if len(name) <= len(pfx) || name[:len(pfx)] != pfx {
+		return "", "", false
+	}
+	rest := name[len(pfx):]
+	best := ""
+	for _, s := range serverNames {
+		san := sanitizeIdentifierComponent(s)
+		if san == "" || len(san) <= len(best) {
+			continue
+		}
+		if len(rest) > len(san) && rest[:len(san)] == san && rest[len(san)] == '_' {
+			best = san
+		}
+	}
+	if best == "" {
+		return "", "", false
+	}
+	tool = rest[len(best)+1:]
+	return best, tool, true
+}
+
 // MCPToolName возвращает зарегистрированное имя для пары сервер/тул
 // (D-AUDIT-72). Нужен Rug Pull Guard для деактивации тула по имени.
 func MCPToolName(serverName, toolName string) string {
