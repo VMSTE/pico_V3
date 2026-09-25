@@ -81,7 +81,11 @@ jobs:
         run: go generate ./...
 
       - name: Run go test with race detector and coverage
-        run: CGO_ENABLED=1 go test -race -coverprofile=cover.out -tags goolm,stdjson $(go list -tags goolm,stdjson ./... | grep -v 'picoclaw/web/')
+        # Волна 121 (срез Б): -timeout 20m — ВРЕМЕННО. pkg/agent под race жил
+        # в 17s от дефолтных 10m ещё до среза (582.9s на PR #169). Структурный
+        # фикс (шардирование pkg/agent + фейковые часы в sleep-тестах) —
+        # отдельной волной, эта строка тогда удаляется.
+        run: CGO_ENABLED=1 go test -race -timeout 20m -coverprofile=cover.out -tags goolm,stdjson $(go list -tags goolm,stdjson ./... | grep -v 'picoclaw/web/')
 
       - name: Coverage summary
         run: |
