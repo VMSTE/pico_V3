@@ -11,6 +11,7 @@ package api
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/config"
@@ -75,9 +76,17 @@ func refreshProviderIfDue(
 	return authError, false
 }
 
+// integrationRefreshMu сериализует проходы: вызывающих два — тикер
+// (StartIntegrationRefresher) и автостарт гейтвея (refreshIntegrationsSync,
+// волна 121-C). Без мьютекса параллельный рефреш одним старым refresh-токеном
+// у Notion даёт invalid_grant на втором вызове → ложный reconnect_required.
+var integrationRefreshMu sync.Mutex
+
 // refreshIntegrationsOnce — одно тело тика (отдельно от тикера ради тестов).
-// Сериализовано вызывающим: одна горутина, один тик = один проход.
+// Сериализовано integrationRefreshMu: один проход в момент времени.
 func refreshIntegrationsOnce(configPath string, now time.Time) {
+	integrationRefreshMu.Lock()
+	defer integrationRefreshMu.Unlock()
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		logger.ErrorCF("integrations", "refresh tick: cannot load config",
@@ -114,6 +123,12 @@ func refreshIntegrationsOnce(configPath string, now time.Time) {
 				map[string]any{"error": err.Error()})
 		}
 	}
+}
+
+// refreshIntegrationsSync — синхронный проход для вызывающих, которым нужен
+// свежий токен НЕМЕДЛЕННО, а не «когда дотикает» (автостарт гейтвея, 121-C).
+func (h *Handler) refreshIntegrationsSync() {
+	refreshIntegrationsOnce(h.configPath, time.Now())
 }
 
 // StartIntegrationRefresher — сериализованный тикер, живёт с процессом
