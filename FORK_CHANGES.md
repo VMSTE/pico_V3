@@ -1343,3 +1343,10 @@ Each entry maps to a single wave/phase and its merged PR.
 - **web/backend/api/integrations_refresh.go** — MODIFIED: integrationRefreshMu (sync.Mutex) сериализует проходы — вызывающих теперь два (тикер + автостарт); без него параллельный рефреш одним старым refresh-токеном у Notion → invalid_grant на втором → ложный reconnect_required. Хелпер refreshIntegrationsSync (gateway.go без новых импортов).
 - **Тесты**: новых нет осознанно — TryAutoStartGateway имеет side-effect запуска процесса; логика рефреша покрыта TestRefreshIntegrationsOnce_*; новая строка — чистая оркестрация.
 - **Гейты**: gofmt/build зелёные; go test web/backend/api 33.2s зелёный; golangci-lint ./web/backend/... — 3 предсуществующих govet (reflect.Ptr) в config.go, файл вне дифа, кандидат в волну-уборку.
+
+## Волна 123 — busy_timeout на коннекте гейтвея (бой 25 сен: SQLITE_BUSY у autoevent) · 25 сен 2026
+
+- **Корень**: гейтвей открывал bot_memory.db голым путём `sql.Open("sqlite", dbPath)` — без busy_timeout. Пул database/sql раздаёт горутинам разные коннекты; под параллельными писателями (ход агента → messages, autoevent → events, спутники) второй писатель ловил SQLITE_BUSY мгновенно. Бой 25 сен 22:53–22:54: 5 потерянных событий за один ход. PRAGMA через Exec не лечит: действует на один коннект пула.
+- **pkg/pika/migrate.go** — MODIFIED: DSN `file:<path>?_pragma=busy_timeout(5000)` — драйвер применяет к каждому новому коннекту пула; ":memory:" в тестах не тронут. Эталон в том же репо: openPikaDBRW (web/backend/api/session.go).
+- **pkg/pika/migrate_test.go** — MODIFIED: TestMigratePragmas += сторож busy_timeout=5000.
+- **Breaking:** None — поведение только мягче: писатель ждёт до 5s вместо мгновенного BUSY.

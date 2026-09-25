@@ -34,7 +34,15 @@ func Migrate(dbPath string) (*sql.DB, error) {
 			dbPath = f.Name()
 		}
 	}
-	db, err := sql.Open("sqlite", dbPath)
+	// Волна 123: busy_timeout через DSN _pragma — действует на КАЖДЫЙ коннект
+	// пула database/sql (PRAGMA через Exec достал бы одному). Корень боя
+	// 25 сен: autoevent терял события на SQLITE_BUSY под параллельными
+	// писателями. Эталон — openPikaDBRW (web/backend/api/session.go).
+	dsn := dbPath
+	if dbPath != ":memory:" {
+		dsn = fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)", dbPath)
+	}
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("pika/migrate: open %s: %w", dbPath, err)
 	}

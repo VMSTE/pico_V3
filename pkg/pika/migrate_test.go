@@ -131,6 +131,16 @@ func TestMigratePragmas(t *testing.T) {
 	if fk != 1 {
 		t.Errorf("expected foreign_keys=1, got %d", fk)
 	}
+
+	// Волна 123: busy_timeout=5000 из DSN — покрывает весь пул коннектов
+	// (бой 25 сен: SQLITE_BUSY у autoevent под параллельными писателями).
+	var bt int
+	if qErr := db.QueryRow("PRAGMA busy_timeout").Scan(&bt); qErr != nil {
+		t.Fatalf("query busy_timeout: %v", qErr)
+	}
+	if bt != 5000 {
+		t.Errorf("expected busy_timeout=5000, got %d", bt)
+	}
 }
 
 func TestFTS5Works(t *testing.T) {
