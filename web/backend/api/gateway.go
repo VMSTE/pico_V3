@@ -336,6 +336,15 @@ func (h *Handler) registerGatewayRoutes(mux *http.ServeMux) {
 // TryAutoStartGateway checks whether gateway start preconditions are met and
 // starts it when possible. Intended to be called by the backend at startup.
 func (h *Handler) TryAutoStartGateway() {
+	// Волна 121 (срез C): гонка старта — гейтвей поднимался через 1s после
+	// старта бэкенда, а первый тик рефрешера шёл асинхронно (сеть до 30s на
+	// провайдера): initialize MCP с протухшим OAuth-токеном падал с
+	// Unauthorized, сервер оставался мёртв до рестарта (бой 25 сен 18:27,
+	// notion; реактивный 401-путь покрывает только вызовы ПОДКЛЮЧЁННОГО
+	// сервера, не провалившийся initialize). Рефрешим СИНХРОННО до подъёма:
+	// при запасе > integrationRefreshBuffer проход — no-op, сеть не дёргается.
+	h.refreshIntegrationsSync()
+
 	// Check PID file first to detect an already-running gateway.
 	pidData := h.sanitizeGatewayPidData(ppid.ReadPidFileWithCheck(globalConfigDir()), nil)
 	if pidData != nil {
