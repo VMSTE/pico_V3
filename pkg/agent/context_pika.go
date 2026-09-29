@@ -296,6 +296,11 @@ type pikaContextManagerAdapter struct {
 	// PIKA-V3: Phase 6
 	topicRegexes     []*regexp.Regexp
 	rotateRegistered sync.Map
+
+	// Волна 124: ротация с прошлой сборки брифа. IsRotation существовал
+	// в ArchivistInput с Phase 6, но никем не ставился — мёртвая ветка
+	// промпта (бой 28 сен: амнезия после каждой ротации). Под мьютексом mu.
+	rotatedSinceBuild bool
 }
 
 // D-AUDIT-101: parallel turns (different sessions) share one adapter —
@@ -333,6 +338,9 @@ func (a *pikaContextManagerAdapter) Assemble(
 			if sl := ps.Session(req.SessionKey); sl != nil {
 				sl.OnRotate(func(_ string) {
 					a.cm.GetArchivist().InvalidateBrief()
+					a.mu.Lock()
+					a.rotatedSinceBuild = true
+					a.mu.Unlock()
 				})
 			}
 		}
@@ -416,9 +424,14 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 		toolCat = agent.Tools.GetSummaries()
 		skillCat = agent.ContextBuilder.ListSkillNames()
 	}
+	c.adapter.mu.Lock()
+	rotated := c.adapter.rotatedSinceBuild
+	c.adapter.rotatedSinceBuild = false
+	c.adapter.mu.Unlock()
 	result, err := c.adapter.cm.GetArchivist().BuildPrompt(
 		ctx, pika.ArchivistInput{
 			SessionKey:           sk,
+			IsRotation:           rotated,
 			Message:              req.CurrentMessage, // D-AUDIT-60: раньше не передавалось!
 			ToolCatalog:          toolCat,
 			SkillCatalog:         skillCat,

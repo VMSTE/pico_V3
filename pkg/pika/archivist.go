@@ -33,7 +33,10 @@ type ArchivistConfig struct {
 	ReasoningDriftOverlapMin  float64
 	RotationLastN             int
 	DefaultLastN              int
-	Model                     string
+	// Волна 124: капы дельты входа в токенах (~4 символа/токен).
+	DeltaMaxTokens         int
+	RotationDeltaMaxTokens int
+	Model                  string
 }
 
 // DefaultArchivistConfig returns sensible defaults (D-107).
@@ -54,6 +57,8 @@ func DefaultArchivistConfig() ArchivistConfig {
 		ReasoningDriftOverlapMin: 0.2,
 		RotationLastN:            10,
 		DefaultLastN:             5,
+		DeltaMaxTokens:           4000,
+		RotationDeltaMaxTokens:   12000,
 		Model:                    "background",
 	}
 }
@@ -152,6 +157,9 @@ type Archivist struct {
 	// молча получал протухший бриф от другого чата (0 LLM-вызовов).
 	builtForSessionKey string
 	builtForScope      string
+	// Волна 124: id последнего сообщения, попавшего во вход прошлой
+	// сборки — дельта следующего входа считается от него.
+	builtAfterMsgID int64
 
 	// PIKA-V3: transient tracking for atom_usage (TZ-v2-9a F-2)
 	currentSessionKey string
@@ -304,6 +312,24 @@ func (a *Archivist) BuildPrompt(
 	}
 
 	// Build user message with all input context
+	// Волна 124: тёплый вход — предыдущий бриф + дельта сообщений чата
+	// с его сборки. Ротация чат не меняет: хвост умершей сессии доезжает
+	// без поиска (handoff из живого контекста, а не из отставших атомов).
+	a.mu.RLock()
+	prevBrief := ""
+	if a.lastResult != nil {
+		prevBrief = a.lastResult.BriefText
+	}
+	watermark := a.builtAfterMsgID
+	a.mu.RUnlock()
+	deltaCap := a.cfg.DeltaMaxTokens
+	if input.IsRotation && a.cfg.RotationDeltaMaxTokens > deltaCap {
+		deltaCap = a.cfg.RotationDeltaMaxTokens
+	}
+	input.PreviousBrief = prevBrief
+	input.WorkSinceBrief = a.mem.GetWorkSince(
+		ctx, input.SessionKey, watermark, deltaCap,
+	)
 	userMsg := a.buildUserMessage(ctx, input)
 
 	// Run agentic loop
@@ -317,6 +343,9 @@ func (a *Archivist) BuildPrompt(
 	}
 
 	// Serialize brief
+	// Волна 124 (бой 28 сен): промптное «без дублей» не сработало
+	// (×3 подряд в AVOID) — дедупит Go, детерминированно.
+	dedupeMemoryBrief(&output.MemoryBrief)
 	briefText := SerializeMemoryBrief(output.MemoryBrief)
 	briefPreview = briefText
 
@@ -330,6 +359,7 @@ func (a *Archivist) BuildPrompt(
 				break
 			}
 			output.MemoryBrief = compressed
+			dedupeMemoryBrief(&output.MemoryBrief)
 			briefText = SerializeMemoryBrief(compressed)
 			if estimateTokens(briefText) <=
 				a.cfg.MemoryBriefSoftLimit {
@@ -349,6 +379,7 @@ func (a *Archivist) BuildPrompt(
 	}
 	a.mu.Lock()
 	a.lastResult = result
+	a.builtAfterMsgID = a.mem.GetMaxMessageID(ctx, input.SessionKey)
 	a.mu.Unlock()
 
 	return result, nil
@@ -419,6 +450,16 @@ func (a *Archivist) buildUserMessage(
 		}
 	}
 
+	if input.PreviousBrief != "" {
+		sb.WriteString("## PREVIOUS_BRIEF\n")
+		sb.WriteString(input.PreviousBrief)
+		sb.WriteString("\n\n")
+	}
+	if input.WorkSinceBrief != "" {
+		sb.WriteString("## WORK_SINCE_BRIEF\n")
+		sb.WriteString(input.WorkSinceBrief)
+		sb.WriteString("\n\n")
+	}
 	sb.WriteString("## Config\n")
 	fmt.Fprintf(&sb,
 		"reasoning_guided_retrieval: %v\n",

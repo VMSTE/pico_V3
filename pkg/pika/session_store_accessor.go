@@ -30,7 +30,7 @@ func (bm *BotMemory) GetLastReasoningText(
 	var text sql.NullString
 	err := bm.db.QueryRowContext(ctx,
 		`SELECT reasoning_text FROM reasoning_log
-		 WHERE pika_session_id = ?
+		 WHERE chat_id = ?
 		   AND reasoning_text IS NOT NULL
 		   AND reasoning_text != ''
 		 ORDER BY id DESC LIMIT 1`,

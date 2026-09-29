@@ -1350,3 +1350,16 @@ Each entry maps to a single wave/phase and its merged PR.
 - **pkg/pika/migrate.go** — MODIFIED: DSN `file:<path>?_pragma=busy_timeout(5000)` — драйвер применяет к каждому новому коннекту пула; ":memory:" в тестах не тронут. Эталон в том же репо: openPikaDBRW (web/backend/api/session.go).
 - **pkg/pika/migrate_test.go** — MODIFIED: TestMigratePragmas += сторож busy_timeout=5000.
 - **Breaking:** None — поведение только мягче: писатель ждёт до 5s вместо мгновенного BUSY.
+
+## Волна 124 (срез А) — Тёплый вход Архивариуса: дельта сессии, живой is_rotation, план переживает ротацию (ТЗ-124) · 29 сен 2026
+
+- **Корень (бой 28 сен, миграция Notion→GitHub)**: ротация выбрасывала рабочий контекст, бриф пересобирался холодно из отставших атомов → «в каком репо?» после каждой ротации (8 ротаций за 40 минут). is_rotation существовал в ArchivistInput, но никем не ставился — ветка ротации в промпте мертва. План искался по pika_session_id с суффиксом ротации → терялся всегда. Бриф без дедупа (×3 дубль в AVOID, trace_spans).
+- **pkg/pika/interfaces.go** — ArchivistInput += PreviousBrief/WorkSinceBrief: модель founder'а — дельта сырьём, поиск = обогащение.
+- **pkg/pika/botmemory_delta.go** — NEW: GetMaxMessageID + GetWorkSince (дельта по watermark последней сборки, кап токенов срезает голову — хвост важнее).
+- **pkg/pika/archivist.go** — watermark builtAfterMsgID рядом с кэшем брифа; вход += секции PREVIOUS_BRIEF/WORK_SINCE_BRIEF; dedupeMemoryBrief на выходе и после compressBrief; конфиг += DeltaMaxTokens (4000) / RotationDeltaMaxTokens (12000). Проводка капов из config.json — срез Б (точка известна: ResolvedAgentConfig.MemoryBrief + mapArchivistConfig).
+- **pkg/pika/archivist_dedup.go** — NEW: дедуп секций брифа (промптное «без дублей» LLM не удержал — дедупит Go).
+- **pkg/agent/context_pika.go** — OnRotate взводит rotatedSinceBuild → следующий BuildPrompt получает IsRotation=true (мёртвая ветка промпта ожила).
+- **pkg/pika/session_store_accessor.go** — GetLastReasoningText по chat_id вместо pika_session_id: ACTIVE_PLAN переживает ротацию.
+- **workspace/prompts/archivist_build.md** — новые входы + обязанность handoff при ротации (task / decisions дословно / сделано-осталось / следующее действие). Деплой: cp в живой workspace (onboard preserve не перезаписывает).
+- **Тесты**: archivist_delta_test.go (watermark-дельта, кап срезает голову, дедуп, тёплые секции).
+- **Breaking:** None — только добавления; fast path кэша брифа не тронут.
