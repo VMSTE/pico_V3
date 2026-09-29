@@ -447,7 +447,9 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 	// ошибка. Промт Архивариуса легально разрешает пустые блоки при
 	// пустом поиске; hard error выкидывал весь MEMORY BRIEF и шумел
 	// в логах на каждый пустой результат.
-	if result == nil || strings.TrimSpace(result.BriefText) == "" {
+	// Волна 124-fix: пустой бриф при живом FOCUS (handoff) — НЕ молчим.
+	if result == nil || (strings.TrimSpace(result.BriefText) == "" &&
+		pika.SerializeFocus(result.Focus) == "") {
 		return nil, nil
 	}
 	// PIKA-V3: Progressive Disclosure — promote recommended tools (Block B2)
@@ -455,8 +457,15 @@ func (c *pikaMemoryBriefContributor) ContributePrompt(
 		len(result.RecommendedTools) > 0 {
 		agent.Tools.PromoteTools(result.RecommendedTools, 2)
 	}
+	// Волна 124-fix (бой 29 сен): FOCUS (handoff: задача/решения/
+	// следующий шаг) СОБИРАЛСЯ архивариусом, но в промпт не попадал.
+	// FOCUS идёт ПЕРЕД брифом — это самое важное после ротации.
+	content := ""
+	if focusText := pika.SerializeFocus(result.Focus); focusText != "" {
+		content = "--- FOCUS ---\n" + focusText + "\n\n"
+	}
 	// PIKA-V3: build content with brief + recommended tools/skills
-	content := "--- MEMORY BRIEF ---\n" + result.BriefText
+	content += "--- MEMORY BRIEF ---\n" + result.BriefText
 	if len(result.RecommendedTools) > 0 {
 		content += "\n--- RECOMMENDED TOOLS ---\n" +
 			strings.Join(result.RecommendedTools, ", ")

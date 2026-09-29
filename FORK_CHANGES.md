@@ -1374,3 +1374,11 @@ Each entry maps to a single wave/phase and its merged PR.
 - **archivist.go:** output_preview брифа 500 → 4000 символов.
 - **Контрактная поправка к ТЗ:** core_prompt_id/context_prompt_id остаются NULL — «CORE/CONTEXT как версионируемый файл» не существует в живой архитектуре (главный промпт собирается динамически); его версия = full_prompt_hash + полный текст в самом снапшоте. Версионируются промпт-ФАЙЛЫ спутников.
 - **Тесты:** prompt_versions_test.go (идемпотентность, v+1, независимость компонентов), migrate_v8_test.go (колонка, запись/чтение full_prompt, версия спутника), prompt_snapshot_test.go (расклад по маркерам, без маркеров = core).
+
+## Волна 124-fix — FOCUS доезжает до промпта: handoff перестал выбрасываться на последней миле (бой 29 сен) · 29 сен 2026
+
+- **Корень (бой 29 сен + снапшоты среза В):** «не нашла репо и критерии» после ротации. prompt_snapshots.full_prompt показал: слова FOCUS в системном промпте НЕТ (instr=0). Чтение кода: Archivist собирает handoff в ArchivistResult.Focus (task/step/mode/blocked/constraints/decisions), но контрибьютор кладёт в промпт только BriefText — Focus выбрасывался. Срез А оживил вход и обязал handoff, но последняя миля была оборвана с рождения.
+- **pkg/pika/archivist.go:** NEW SerializeFocus — FOCUS в текст (пустой Focus → пусто, секция не создаётся).
+- **pkg/agent/context_pika.go:** контент вклада = --- FOCUS --- перед --- MEMORY BRIEF ---; гард волны 88 (пустой бриф → молчим) расширен: молчим только когда пусты ОБА (бриф и focus).
+- **pkg/agent/prompt_snapshot.go:** маркер FOCUS считается в bucket brief (выход архивариуса).
+- **Тест:** focus_serialize_test.go — все 6 полей в тексте, пустой/mode-only Focus → пусто.
