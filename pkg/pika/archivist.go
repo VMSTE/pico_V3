@@ -1159,6 +1159,37 @@ func SerializeMemoryBrief(mb MemoryBrief) string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
+// SerializeFocus (волна 124-fix, бой 29 сен): FOCUS в текст промпта.
+// Бой показал: Архивариус собирал handoff в Focus (задача/решения/
+// следующий шаг), но в системный промпт попадал только BriefText —
+// handoff выбрасывался на последней миле («не нашла репо и критерии»).
+// Пустой Focus → пустая строка (секция не создаётся).
+func SerializeFocus(f Focus) string {
+	if f.Task == "" && f.Step == "" {
+		return ""
+	}
+	var sb strings.Builder
+	if f.Task != "" {
+		fmt.Fprintf(&sb, "TASK: %s\n", f.Task)
+	}
+	if f.Step != "" {
+		fmt.Fprintf(&sb, "STEP: %s\n", f.Step)
+	}
+	if f.Mode != "" {
+		fmt.Fprintf(&sb, "MODE: %s\n", f.Mode)
+	}
+	if f.Blocked != nil && *f.Blocked != "" {
+		fmt.Fprintf(&sb, "BLOCKED: %s\n", *f.Blocked)
+	}
+	for _, c := range f.Constraints {
+		fmt.Fprintf(&sb, "CONSTRAINT: %s\n", c)
+	}
+	for _, d := range f.Decisions {
+		fmt.Fprintf(&sb, "DECISION: %s\n", d)
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
 // estimateTokens gives a rough token count (~4 chars/token).
 func estimateTokens(s string) int {
 	return len(s) / 4

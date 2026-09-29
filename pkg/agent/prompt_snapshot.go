@@ -32,7 +32,8 @@ func promptTokenBreakdown(sp string) map[string]int {
 		bucket := "context"
 		switch {
 		case strings.Contains(name, "MEMORY BRIEF"),
-			strings.Contains(name, "RECOMMENDED"):
+			strings.Contains(name, "RECOMMENDED"),
+			strings.Contains(name, "FOCUS"):
 			bucket = "brief"
 		case strings.Contains(name, "TRAIL"):
 			bucket = "trail"
