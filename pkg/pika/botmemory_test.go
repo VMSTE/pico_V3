@@ -374,7 +374,8 @@ func TestPromptVersionsAndSnapshots(t *testing.T) {
 	err = bm.InsertPromptSnapshot(ctx,
 		"snap-1", "trace-1", "s1", "1",
 		promptID, "", "", tokens,
-		"fullhash", "preview text", 42)
+		"fullhash", "preview text", 42,
+		"full prompt body", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

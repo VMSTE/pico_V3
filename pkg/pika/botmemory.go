@@ -1046,23 +1046,32 @@ func (bm *BotMemory) UpsertPromptVersion(
 }
 
 // InsertPromptSnapshot records a prompt composition snapshot for a trace.
+// Волна 124 (срез В, ТЗ-124): += fullPrompt (полный системный промпт)
+// и satelliteVersions (prompt_id версий спутников: archivarius/atomizer/
+// reflexor). Пустые значения пишутся NULL — отсутствие данных = факт.
 func (bm *BotMemory) InsertPromptSnapshot(
 	ctx context.Context, snapshotID, traceID, sessionID string,
 	turnID string, coreID, ctxID, briefHash string,
 	tokens map[string]int, fullHash, preview string, buildMs int,
+	fullPrompt string, satelliteVersions map[string]string,
 ) error {
 	_, err := bm.db.ExecContext(ctx,
 		`INSERT INTO prompt_snapshots
 		(snapshot_id,trace_id,chat_id,pika_session_id,
 		core_prompt_id,context_prompt_id,brief_hash,
+		archivarius_version,atomizer_version,reflexor_version,
 		core_tokens,context_tokens,brief_tokens,trail_tokens,plan_tokens,
-		full_prompt_hash,full_prompt_preview,build_duration_ms)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		full_prompt_hash,full_prompt_preview,build_duration_ms,full_prompt)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		snapshotID, traceID, sessionID, turnID,
 		strOrNil(coreID), strOrNil(ctxID), strOrNil(briefHash),
+		strOrNil(satelliteVersions["archivarius"]),
+		strOrNil(satelliteVersions["atomizer"]),
+		strOrNil(satelliteVersions["reflexor"]),
 		tokens["core"], tokens["context"], tokens["brief"],
 		tokens["trail"], tokens["plan"],
-		strOrNil(fullHash), strOrNil(preview), buildMs)
+		strOrNil(fullHash), strOrNil(preview), buildMs,
+		strOrNil(fullPrompt))
 	if err != nil {
 		return fmt.Errorf("pika/botmemory: insert snapshot: %w", err)
 	}

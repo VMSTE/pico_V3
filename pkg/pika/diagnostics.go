@@ -285,6 +285,13 @@ func (d *DiagnosticsEngine) BuildSubagentPrompt(ctx context.Context, component s
 	}
 	basePrompt := string(baseData)
 
+	// Волна 124 (срез В, ТЗ-124): версионируем промпт-файл компонента —
+	// prompt_versions ждала писателя с рождения схемы. Тот же хеш →
+	// та же версия (0 записей); ошибка не роняет сборку промпта.
+	if _, verr := d.mem.EnsurePromptVersion(ctx, component, basePrompt); verr != nil {
+		log.Printf("pika/diagnostics: prompt version %s: %v", component, verr)
+	}
+
 	// 3. Query active/verified CRs for this component.
 	rows, err := d.mem.db.QueryContext(ctx,
 		`SELECT data FROM registry
