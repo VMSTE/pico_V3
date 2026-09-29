@@ -284,7 +284,7 @@ func (a *Archivist) BuildPrompt(
 		// Волна 92: превью входа/выхода в спан — цепочку читаем данными.
 		_ = a.mem.SetSpanPreviews(
 			dctx, spanIDarchivist,
-			truncateStr(input.Message, 300), truncateStr(briefPreview, 500),
+			truncateStr(input.Message, 300), truncateStr(briefPreview, 4000),
 		)
 		if a.diag != nil {
 			if retErr != nil {

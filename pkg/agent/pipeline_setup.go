@@ -130,6 +130,7 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 				hex.EncodeToString(h[:]),
 				preview,
 				int(time.Since(assembleStart).Milliseconds()),
+				systemPrompt, nil,
 			)
 		}
 
@@ -165,15 +166,19 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
 			if len(preview) > 200 {
 				preview = preview[:200]
 			}
-			briefTok := 0
-			if idx := strings.Index(sp, "--- MEMORY BRIEF ---"); idx >= 0 {
-				briefTok = (len(sp) - idx) / 4
-			}
+			// Волна 124 (срез В, ТЗ-124): полный расклад токенов по
+			// секциям (promptTokenBreakdown), полный промпт в базу,
+			// версии промптов спутников из prompt_versions.
 			_ = bm.InsertPromptSnapshot(ctx, snapID, trID, ts.sessionKey,
 				tid, "", "", "",
-				map[string]int{"core": len(sp) / 4, "brief": briefTok},
+				promptTokenBreakdown(sp),
 				hex.EncodeToString(h[:]), preview,
-				int(time.Since(assembleStart).Milliseconds()))
+				int(time.Since(assembleStart).Milliseconds()),
+				sp, map[string]string{
+					"archivarius": bm.LatestPromptVersion(ctx, "archivist"),
+					"atomizer":    bm.LatestPromptVersion(ctx, "atomizer"),
+					"reflexor":    bm.LatestPromptVersion(ctx, "reflexor"),
+				})
 		}
 	}
 

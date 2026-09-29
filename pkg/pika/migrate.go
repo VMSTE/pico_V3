@@ -118,6 +118,11 @@ func Migrate(dbPath string) (*sql.DB, error) {
 			description: "artifact_passports — паспорта артефактов, expand-only (D-AUDIT-131, wave 108)",
 			ddl:         migrationV7,
 		},
+		{
+			version:     8,
+			description: "prompt_snapshots.full_prompt — полный системный промпт (ТЗ-124 срез В, wave 124)",
+			ddl:         migrationV8,
+		},
 	}
 
 	for _, m := range migrations {
@@ -621,6 +626,13 @@ CREATE TABLE IF NOT EXISTS artifact_passports (
 );
 
 CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifact_passports(ts);
+`
+
+// Волна 124 (срез В, ТЗ-124): prompt_snapshots += full_prompt — полный
+// системный промпт каждой сборки (постфактум «что видела модель»).
+// Expand-only: существующие строки получают NULL = «до волны не писалось».
+const migrationV8 = `
+ALTER TABLE prompt_snapshots ADD COLUMN full_prompt TEXT;
 `
 
 // PIKA-V3: migrationV2 — rename session_id->chat_id, turn_id->pika_session_id (TEXT).

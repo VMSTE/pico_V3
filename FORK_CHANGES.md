@@ -1363,3 +1363,14 @@ Each entry maps to a single wave/phase and its merged PR.
 - **workspace/prompts/archivist_build.md** — новые входы + обязанность handoff при ротации (task / decisions дословно / сделано-осталось / следующее действие). Деплой: cp в живой workspace (onboard preserve не перезаписывает).
 - **Тесты**: archivist_delta_test.go (watermark-дельта, кап срезает голову, дедуп, тёплые секции).
 - **Breaking:** None — только добавления; fast path кэша брифа не тронут.
+
+## Волна 124 (срез В) — Персист промпта: полный системный промпт в базу, prompt_versions оживлены, честный расклад токенов (ТЗ-124) · 29 сен 2026
+
+- **Корень (✓ база 29 сен):** prompt_snapshots писала только хеш + 200 символов превью; prompt_versions — 0 строк от рождения (таблица без писателя). Постфактум «что видела модель» не отвечался.
+- **migrate.go:** миграция v8 — prompt_snapshots += full_prompt TEXT (expand-only; старые строки NULL = «не писалось»).
+- **pkg/pika/prompt_versions.go (NEW):** EnsurePromptVersion (хеш содержимого → версия; изменение → v+1) + LatestPromptVersion. Писатель в DiagnosticsEngine.BuildSubagentPrompt — единая воронка промптов спутников (archivist/atomizer/reflexor/mcp_guard), ошибка записи не роняет сборку.
+- **botmemory.go:** InsertPromptSnapshot += fullPrompt + satelliteVersions (archivarius/atomizer/reflexor колонки DDL наконец заполнены).
+- **pipeline_setup.go:** снапшот пишет полный промпт + расклад токенов по секциям (promptTokenBreakdown: маркеры "--- NAME ---"; core/brief/trail/plan/context) + версии спутников.
+- **archivist.go:** output_preview брифа 500 → 4000 символов.
+- **Контрактная поправка к ТЗ:** core_prompt_id/context_prompt_id остаются NULL — «CORE/CONTEXT как версионируемый файл» не существует в живой архитектуре (главный промпт собирается динамически); его версия = full_prompt_hash + полный текст в самом снапшоте. Версионируются промпт-ФАЙЛЫ спутников.
+- **Тесты:** prompt_versions_test.go (идемпотентность, v+1, независимость компонентов), migrate_v8_test.go (колонка, запись/чтение full_prompt, версия спутника), prompt_snapshot_test.go (расклад по маркерам, без маркеров = core).
