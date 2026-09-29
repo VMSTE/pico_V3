@@ -18,6 +18,8 @@ Go передаёт тебе structured JSON в user message:
 | user_message | string | Текущее сообщение пользователя (при ротации = последнее) |
 | session_id | string | ID сессии |
 | is_rotation | bool | true при автоматической ротации контекста |
+| previous_brief | string | предыдущий MEMORY BRIEF (пусто при первой сборке) |
+| work_since_brief | string | СЫРЫЕ сообщения чата, накопленные после сборки previous_brief (обе роли). При ротации — весь хвост умершей сессии |
 | active_plan | JSON/null | {steps:[{text,status}]} — текущий план, если есть |
 | config | JSON | {reasoning_guided_retrieval, memory_brief_soft_limit, max_recommended_tools, max_recommended_skills} |
 | tool_catalog | JSON | [{name, description, source}] — полный каталог доступных тулов |
@@ -58,6 +60,11 @@ polarity="negative" первым — ⛔ AVOID важнее ✅ PREFER.
 Ошибки прошлого = самая ценная память. Потеря → повторение.
 
 Если is_rotation=true → добавь aspects: ["archive"] для поиска по предыдущей сессии.
+Плюс (волна 124): WORK_SINCE_BRIEF содержит хвост умершей сессии — восстанови из него
+в FOCUS ОБЯЗАТЕЛЬНО: task (что делали), decisions (решения дословно, без пересказа),
+step (что сделано / что осталось), и в memory_brief.context одной строкой — следующее
+действие. Критерий: пользователь не должен заметить ротацию — модель продолжает
+с места, ничего не переспрашивает.
 
 ### Шаг 2 — Дополнительный retrieval (опционально)
 

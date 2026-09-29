@@ -51,6 +51,11 @@ type ArchivistInput struct {
 	SkillCatalog []string // available skill names
 	// D-AUDIT-60: активный план хода (пусто, если нет)
 	ActivePlan string
+	// Волна 124: тёплый вход (модель founder'а, 29 сен) — предыдущий бриф
+	// + сырая дельта сессии после него (обе роли, кап по токенам).
+	// Архивариус суммирует дельту сам; поиск — только обогащение.
+	PreviousBrief  string
+	WorkSinceBrief string
 	// D-AUDIT-60: лимиты рекомендаций из ToolSelectionConfig
 	MaxRecommendedTools  int
 	MaxRecommendedSkills int
