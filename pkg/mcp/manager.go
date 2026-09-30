@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/time/rate"
@@ -172,6 +173,11 @@ type ServerConnection struct {
 	Session     *mcp.ClientSession
 	Tools       []*mcp.Tool
 	reconnectMu sync.Mutex
+	// Волна 125 (срез Б): процесс stdio-сервера (kill при reap/teardown —
+	// урок Claude Code #74329: брошенный процесс утекает к init) и момент
+	// поднятия (idle-счёт до первого вызова).
+	proc        *exec.Cmd
+	connectedAt time.Time
 }
 
 // Manager manages multiple MCP server connections
@@ -188,6 +194,19 @@ type Manager struct {
 	mu       sync.RWMutex
 	closed   atomic.Bool    // changed from bool to atomic.Bool to avoid TOCTOU race
 	wg       sync.WaitGroup // tracks in-flight CallTool calls
+
+	// Волна 125 (срезы Б+В, ТЗ-125): жизненный цикл + устойчивость.
+	lastUsed    map[string]time.Time         // последний вызов на сервер
+	sleeping    map[string]*ServerConnection // реапнутые (idle), тулы в кэше
+	janitorOnce sync.Once
+	janitorStop chan struct{}
+	janitorDone sync.Once
+
+	// Бэкофф реконнекта (урок hermes-agent: счётчик без сброса после
+	// успеха = гарантированная вечная смерть на длинном аптайме).
+	backoffMu   sync.Mutex
+	failCount   map[string]int
+	nextRetryAt map[string]time.Time
 }
 
 var connectServerFunc = connectServer
@@ -195,8 +214,12 @@ var connectServerFunc = connectServer
 // NewManager creates a new MCP manager
 func NewManager() *Manager {
 	return &Manager{
-		servers:  make(map[string]*ServerConnection),
-		statuses: make(map[string]*ServerStatus),
+		servers:     make(map[string]*ServerConnection),
+		statuses:    make(map[string]*ServerStatus),
+		lastUsed:    make(map[string]time.Time),
+		sleeping:    make(map[string]*ServerConnection),
+		failCount:   make(map[string]int),
+		nextRetryAt: make(map[string]time.Time),
 	}
 }
 
@@ -322,6 +345,10 @@ type ServerStatus struct {
 	Connected bool
 	Tools     int
 	LastError string
+	// State =="idle" (волна 125): сервер спит после idle-reap и поднимется
+	// на следующем вызове. Connected при idle=true (тулы доступны из кэша) —
+	// idle НЕ читается как «упало» ни моделью, ни /mcp.
+	State string
 }
 
 // setStatus / setStatusLocked: пишут все точки коннекта/ошибок.
@@ -370,6 +397,7 @@ func (m *Manager) ConnectServer(
 
 	m.servers[name] = conn
 	m.setStatusLocked(name, true, len(conn.Tools), "")
+	m.startJanitorLocked() // волна 125: idle-reap janitor
 	return nil
 }
 
@@ -404,6 +432,7 @@ func connectServer(
 	// Create transport based on configuration
 	// Auto-detect transport type if not explicitly specified
 	var transport mcp.Transport
+	var stdioCmd *exec.Cmd // волна 125: процесс для kill при reap/teardown
 	transportType := cfg.Type
 
 	// Auto-detect: if URL is provided, use SSE; if command is provided, use stdio
@@ -511,6 +540,7 @@ func connectServer(
 			env = append(env, fmt.Sprintf("%s=%s", k, v))
 		}
 		cmd.Env = env
+		stdioCmd = cmd
 		transport = &isolatedCommandTransport{Command: cmd}
 	default:
 		return nil, fmt.Errorf(
@@ -543,11 +573,13 @@ func connectServer(
 	}
 
 	return &ServerConnection{
-		Name:    name,
-		Config:  cfg,
-		Client:  client,
-		Session: session,
-		Tools:   tools,
+		Name:        name,
+		Config:      cfg,
+		Client:      client,
+		Session:     session,
+		Tools:       tools,
+		proc:        stdioCmd,
+		connectedAt: time.Now(),
 	}, nil
 }
 
@@ -596,7 +628,15 @@ func (m *Manager) CallTool(
 	m.mu.RUnlock()
 
 	if !ok {
-		return nil, fmt.Errorf("server %s not found", serverName)
+		// Волна 125 (срез Б): сервер может спать после idle-reap — будим
+		// со свежим конфигом (токен резолвится на спавне, а не сидит
+		// часами в env). Не спит → честный not found, как раньше.
+		wokeConn, wakeErr := m.wakeServer(ctx, serverName)
+		if wakeErr != nil {
+			return nil, wakeErr
+		}
+		conn = wokeConn
+		m.wg.Add(1)
 	}
 
 	// D-AUDIT-73: per-server RPM (security.mcp). Неблокирующе: превышение →
@@ -608,6 +648,7 @@ func (m *Manager) CallTool(
 		)
 	}
 	defer m.wg.Done()
+	defer m.touchServer(serverName) // волна 125: активность для idle-reap
 
 	params := &mcp.CallToolParams{
 		Name:      toolName,
@@ -735,6 +776,8 @@ func isAuthCallError(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unauthorized") ||
 		strings.Contains(msg, "401") ||
+		strings.Contains(msg, "403") ||
+		strings.Contains(msg, "bad credentials") ||
 		strings.Contains(msg, "invalid_token")
 }
 
@@ -807,6 +850,12 @@ func (m *Manager) reconnectServerWithConfig(
 		return nil, fmt.Errorf("server %s not found", serverName)
 	}
 
+	// Волна 125 (срез В): бэкофф — не долбим умирающий сервер.
+	if wait := m.reconnectBlocked(serverName); wait > 0 {
+		return nil, fmt.Errorf("MCP server %q reconnect backoff, retry in %s",
+			serverName, wait.Round(time.Second))
+	}
+
 	staleConn.reconnectMu.Lock()
 	defer staleConn.reconnectMu.Unlock()
 
@@ -826,29 +875,33 @@ func (m *Manager) reconnectServerWithConfig(
 
 	freshConn, err := connectServerFunc(ctx, serverName, freshCfg)
 	if err != nil {
+		m.recordReconnectFail(serverName) // волна 125: экспонента бэкоффа
 		return nil, err
 	}
 
 	m.mu.Lock()
 	if m.closed.Load() {
 		m.mu.Unlock()
-		_ = freshConn.Session.Close()
+		closeServerConn(freshConn)
 		return nil, fmt.Errorf("manager is closed")
 	}
 
 	currentConn, ok = m.servers[serverName]
 	if !ok {
 		m.mu.Unlock()
-		_ = freshConn.Session.Close()
+		closeServerConn(freshConn)
 		return nil, fmt.Errorf("server %s not found", serverName)
 	}
 
 	if currentConn == staleConn {
 		m.servers[serverName] = freshConn
 		m.setStatusLocked(serverName, true, len(freshConn.Tools), "")
+		// Волна 125 (срез В): успех сбрасывает бэкофф (отдельный backoffMu,
+		// m.mu уже держим — вложенных локов на одном мьютексе нет).
+		m.recordReconnectSuccess(serverName)
 		staleToClose := staleConn
 		m.mu.Unlock()
-		_ = staleToClose.Session.Close()
+		closeServerConn(staleToClose)
 		return freshConn, nil
 	}
 
@@ -879,7 +932,13 @@ func (m *Manager) Close() error {
 
 	var errs []error
 	for name, conn := range m.servers {
-		if err := conn.Session.Close(); err != nil {
+		err := conn.Session.Close()
+		// Волна 125: процесс реально убиваем, не бросаем.
+		if conn.proc != nil && conn.proc.Process != nil {
+			_ = conn.proc.Process.Kill()
+			_ = conn.proc.Wait()
+		}
+		if err != nil {
 			logger.ErrorCF("mcp", "Failed to close server connection",
 				map[string]any{
 					"server": name,
@@ -890,6 +949,13 @@ func (m *Manager) Close() error {
 	}
 
 	m.servers = make(map[string]*ServerConnection)
+
+	// Волна 125: остановить idle-janitor
+	m.janitorDone.Do(func() {
+		if m.janitorStop != nil {
+			close(m.janitorStop)
+		}
+	})
 
 	if len(errs) > 0 {
 		return fmt.Errorf("failed to close %d server(s): %w", len(errs), errors.Join(errs...))

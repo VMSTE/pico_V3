@@ -1395,3 +1395,11 @@ Each entry maps to a single wave/phase and its merged PR.
 - **pkg/mcp/manager.go:** NEW mcpCredentialsChanged (Headers ИЛИ Env); auth-ветка CallTool зовёт его. Рефрешер (SetServerConfigRefresher, волна 121) уже умел резолвить ${oauth:*} в Env — менеджер это наконец проверяет.
 - **Тесты (manager_wave125_test.go):** 401 у stdio → реконнект со свежим env + ретрай → успех; тот же env → реконнекта нет, ошибка честно вверх.
 - Срезы Б (lazy spawn + idle reap) и В (бэкофф со сбросом, классификация) — дальше по ТЗ-125.
+
+## Волна 125 (срезы Б+В) — Жизненный цикл MCP: idle reap + пробуждение со свежим токеном + бэкофф со сбросом (ТЗ-125) · 30 сен 2026
+
+- **Повод (бой 30 сен):** github-mcp-server ×2 висели 16 часов с токеном из env на момент спавна (TTL ~8ч) → гарантированный 401. Индустрия (30 сен): mcp-gateway/oh-my-pi (lazy spawn + idle reap), gemini-cli (getValidToken при создании транспорта), MCP-006 (cooldown), антипаттерны Claude Code (процесс-утечка #74329, вечный failed #43177) и hermes-agent (счётчик без сброса).
+- **config.go:** MCPServerConfig += idle_timeout_min (0 = дефолт 15, <0 = никогда).
+- **manager.go + lifecycle.go (NEW):** idle reap janitor (раз в минуту; сервер без вызовов > таймаута → sleeping с кэшем тулов, статус State=idle при Connected=true — «спит», не «упал»); wakeServer — CallTool по спящему → свежий конфиг из рефрешера ДО спавна → коннект → вызов; closeServerConn — полный teardown (сессия + Process.Kill + Wait, урок #74329); бэкофф реконнекта 5s→5m со СБРОСОМ после успеха (урок hermes); isAuthCallError += 403/bad credentials.
+- **Осознанно НЕ вошло:** lazy-from-boot (сервер вообще не поднимать до первого вызова) — требует персистентного кэша каталога тулов, иначе модель тулы не видит. Отдельным шагом после решения о кэше (записано в ТЗ-125).
+- **Тесты (manager_wave125b_test.go):** reap→idle-статус→wake со свежим env→второй вызов без респавна; бэкофф блокирует немедленный повтор и отпускает после окна; расширенная классификация auth.
