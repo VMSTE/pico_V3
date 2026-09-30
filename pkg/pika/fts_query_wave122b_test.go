@@ -1,22 +1,26 @@
 package pika
 
-// ТЗ-122 (срез 1.5): кластерный буст сообщений + RRF-слияние слоёв.
+// ТЗ-122: срез 1.5 (RRF-слияние слоёв) + срез 4 (кластер как единица
+// выдачи с gap-fill).
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
 
-// Эталон №1 (30 сен): ответ размазан по кластеру сообщений 3127-3129,
-// поодиночке слабые. Соседи в выборке -> буст; одиночный хит -> без буста.
-func TestSearchMessages_NeighborClusterBoost(t *testing.T) {
+// Эталон №1 (30 сен): ответ размазан по кластеру 3127-3129; дословная
+// цитата была в 3128, которая сама в топ-10 не входила, а соседи входили.
+// Кластер сливается в один результат: текст всех сообщений цепочки
+// (gap-fill, включая нематчнувшиеся), скор — лучший член + буст за размер.
+func TestSearchMessages_NeighborClusterMerge(t *testing.T) {
 	bm, ms, cleanup := setupSearchTest(t)
 	defer cleanup()
 	ctx := context.Background()
 	cluster := []string{
 		"обсуждаем переезд документы",
-		"короткое решение про документы",
+		"между хитами лежит ответ без термов запроса",
 		"итог: документы переезжают в новое место",
 	}
 	for _, c := range cluster {
@@ -27,7 +31,7 @@ func TestSearchMessages_NeighborClusterBoost(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Разделитель без терма, затем одиночный далёкий хит.
+	// Разделитель без терма, затем одиночный хит в ДРУГОМ чате.
 	for _, c := range []string{
 		"посторонний разговор",
 		"документы документы документы — старый спам",
@@ -44,23 +48,34 @@ func TestSearchMessages_NeighborClusterBoost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var clusterHits, spamHits int
-	for _, r := range res {
-		if r.ChatID == "s1" {
-			clusterHits++
-			if r.Boost <= 0 {
-				t.Fatalf("cluster hit without boost: %+v", r)
-			}
-		}
-		if r.ChatID == "s2" {
-			spamHits++
-			if r.Boost != 0 {
-				t.Fatalf("lonely hit got boost: %+v", r)
-			}
+	if len(res) != 2 {
+		t.Fatalf("got %d results, want 2 (merged cluster + spam)", len(res))
+	}
+	var cl, spam *rawResult
+	for i := range res {
+		switch res[i].ChatID {
+		case "s1":
+			cl = &res[i]
+		case "s2":
+			spam = &res[i]
 		}
 	}
-	if clusterHits != 3 || spamHits != 1 {
-		t.Fatalf("cluster=%d spam=%d, want 3/1", clusterHits, spamHits)
+	if cl == nil || spam == nil {
+		t.Fatalf("missing cluster or spam: %+v", res)
+	}
+	if cl.Boost <= 0 {
+		t.Fatalf("cluster without size boost: %+v", *cl)
+	}
+	if !strings.Contains(cl.Summary, "переезд") ||
+		!strings.Contains(cl.Summary, "итог") {
+		t.Fatalf("cluster summary missing members: %q", cl.Summary)
+	}
+	// gap-fill: нематчнувшееся сообщение между хитами попало в кластер
+	if !strings.Contains(cl.Summary, "между хитами лежит ответ") {
+		t.Fatalf("gap-fill missing: %q", cl.Summary)
+	}
+	if spam.Boost != 0 {
+		t.Fatalf("lonely hit got boost: %+v", *spam)
 	}
 }
 
@@ -87,9 +102,9 @@ func TestScoreResults_RRFPerLayer(t *testing.T) {
 			knowBest = s.Score
 		}
 	}
-	// messages best: 0.5 * 61/61 + recency(0.1) = 0.6
-	if msgBest < 0.55 || msgBest > 0.65 {
-		t.Fatalf("messages best = %v, want ~0.6", msgBest)
+	// Срез 3 (мягкий вес): messages best = 0.95 * 61/61 + 0.1 = 1.05
+	if msgBest < 1.0 || msgBest > 1.1 {
+		t.Fatalf("messages best = %v, want ~1.05", msgBest)
 	}
 	// knowledge best: 1.0 * 61/61 + 0.1 = 1.1
 	if knowBest < 1.0 {

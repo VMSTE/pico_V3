@@ -96,8 +96,13 @@ func main() {
 		} else if rank > 5 {
 			mark = "LOW" // нашлось, но ниже топ-5
 		}
+		types := map[string]int{}
+		for _, r := range results {
+			types[r.Type]++
+		}
+		fmt.Printf("     слои в выдаче: %v (всего %d)\n", types, len(results))
 		if mark != "OK" {
-			for j := 0; j < len(results) && j < 5; j++ {
+			for j := 0; j < len(results) && j < 10; j++ {
 				fmt.Printf("     top%d [%s %.3f] %s\n",
 					j+1, results[j].Type, results[j].Score, trunc(results[j].Summary, 90))
 			}

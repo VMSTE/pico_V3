@@ -31,8 +31,12 @@ func TestBuildFTSQuery_CleansAndDedupes(t *testing.T) {
 	if strings.Contains(got, `""`) {
 		t.Fatalf("empty term leaked: %q", got)
 	}
-	if strings.Count(got, " OR ") != 2 {
-		t.Fatalf("want 3 terms OR-ed, got %q", got)
+	// Срез 2: у кириллических термов добавляются стем-префиксы.
+	if strings.Count(got, " OR ") < 2 {
+		t.Fatalf("want several OR-ed terms, got %q", got)
+	}
+	if !strings.Contains(got, "ноуш*") {
+		t.Fatalf("stem prefix missing in %q", got)
 	}
 }
 

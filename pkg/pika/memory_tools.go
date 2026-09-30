@@ -18,6 +18,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/kljensen/snowball"
+
 	"golang.org/x/sync/errgroup"
 
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
@@ -66,14 +68,19 @@ type rawResult struct {
 var errNoUsableFTSTerms = errors.New("fts: no usable terms")
 
 // PIKA-V3: Layer priority constants for scoring.
+// ТЗ-122 (срез 3): мягкие веса слоёв вместо жёсткого потолка.
+// Пользователь не обязан знать, где лежит ответ (атом/горячее/архив) —
+// слой это происхождение, а не приговор. Потолок messages=0.5 структурно
+// не пускал живое сообщение в топ-5 при пяти атомах (стенд 30 сен:
+// макс. скор сообщения 0.82 против 0.938 у пятого атома).
 const (
 	prioKnowledge   = 1.0
-	prioEvents      = 0.9
-	prioArchive     = 0.8
-	prioReasoning   = 0.7
-	prioRegistry    = 0.6
-	prioArtifacts   = 0.65 // волна 108: паспорта артефактов
-	prioMessages    = 0.5
+	prioEvents      = 0.95
+	prioArchive     = 0.95
+	prioMessages    = 0.95
+	prioReasoning   = 0.85
+	prioArtifacts   = 0.85 // волна 108: паспорта артефактов
+	prioRegistry    = 0.8
 	recencyMaxDays  = 30.0
 	recencyMaxBoost = 0.1
 	searchTimeout   = 5 * time.Second
@@ -475,31 +482,13 @@ func (ms *MemorySearch) searchMessages(
 		})
 	}
 
-	// ТЗ-122 (срез 1.5): кластерный буст (паттерн EmergenceMem: сессия
-	// скорится по числу попавших turn'ов). Эталон №1: ответ размазан по
-	// сообщениям 3127-3129 — поодиночке слабые (46 место), кластером
-	// сильные. Соседи хита (±3 по id) в той же выборке = горячая тема.
-	// Только соседи ТОГО ЖЕ чата: id-соседство между чатами
-	// бессмысленно (id глобальные, беседы переплетены).
-	matched := make(map[int64]string, len(out))
-	for _, r := range out {
-		matched[r.MsgID] = r.ChatID
-	}
-	for i := range out {
-		n := 0
-		for d := int64(1); d <= 3; d++ {
-			if ch, ok := matched[out[i].MsgID-d]; ok && ch == out[i].ChatID {
-				n++
-			}
-			if ch, ok := matched[out[i].MsgID+d]; ok && ch == out[i].ChatID {
-				n++
-			}
-		}
-		out[i].Boost = 0.15 * float64(n)
-		if out[i].Boost > 0.45 {
-			out[i].Boost = 0.45
-		}
-	}
+	// ТЗ-122 (срез 4): кластер как единица выдачи — хиты, идущие подряд
+	// по id в одном чате, сливаются в один результат (EmergenceMem:
+	// скоринг сессии + sentence-window small-to-big). Дословный ответ
+	// часто в НЕматчнувшемся сообщении между хитами (эталон №1: цитата
+	// в 3128, в топ-10 вошли только соседи 3127/3129) — gap-fill
+	// дотягивает цепочку целиком.
+	out = ms.mergeMessageClusters(ctx, out)
 	return out, rows.Err()
 }
 
@@ -995,7 +984,7 @@ func buildFTSQuery(query string) string {
 		return query
 	}
 	seen := make(map[string]bool, len(words))
-	quoted := make([]string, 0, len(words))
+	quoted := make([]string, 0, len(words)*2)
 	for _, w := range words {
 		w = strings.ToLower(strings.Trim(w, "\"'`.,;:!?()[]{}<>*+^~—–-=|/\\"))
 		if w == "" || seen[w] {
@@ -1003,8 +992,32 @@ func buildFTSQuery(query string) string {
 		}
 		seen[w] = true
 		quoted = append(quoted, "\""+w+"\"")
+		// ТЗ-122 (срез 2): RU-стемминг на стороне ЗАПРОСА (snowball) —
+		// стем идёт префиксным термом stem*: "ноушена" находит "ноушен"
+		// (бой 30 сен, эталон №1) без переиндексации контента.
+		if !hasCyrillic(w) {
+			continue
+		}
+		stem, err := snowball.Stem(w, "russian", true)
+		if err != nil || stem == "" || stem == w ||
+			len([]rune(stem)) < 3 || seen[stem] {
+			continue
+		}
+		seen[stem] = true
+		quoted = append(quoted, stem+"*")
 	}
 	return strings.Join(quoted, " OR ")
+}
+
+// hasCyrillic — стеммим только русские слова; прочее snowball-ru
+// переваривает непредсказуемо.
+func hasCyrillic(s string) bool {
+	for _, r := range s {
+		if unicode.Is(unicode.Cyrillic, r) {
+			return true
+		}
+	}
+	return false
 }
 
 // extractSnippet finds query in content, returns context.
@@ -1128,4 +1141,117 @@ func (ms *MemorySearch) searchArtifacts(
 		})
 	}
 	return out, rows.Err()
+}
+
+// mergeMessageClusters — срез 4: слияние сообщений-кластеров.
+// Сортировка по (chat_id, id), цепочка = тот же чат и разрыв <= 3.
+func (ms *MemorySearch) mergeMessageClusters(
+	ctx context.Context,
+	in []rawResult,
+) []rawResult {
+	if len(in) == 0 {
+		return in
+	}
+	sorted := make([]rawResult, len(in))
+	copy(sorted, in)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].ChatID != sorted[j].ChatID {
+			return sorted[i].ChatID < sorted[j].ChatID
+		}
+		return sorted[i].MsgID < sorted[j].MsgID
+	})
+
+	var out []rawResult
+	cluster := []rawResult{sorted[0]}
+	flush := func() {
+		if len(cluster) == 1 {
+			out = append(out, cluster[0])
+		} else {
+			out = append(out, ms.mergeCluster(ctx, cluster))
+		}
+		cluster = nil
+	}
+	for i := 1; i < len(sorted); i++ {
+		prev := cluster[len(cluster)-1]
+		cur := sorted[i]
+		if cur.ChatID == prev.ChatID && cur.MsgID-prev.MsgID <= 3 {
+			cluster = append(cluster, cur)
+			continue
+		}
+		flush()
+		cluster = []rawResult{cur}
+	}
+	flush()
+	return out
+}
+
+// mergeCluster — один кластер: скор = лучший bm25 члена + буст за
+// размер (0.2 за члена сверх первого, кап 0.6); текст — ВСЯ цепочка
+// сообщений от первого до последнего id (gap-fill из базы, без
+// role=tool), кап 800 символов.
+func (ms *MemorySearch) mergeCluster(
+	ctx context.Context,
+	members []rawResult,
+) rawResult {
+	best := members[0]
+	for _, m := range members[1:] {
+		if m.RawBM25 < best.RawBM25 {
+			best = m
+		}
+	}
+	lo := members[0].MsgID
+	hi := members[len(members)-1].MsgID
+
+	type msgLine struct{ role, content string }
+	var lines []msgLine
+	gapRows, err := ms.bm.db.QueryContext(ctx,
+		`SELECT role, content FROM messages
+		WHERE chat_id = ? AND id BETWEEN ? AND ? AND role != 'tool'
+		ORDER BY id LIMIT 12`,
+		best.ChatID, lo, hi)
+	if err == nil {
+		defer gapRows.Close()
+		for gapRows.Next() {
+			var role string
+			var content sql.NullString
+			if scanErr := gapRows.Scan(&role, &content); scanErr != nil {
+				break
+			}
+			lines = append(lines, msgLine{role, content.String})
+		}
+	}
+	if len(lines) == 0 {
+		for _, m := range members {
+			lines = append(lines, msgLine{"", m.Summary})
+		}
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "[диалог %d-%d] ", lo, hi)
+	for i, l := range lines {
+		if i > 0 {
+			sb.WriteString(" | ")
+		}
+		if l.role != "" {
+			fmt.Fprintf(&sb, "%s: ", l.role)
+		}
+		sb.WriteString(truncateStr(l.content, 150))
+	}
+	summary := truncateStr(sb.String(), 800)
+
+	// Скор кластера = СУММА bm25 членов (аддитивное доказательство,
+	// как RRF суммирует по спискам; EmergenceMem: скор сессии = число
+	// turn'ов в топе). Три подтверждения сильнее одного яркого.
+	sumBM := 0.0
+	for _, m := range members {
+		sumBM += m.RawBM25
+	}
+	best.RawBM25 = sumBM
+	boost := 0.2 * float64(len(members)-1)
+	if boost > 0.6 {
+		boost = 0.6
+	}
+	best.Summary = summary
+	best.FullContent = summary
+	best.Boost = boost
+	return best
 }
