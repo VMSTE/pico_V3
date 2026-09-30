@@ -639,8 +639,11 @@ func (m *Manager) CallTool(
 			// Волна 121 (срез А): токен мог рефрешнуть лаунчер — перечитываем
 			// конфиг сервера с диска. Тот же Bearer → не переподключаемся.
 			if freshCfg, ok := m.freshServerConfig(serverName, conn.Config); ok {
-				oldAuth := conn.Config.Headers["Authorization"]
-				if newAuth := freshCfg.Headers["Authorization"]; oldAuth != "" && newAuth != oldAuth {
+				// Волна 125 (срез А, бой 30 сен): креды живут не только в
+				// Headers (http), но и в Env (stdio: GITHUB_PERSONAL_ACCESS_TOKEN).
+				// До фикса ветка рефреша для stdio не срабатывала НИКОГДА —
+				// протухший токен в env означал 401 до рестарта гейтвея.
+				if mcpCredentialsChanged(conn.Config, freshCfg) {
 					logger.WarnCF("mcp", "MCP server auth error, reconnecting with refreshed token",
 						map[string]any{
 							"server": serverName,
@@ -733,6 +736,25 @@ func isAuthCallError(err error) bool {
 	return strings.Contains(msg, "unauthorized") ||
 		strings.Contains(msg, "401") ||
 		strings.Contains(msg, "invalid_token")
+}
+
+// mcpCredentialsChanged (волна 125, срез А): изменились ли креды сервера —
+// Authorization в Headers (http) ИЛИ любое непустое значение в Env (stdio).
+// freshCfg приходит уже резолвнутым рефрешером (${oauth:*} → свежий токен),
+// conn.Config.Env — резолвнутым при загрузке (волна 114), так что сравнение
+// значений честное. Пустое старое значение = «не было креда» — не повод
+// для реконнекта (как и раньше с пустым Bearer).
+func mcpCredentialsChanged(old, fresh config.MCPServerConfig) bool {
+	oldAuth := old.Headers["Authorization"]
+	if newAuth := fresh.Headers["Authorization"]; oldAuth != "" && newAuth != oldAuth {
+		return true
+	}
+	for k, nv := range fresh.Env {
+		if ov, ok := old.Env[k]; ok && ov != "" && ov != nv {
+			return true
+		}
+	}
+	return false
 }
 
 // freshServerConfig: свежий конфиг сервера через колбэк гейтвара (волна 121).

@@ -1388,3 +1388,10 @@ Each entry maps to a single wave/phase and its merged PR.
 - **Корень (✓ база 30 сен):** цепочка ACTIVE_PLAN живая (извлечение <plan> из последнего reasoning, по chat_id переживает ротацию с волны 124-А), но ИСТОЧНИК пуст: 1634 записи reasoning_log — 0 с тегом <plan>; 0 настоящих секций ACTIVE_PLAN в промптах за всю жизнь базы.
 - **workspace/AGENT.md:** одна строка дисциплины — многошаговая задача → план в <plan> в мыслях, обновлять каждый ход (стиль «right altitude»: правило + формат + одна причина, без простыней — ревью founder'а 30 сен). Правка только через репо: чистая установка получает настроенного агента из коробки.
 - Промпт-файл, кода нет. Контроль в бою: reasoning_log с <plan> > 0, секции --- ACTIVE_PLAN --- в prompt_snapshots > 0 (сейчас 0 и 0).
+
+## Волна 125 (срез А) — Auth-рефреш MCP для stdio: паритет Env с Headers (бой 30 сен) · 30 сен 2026
+
+- **Корень (бой 30 сен 13:40, ✓ код):** MCP GitHub умер с «401 Bad credentials» до рестарта. Ветка auth-рефреша в manager.go (волна 121-А) сравнивала только Config.Headers["Authorization"] — http-путь (Notion). У stdio-серверов токен в Config.Env → ветка для них не срабатывала НИКОГДА. Процессы github-mcp-server висели 16ч с токеном из env на момент спавна (TTL ~8ч).
+- **pkg/mcp/manager.go:** NEW mcpCredentialsChanged (Headers ИЛИ Env); auth-ветка CallTool зовёт его. Рефрешер (SetServerConfigRefresher, волна 121) уже умел резолвить ${oauth:*} в Env — менеджер это наконец проверяет.
+- **Тесты (manager_wave125_test.go):** 401 у stdio → реконнект со свежим env + ретрай → успех; тот же env → реконнекта нет, ошибка честно вверх.
+- Срезы Б (lazy spawn + idle reap) и В (бэкофф со сбросом, классификация) — дальше по ТЗ-125.
