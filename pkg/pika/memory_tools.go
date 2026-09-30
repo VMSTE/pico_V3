@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -52,9 +53,17 @@ type rawResult struct {
 	LayerPrio float64
 	MsgID     int64
 	ChatID    string
+	// ТЗ-122 (срез 1.5): буст «горячего кластера» — соседи хита по id
+	// тоже матчатся (ответ размазан по 2-3 сообщениям диалога).
+	Boost float64
 	// D-AUDIT-126: сырой текст хита (до обрезки) — отдаётся при full=true.
 	FullContent string
 }
+
+// errNoUsableFTSTerms — в запросе не осталось ни одного пригодного
+// терма после чистки (ТЗ-122, срез 1): FTS-слои пропускаются, а не
+// падают syntax error.
+var errNoUsableFTSTerms = errors.New("fts: no usable terms")
 
 // PIKA-V3: Layer priority constants for scoring.
 const (
@@ -382,6 +391,9 @@ func (ms *MemorySearch) searchMessages(
 	// LIKE+счётчика слов: IDF взвешивает редкие слова выше шума.
 	// Scope session — фильтр chat_id (D-AUDIT-104); all — вся база.
 	fq := buildFTSQuery(query) // слова через OR, каждое в кавычках
+	if fq == "" {
+		return nil, nil
+	}
 	var args []any
 	// #nosec G202 -- WHERE из статических фрагментов; значения параметризованы
 	// Волна 86 (бой 20 авг): role=tool вне выдачи — иначе поиск находит
@@ -407,7 +419,9 @@ func (ms *MemorySearch) searchMessages(
 	// и слоты достаются разным сообщениям. Финальный срез до limit —
 	// в Execute после скоринга, как и было.
 	q += ` ORDER BY score, m.id LIMIT ?` // bm25: меньше = лучше
-	args = append(args, limit*4)
+	// ТЗ-122 (срез 1.5): over-fetch x10 — эталон №1 сидел на ранге 46
+	// при отсечке 40 и не доезжал до скоринга в принципе (стенд 30 сен).
+	args = append(args, limit*10)
 	rows, err := ms.bm.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -460,6 +474,32 @@ func (ms *MemorySearch) searchMessages(
 			),
 		})
 	}
+
+	// ТЗ-122 (срез 1.5): кластерный буст (паттерн EmergenceMem: сессия
+	// скорится по числу попавших turn'ов). Эталон №1: ответ размазан по
+	// сообщениям 3127-3129 — поодиночке слабые (46 место), кластером
+	// сильные. Соседи хита (±3 по id) в той же выборке = горячая тема.
+	// Только соседи ТОГО ЖЕ чата: id-соседство между чатами
+	// бессмысленно (id глобальные, беседы переплетены).
+	matched := make(map[int64]string, len(out))
+	for _, r := range out {
+		matched[r.MsgID] = r.ChatID
+	}
+	for i := range out {
+		n := 0
+		for d := int64(1); d <= 3; d++ {
+			if ch, ok := matched[out[i].MsgID-d]; ok && ch == out[i].ChatID {
+				n++
+			}
+			if ch, ok := matched[out[i].MsgID+d]; ok && ch == out[i].ChatID {
+				n++
+			}
+		}
+		out[i].Boost = 0.15 * float64(n)
+		if out[i].Boost > 0.45 {
+			out[i].Boost = 0.45
+		}
+	}
 	return out, rows.Err()
 }
 
@@ -470,6 +510,9 @@ func (ms *MemorySearch) searchKnowledge(
 	limit int,
 ) ([]rawResult, error) {
 	fq := buildFTSQuery(query)
+	if fq == "" {
+		return nil, nil
+	}
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT ka.id, ka.atom_id, ka.category,
 		ka.summary, ka.confidence, ka.created_at,
@@ -522,6 +565,9 @@ func (ms *MemorySearch) searchArchive(
 	limit int,
 ) ([]rawResult, error) {
 	fq := buildFTSQuery(query)
+	if fq == "" {
+		return nil, nil
+	}
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT ka.id, ka.source_message_id,
 		ka.summary, ka.created_at,
@@ -598,6 +644,9 @@ func (ms *MemorySearch) searchEventsArchive(
 	limit int,
 ) ([]rawResult, error) {
 	fq := buildFTSQuery(query)
+	if fq == "" {
+		return nil, nil
+	}
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT ea.id, ea.type, ea.outcome,
 		ea.summary, ea.ts,
@@ -663,14 +712,20 @@ func (ms *MemorySearch) searchReasoning(
 	// Ключевой слой для «о чём она думала, когда…» — keywords-ярлыки
 	// такого не содержат. Сниппет — существующий extractSnippet (окно).
 	fq := buildFTSQuery(query)
-	rows, err := ms.bm.db.QueryContext(ctx,
-		`SELECT rl.id, rl.task, rl.mode, rl.ts, rl.reasoning_text,
+	var rows *sql.Rows
+	var err error
+	if fq == "" {
+		err = errNoUsableFTSTerms
+	} else {
+		rows, err = ms.bm.db.QueryContext(ctx,
+			`SELECT rl.id, rl.task, rl.mode, rl.ts, rl.reasoning_text,
 		bm25(reasoning_fts) AS score
 		FROM reasoning_log rl
 		JOIN reasoning_fts rf ON rl.id = rf.rowid
 		WHERE reasoning_fts MATCH ?
 		ORDER BY score LIMIT ?`,
-		fq, limit)
+			fq, limit)
+	}
 	if err != nil {
 		logLayerWarn("reasoning_fts", err)
 	} else {
@@ -865,44 +920,44 @@ func dedupResults(results []rawResult) []rawResult {
 }
 
 // scoreResults applies normalized_bm25 * layer_priority + recency.
+// ТЗ-122 (срез 1.5): RRF (reciprocal rank fusion, Cormack 2009) —
+// слияние слоёв по ПОЗИЦИЯМ, не по сырым bm25: шкалы таблиц
+// несопоставимы, позиции сопоставимы. k=60 — классика без тюнинга;
+// вес слоя = LayerPrio. Индустриальный дефолт hybrid search (Redis,
+// Elasticsearch). Склейка min-max по общему котлу — антипаттерн:
+// слой с "более отрицательной" шкалой получал систематическое
+// преимущество независимо от релевантности.
+const rrfK = 60.0
+
 func scoreResults(results []rawResult) []SearchResult {
 	if len(results) == 0 {
 		return []SearchResult{}
 	}
 
-	// Collect BM25 range for normalization
-	var minBM, maxBM float64
-	hasFTS := false
-	for _, r := range results {
-		if !r.IsFTS {
-			continue
-		}
-		if !hasFTS {
-			minBM = r.RawBM25
-			maxBM = r.RawBM25
-			hasFTS = true
-		} else {
-			if r.RawBM25 < minBM {
-				minBM = r.RawBM25
+	// Ранг внутри своего слоя: FTS — по bm25 (меньше = лучше),
+	// при равенстве и для не-FTS слоёв — по свежести.
+	byLayer := map[string][]int{}
+	for i, r := range results {
+		byLayer[r.Source] = append(byLayer[r.Source], i)
+	}
+	rrf := make([]float64, len(results))
+	for _, idxs := range byLayer {
+		sort.Slice(idxs, func(a, b int) bool {
+			ra, rb := results[idxs[a]], results[idxs[b]]
+			if ra.IsFTS && rb.IsFTS && ra.RawBM25 != rb.RawBM25 {
+				return ra.RawBM25 < rb.RawBM25
 			}
-			if r.RawBM25 > maxBM {
-				maxBM = r.RawBM25
-			}
+			return ra.CreatedAt.After(rb.CreatedAt)
+		})
+		for rank0, i := range idxs {
+			rrf[i] = results[i].LayerPrio *
+				(rrfK + 1) / (rrfK + float64(rank0) + 1)
 		}
 	}
 
 	now := time.Now()
 	out := make([]SearchResult, 0, len(results))
-	for _, r := range results {
-		// Normalized BM25: 0..1 (1 = best match)
-		// bm25() returns negative; more negative = better
-		var norm float64
-		if r.IsFTS && maxBM != minBM {
-			norm = (maxBM - r.RawBM25) / (maxBM - minBM)
-		} else {
-			norm = 1.0 // non-FTS or single FTS result
-		}
-
+	for i, r := range results {
 		// Recency: linear decay 30d, clamp 0..0.1
 		days := now.Sub(r.CreatedAt).Hours() / 24.0
 		recency := 0.0
@@ -911,7 +966,9 @@ func scoreResults(results []rawResult) []SearchResult {
 				(1.0 - days/recencyMaxDays)
 		}
 
-		s := norm*r.LayerPrio + recency
+		// Кластерный буст (горячие соседи) мультипликативно усиливает
+		// позиционный скор слоя.
+		s := rrf[i]*(1+r.Boost) + recency
 		s = math.Round(s*1000) / 1000
 
 		out = append(out, SearchResult{
@@ -927,18 +984,25 @@ func scoreResults(results []rawResult) []SearchResult {
 
 // buildFTSQuery converts natural language to FTS5 OR query.
 // Each word is quoted for literal matching.
+// ТЗ-122 (срез 1): пунктуация срезается с краёв, термы приводятся к
+// нижнему регистру и дедупятся; пустые НЕ попадают в запрос — старый
+// код оставлял дыры в заранее аллоцированном слайсе (continue при
+// пустом слове), давая `"a" OR  OR "b"` -> syntax error -> FTS-слой
+// молча возвращал пусто на любом запросе с "пустым" словом.
 func buildFTSQuery(query string) string {
 	words := strings.Fields(query)
 	if len(words) == 0 {
 		return query
 	}
-	quoted := make([]string, len(words))
-	for i, w := range words {
-		w = strings.ReplaceAll(w, "\"", "")
-		if w == "" {
+	seen := make(map[string]bool, len(words))
+	quoted := make([]string, 0, len(words))
+	for _, w := range words {
+		w = strings.ToLower(strings.Trim(w, "\"'`.,;:!?()[]{}<>*+^~—–-=|/\\"))
+		if w == "" || seen[w] {
 			continue
 		}
-		quoted[i] = "\"" + w + "\""
+		seen[w] = true
+		quoted = append(quoted, "\""+w+"\"")
 	}
 	return strings.Join(quoted, " OR ")
 }

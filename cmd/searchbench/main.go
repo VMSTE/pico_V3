@@ -96,6 +96,12 @@ func main() {
 		} else if rank > 5 {
 			mark = "LOW" // нашлось, но ниже топ-5
 		}
+		if mark != "OK" {
+			for j := 0; j < len(results) && j < 5; j++ {
+				fmt.Printf("     top%d [%s %.3f] %s\n",
+					j+1, results[j].Type, results[j].Score, trunc(results[j].Summary, 90))
+			}
+		}
 		fmt.Printf("%-4d %-60s %-6s rank=%d layer=%s\n",
 			i+1, trunc(c.Q, 60), mark, rank, layer)
 	}
