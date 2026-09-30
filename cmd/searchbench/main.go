@@ -39,8 +39,8 @@ func main() {
 		os.Exit(1)
 	}
 	var cases []benchCase
-	if err := json.Unmarshal(data, &cases); err != nil {
-		fmt.Fprintf(os.Stderr, "parse cases: %v\n", err)
+	if pErr := json.Unmarshal(data, &cases); pErr != nil {
+		fmt.Fprintf(os.Stderr, "parse cases: %v\n", pErr)
 		os.Exit(1)
 	}
 
