@@ -123,6 +123,11 @@ func Migrate(dbPath string) (*sql.DB, error) {
 			description: "prompt_snapshots.full_prompt — полный системный промпт (ТЗ-124 срез В, wave 124)",
 			ddl:         migrationV8,
 		},
+		{
+			version:     9,
+			description: "messages_archive_fts — прямой FTS холодного архива (ТЗ-122, срез 6)",
+			ddl:         migrationV9,
+		},
 	}
 
 	for _, m := range migrations {
@@ -759,4 +764,16 @@ CREATE TRIGGER messages_fts_au AFTER UPDATE ON messages BEGIN
 END;
 
 INSERT INTO messages_fts(messages_fts) VALUES('rebuild');
+`
+
+// ТЗ-122 (срез 6): messages_archive_fts — прямой FTS по холодному архиву.
+// Контент архива сжат в blob -> триггером не индексируется; таблица
+// contentless, заполняется из Go: на записи (ArchiveAndDeleteTurns) и
+// бэкфиллом при старте (NewBotMemory -> BackfillMessagesArchiveFTS).
+// Образец — events_archive_fts (D-93), отличие только в способе наполнения.
+const migrationV9 = `
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_archive_fts USING fts5(
+    content,
+    content = 
+);
 `

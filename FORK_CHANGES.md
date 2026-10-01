@@ -1422,3 +1422,16 @@ Each entry maps to a single wave/phase and its merged PR.
   - `workspace/AGENT.md` — MODIFIED: «Память: веер запросов» — параллельные search_memory, CRAG-цикл релевантности, режимы feedback/full/around/limit
   - `pkg/pika/fts_query_wave122_test.go`, `pkg/pika/fts_query_wave122b_test.go` — NEW: 11 тестов (дыры/чистка/дедуп, гарды слоёв, кластер+gap-fill, RRF per-layer, федеративный минимум)
 - **Breaking:** None — изменено ранжирование search_memory (осознанно, цифры выше); схема БД не тронута
+
+## Волна 122 (срез В) — Холодный FTS: прямой полнотекст по messages_archive (ТЗ-122) · 1 окт 2026
+
+- **ТЗ:** ТЗ-122 этап 1 п.1 (закрытие архивного регресса); нужда доказана кейсом №4 стенда (OAuth-эпопея 22 сен была лексически недостижима — только через атом-посредник)
+- **PR:** pending (wave-122-c-archive-fts)
+- **Files:**
+  - `pkg/pika/migrate.go` — MODIFIED: миграция v9 — messages_archive_fts (contentless FTS5; blob триггером не распаковать → наполнение из Go)
+  - `pkg/pika/botmemory.go` — MODIFIED: индекс на записи в ArchiveAndDeleteTurns (контент до сжатия; индекс не роняет архивацию, WARN only) + BackfillMessagesArchiveFTS (разовый догон из NewBotMemory, идемпотентно; на копии боевой базы: 317 строк)
+  - `pkg/pika/memory_tools.go` — MODIFIED: слой searchMessagesArchive (FTS → rowid → ReadArchivedMessage → snippet; DedupKey общий с атомным путём — кросс-дедуп бесплатно)
+  - `pkg/pika/migrate_test.go` — MODIFIED: версия 9 + таблица в инвентаре
+  - `pkg/pika/fts_archive_wave122c_test.go` — NEW: прямой FTS после архивации (без атома); бэкфилл + идемпотентность
+  - `cmd/searchbench/cases.json` — MODIFIED: эталон №4 = дословный фрагмент архивного сообщения (22 сен)
+- **Breaking:** None (новая таблица; поведение остальных слоёв не тронуто)

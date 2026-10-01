@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -184,6 +185,13 @@ func NewBotMemory(db *sql.DB) (*BotMemory, error) {
 	bm := &BotMemory{db: db, encoder: enc, decoder: dec}
 	if err := bm.recoverStaleSpans(context.Background()); err != nil {
 		return nil, fmt.Errorf("pika/botmemory: recover spans: %w", err)
+	}
+	// ТЗ-122 (срез 6): догон messages_archive_fts для строк, заархив-
+	// ированных до появления индекса. Нефатально, идемпотентно.
+	if n, bErr := bm.BackfillMessagesArchiveFTS(context.Background()); bErr != nil {
+		log.Printf("WARN pika/botmemory: archive fts backfill: %v", bErr)
+	} else if n > 0 {
+		log.Printf("INFO pika/botmemory: messages_archive_fts backfilled %d rows", n)
 	}
 	return bm, nil
 }
@@ -869,6 +877,14 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 		if err != nil {
 			return fmt.Errorf("pika/botmemory: archive insert msg: %w", err)
 		}
+		// ТЗ-122 (срез 6): индекс в messages_archive_fts пишем здесь —
+		// контент ещё не сжат (триггером blob не распаковать). Индекс
+		// не роняет архивацию: только WARN.
+		if _, fErr := tx.ExecContext(ctx,
+			`INSERT INTO messages_archive_fts(rowid, content) VALUES (?,?)`,
+			id, content.String); fErr != nil {
+			log.Printf("WARN pika/botmemory: archive fts index: %v", fErr)
+		}
 	}
 	if rowErr := mRows.Err(); rowErr != nil {
 		return fmt.Errorf("pika/botmemory: archive iter msgs: %w", rowErr)
@@ -1241,4 +1257,45 @@ func (bm *BotMemory) SetSpanPreviews(
 		return fmt.Errorf("pika/botmemory: span previews: %w", err)
 	}
 	return nil
+}
+
+// BackfillMessagesArchiveFTS — ТЗ-122 (срез 6): разовый догон индекса
+// messages_archive_fts для строк, заархивированных до его появления.
+// Распаковка тем же путём, что и чтение (ReadArchivedMessage).
+// Идемпотентно; вызывается из NewBotMemory.
+func (bm *BotMemory) BackfillMessagesArchiveFTS(ctx context.Context) (int, error) {
+	rows, err := bm.db.QueryContext(ctx,
+		`SELECT ma.id FROM messages_archive ma
+		LEFT JOIN messages_archive_fts f ON f.rowid = ma.id
+		WHERE f.rowid IS NULL AND ma.blob IS NOT NULL`)
+	if err != nil {
+		return 0, fmt.Errorf("pika/botmemory: archive fts backfill scan: %w", err)
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if sErr := rows.Scan(&id); sErr != nil {
+			rows.Close()
+			return 0, sErr
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, id := range ids {
+		content, _, rErr := bm.ReadArchivedMessage(ctx, id)
+		if rErr != nil || content == "" {
+			continue
+		}
+		if _, iErr := bm.db.ExecContext(ctx,
+			`INSERT INTO messages_archive_fts(rowid, content) VALUES (?,?)`,
+			id, content); iErr != nil {
+			return n, fmt.Errorf("pika/botmemory: archive fts backfill insert: %w", iErr)
+		}
+		n++
+	}
+	return n, nil
 }

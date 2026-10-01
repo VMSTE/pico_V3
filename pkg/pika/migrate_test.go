@@ -23,8 +23,8 @@ func TestMigrateNewDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 8 {
-		t.Fatalf("expected version 8, got %d", ver)
+	if ver != 9 {
+		t.Fatalf("expected version 9, got %d", ver)
 	}
 
 	// Check key tables exist
@@ -37,6 +37,7 @@ func TestMigrateNewDB(t *testing.T) {
 		"prompt_versions": false, "prompt_snapshots": false,
 		"atom_usage": false, "daily_metrics": false,
 		"schema_version": false, "reasoning_fts": false,
+		"messages_archive_fts": false,
 	}
 	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
 	if err != nil {
@@ -99,8 +100,8 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 8 {
-		t.Fatalf("expected version 8 after second Migrate, got %d", ver)
+	if ver != 9 {
+		t.Fatalf("expected version 9 after second Migrate, got %d", ver)
 	}
 }
 
