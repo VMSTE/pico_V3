@@ -290,6 +290,19 @@ func (ms *MemorySearch) fanOut(
 		return nil
 	})
 
+	// Layer 3b: messages_archive — ПРЯМОЙ FTS холодного архива (срез 6)
+	g.Go(func() error {
+		res, err := ms.searchMessagesArchive(gCtx, query, limit)
+		if err != nil {
+			logLayerWarn("messages_archive", err)
+			return nil
+		}
+		mu.Lock()
+		all = append(all, res...)
+		mu.Unlock()
+		return nil
+	})
+
 	// Layer 3: archive (atom -> decompress -> snippet)
 	g.Go(func() error {
 		res, err := ms.searchArchive(gCtx, query, limit)
@@ -1289,4 +1302,76 @@ func ensureLayerDiversity(scored []SearchResult, limit int) []SearchResult {
 		inTop[r.Source] = true
 	}
 	return top
+}
+
+// searchMessagesArchive — ТЗ-122 (срез 6): прямой FTS по messages_archive.
+// До среза архив был достижим только через атом (дистилляция лосси);
+// кейс №4 стенда (эпопея OAuth 22 сен) доказал: неатомизированный архив
+// лексически недостижим. rowid из FTS -> распаковка через
+// ReadArchivedMessage; DedupKey совпадает с атомным путём -> кросс-дедуп
+// бесплатно.
+func (ms *MemorySearch) searchMessagesArchive(
+	ctx context.Context,
+	query string,
+	limit int,
+) ([]rawResult, error) {
+	fq := buildFTSQuery(query)
+	if fq == "" {
+		return nil, nil
+	}
+	rows, err := ms.bm.db.QueryContext(ctx,
+		`SELECT ma.id, ma.chat_id, ma.role, ma.ts,
+		bm25(messages_archive_fts) AS score
+		FROM messages_archive_fts f
+		JOIN messages_archive ma ON ma.id = f.rowid
+		WHERE messages_archive_fts MATCH ? AND ma.role != 'tool'
+		ORDER BY score LIMIT ?`,
+		fq, limit)
+	if err != nil {
+		return nil, fmt.Errorf("pika/memory_tools: messages archive fts: %w", err)
+	}
+	defer rows.Close()
+
+	type archHit struct {
+		id     int64
+		chatID string
+		role   string
+		ts     string
+		score  float64
+	}
+	var hits []archHit
+	for rows.Next() {
+		var h archHit
+		if scanErr := rows.Scan(&h.id, &h.chatID, &h.role, &h.ts, &h.score); scanErr != nil {
+			return nil, fmt.Errorf("pika/memory_tools: msg archive scan: %w", scanErr)
+		}
+		hits = append(hits, h)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var out []rawResult
+	for _, h := range hits {
+		content, _, readErr := ms.bm.ReadArchivedMessage(ctx, h.id)
+		if readErr != nil {
+			continue
+		}
+		snippet := extractSnippet(content, query, 200)
+		if snippet == "" {
+			snippet = truncateStr(content, 200)
+		}
+		out = append(out, rawResult{
+			Type:        "archive",
+			Summary:     fmt.Sprintf("[%s] %s", h.role, snippet),
+			Source:      "messages_archive",
+			CreatedAt:   parseSQLiteTime(h.ts),
+			RawBM25:     h.score,
+			IsFTS:       true,
+			DedupKey:    fmt.Sprintf("archive:%d", h.id),
+			LayerPrio:   prioArchive,
+			FullContent: fmt.Sprintf("[%s] %s", h.role, content),
+		})
+	}
+	return out, nil
 }
