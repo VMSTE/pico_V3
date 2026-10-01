@@ -40,6 +40,13 @@ type SearchResult struct {
 	Score     float64 `json:"score"`
 	Source    string  `json:"source"` // table name
 	CreatedAt string  `json:"created_at"`
+	// Wave 122 (slice D): additive; omitempty keeps tool JSON unchanged.
+	Role       string  `json:"role,omitempty"`
+	Category   string  `json:"category,omitempty"`
+	Polarity   string  `json:"polarity,omitempty"`
+	Confidence float64 `json:"confidence,omitempty"`
+	AtomID     string  `json:"atom_id,omitempty"`
+	MsgID      int64   `json:"msg_id,omitempty"`
 }
 
 // rawResult is an internal result before scoring.
@@ -54,6 +61,13 @@ type rawResult struct {
 	LayerPrio float64
 	MsgID     int64
 	ChatID    string
+	// Wave 122 (slice D): fields for in-process consumers
+	// (Archivist convergence on this engine).
+	Role       string
+	Category   string
+	Polarity   string
+	Confidence float64
+	AtomID     string
 	// ТЗ-122 (срез 1.5): буст «горячего кластера» — соседи хита по id
 	// тоже матчатся (ответ размазан по 2-3 сообщениям диалога).
 	Boost float64
@@ -485,6 +499,7 @@ func (ms *MemorySearch) searchMessages(
 			RawBM25:   bm25Score,
 			IsFTS:     true,
 			DedupKey:  fmt.Sprintf("messages:%d", id),
+			Role:      role,
 			LayerPrio: prioMessages,
 			MsgID:     id,
 			ChatID:    chatID,
@@ -516,7 +531,7 @@ func (ms *MemorySearch) searchKnowledge(
 	}
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT ka.id, ka.atom_id, ka.category,
-		ka.summary, ka.confidence, ka.created_at,
+		ka.summary, ka.polarity, ka.confidence, ka.created_at,
 		bm25(knowledge_fts) AS score
 		FROM knowledge_atoms ka
 		JOIN knowledge_fts kf ON ka.id = kf.rowid
@@ -533,10 +548,10 @@ func (ms *MemorySearch) searchKnowledge(
 	var out []rawResult
 	for rows.Next() {
 		var id int64
-		var atomID, cat, summary, ca string
+		var atomID, cat, summary, pol, ca string
 		var conf, bm25Score float64
 		scanErr := rows.Scan(
-			&id, &atomID, &cat, &summary,
+			&id, &atomID, &cat, &summary, &pol,
 			&conf, &ca, &bm25Score,
 		)
 		if scanErr != nil {
@@ -546,14 +561,19 @@ func (ms *MemorySearch) searchKnowledge(
 			)
 		}
 		out = append(out, rawResult{
-			Type:      "knowledge",
-			Summary:   fmt.Sprintf("[%s] %s", cat, summary),
-			Source:    "knowledge_atoms",
-			CreatedAt: parseSQLiteTime(ca),
-			RawBM25:   bm25Score,
-			IsFTS:     true,
-			DedupKey:  fmt.Sprintf("knowledge:%d", id),
-			LayerPrio: prioKnowledge,
+			Type:       "knowledge",
+			Summary:    fmt.Sprintf("[%s] %s", cat, summary),
+			Source:     "knowledge_atoms",
+			CreatedAt:  parseSQLiteTime(ca),
+			RawBM25:    bm25Score,
+			IsFTS:      true,
+			DedupKey:   fmt.Sprintf("knowledge:%d", id),
+			MsgID:      id,
+			AtomID:     atomID,
+			Category:   cat,
+			Polarity:   pol,
+			Confidence: conf,
+			LayerPrio:  prioKnowledge,
 		})
 	}
 	return out, rows.Err()
@@ -973,11 +993,17 @@ func scoreResults(results []rawResult) []SearchResult {
 		s = math.Round(s*1000) / 1000
 
 		out = append(out, SearchResult{
-			Type:      r.Type,
-			Summary:   r.Summary,
-			Score:     s,
-			Source:    r.Source,
-			CreatedAt: r.CreatedAt.Format(time.RFC3339),
+			Type:       r.Type,
+			Summary:    r.Summary,
+			Score:      s,
+			Source:     r.Source,
+			CreatedAt:  r.CreatedAt.Format(time.RFC3339),
+			Role:       r.Role,
+			Category:   r.Category,
+			Polarity:   r.Polarity,
+			Confidence: r.Confidence,
+			AtomID:     r.AtomID,
+			MsgID:      r.MsgID,
 		})
 	}
 	return out
@@ -1369,9 +1395,38 @@ func (ms *MemorySearch) searchMessagesArchive(
 			RawBM25:     h.score,
 			IsFTS:       true,
 			DedupKey:    fmt.Sprintf("archive:%d", h.id),
+			Role:        h.role,
+			MsgID:       h.id,
 			LayerPrio:   prioArchive,
 			FullContent: fmt.Sprintf("[%s] %s", h.role, content),
 		})
 	}
 	return out, nil
+}
+
+// Search — programmatic entry into the engine for in-process consumers
+// (wave 122, slice D: Archivist convergence). Same pipeline as Execute
+// (fanOut -> dedup -> score -> sort -> diversity) without the tool's
+// JSON wrapper. SSOT retrieval: engine improvements reach all consumers.
+func (ms *MemorySearch) Search(
+	ctx context.Context,
+	query string,
+	limit int,
+	sessionID string,
+) []SearchResult {
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	ctx, cancel := context.WithTimeout(ctx, searchTimeout)
+	defer cancel()
+	results := ms.fanOut(ctx, query, limit, false, sessionID)
+	results = dedupResults(results)
+	scored := scoreResults(results)
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].Score > scored[j].Score
+	})
+	return ensureLayerDiversity(scored, limit)
 }

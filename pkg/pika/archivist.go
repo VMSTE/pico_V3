@@ -700,7 +700,12 @@ func (a *Archivist) handleSearchContext(
 	return string(data)
 }
 
-// executeSearchContext performs the Go fan-out across 4 aspects.
+// executeSearchContext — wave 122 (slice D): convergence on the
+// search_memory engine (SSOT retrieval). Aspects knowledge/messages/
+// archive are served by ONE engine call (same layers, RRF, clusters,
+// cold archive, artifacts); the SearchContextResult JSON contract is
+// unchanged. Archivist specifics (polarity, lastN tail, correlated
+// tools, reasoning boost) stay on top.
 func (a *Archivist) executeSearchContext(
 	ctx context.Context,
 	params SearchContextParams,
@@ -720,79 +725,127 @@ func (a *Archivist) executeSearchContext(
 		limit = 20
 	}
 
+	want := make(map[string]bool, len(aspects))
 	for _, aspect := range aspects {
-		switch aspect {
+		want[aspect] = true
+	}
+
+	// One engine call serves knowledge/messages/archive/tool_prefs.
+	var engine []SearchResult
+	if want["knowledge"] || want["messages"] || want["archive"] ||
+		want["tool_prefs"] {
+		ms := NewMemorySearch(a.mem)
+		engine = ms.Search(ctx, params.Query, limit, a.currentSessionKey)
+	}
+
+	seenMsg := make(map[string]bool)
+	mapMessage := func(r SearchResult) {
+		content := stripRolePrefix(r.Summary, r.Role)
+		ck := normalizeContentKey(content)
+		if ck == "" || seenMsg[ck] {
+			return
+		}
+		seenMsg[ck] = true
+		// Turn is the archivist-side pika-session index; the engine
+		// works in message ids (r.MsgID). Tail hits below carry Turn.
+		result.Messages = append(result.Messages, MessageHit{
+			Role:    r.Role,
+			Content: truncateStr(content, 500),
+		})
+	}
+	keepKnowledge := func(r SearchResult) bool {
+		// Same filter semantics as the retired searchKnowledge.
+		return params.Polarity == "" || params.Polarity == "all" ||
+			r.Polarity == params.Polarity
+	}
+	mapKnowledge := func(r SearchResult) {
+		result.Knowledge = append(result.Knowledge, KnowledgeHit{
+			Category:   r.Category,
+			Summary:    stripCatPrefix(r.Summary, r.Category),
+			Polarity:   r.Polarity,
+			Confidence: r.Confidence,
+		})
+		// PIKA-V3: atom_usage telemetry (TZ-v2-9a F-2) — preserved.
+		if r.AtomID != "" {
+			tid, _ := a.mem.GetMaxPikaSessionID(ctx, a.currentSessionKey)
+			_ = a.mem.InsertAtomUsage(
+				ctx, r.AtomID, a.currentSpanID, tid, "BRIEF",
+				nil, nil, "", "", a.currentSpanID,
+			)
+		}
+	}
+
+	for _, r := range engine {
+		switch r.Type {
+		case "session", "archive":
+			if want["messages"] || want["archive"] {
+				mapMessage(r)
+			}
 		case "knowledge":
-			hits, err := a.searchKnowledge(
-				ctx, params.Query, params.Polarity, limit,
-			)
-			if err == nil {
-				result.Knowledge = hits
+			if r.Category == "tool_pref" && want["tool_prefs"] {
+				// tool_prefs ignores polarity (as the old code did).
+				result.ToolPrefs = append(result.ToolPrefs, KnowledgeHit{
+					Category:   r.Category,
+					Summary:    stripCatPrefix(r.Summary, r.Category),
+					Polarity:   r.Polarity,
+					Confidence: r.Confidence,
+				})
 			}
-		case "messages":
-			lastN := a.cfg.DefaultLastN
-			if isRotation {
-				lastN = a.cfg.RotationLastN
+			if want["knowledge"] && keepKnowledge(r) {
+				mapKnowledge(r)
 			}
-			hits, err := a.searchMessages(
-				ctx, params.Query, limit, lastN,
-			)
-			if err == nil {
-				result.Messages = hits
-			} else {
-				log.Printf("WARN pika/archivist: messages search: %v", err)
-			}
-		case "reasoning":
-			kw, err := a.extractReasoningKeywords(ctx)
-			if err == nil {
-				result.ReasoningKeywords = kw
-			}
-		case "archive":
-			aHits, err := a.mem.SearchEventsArchiveFTS(
-				ctx, params.Query, limit,
-			)
-			if err == nil {
-				for _, h := range aHits {
-					result.Knowledge = append(
-						result.Knowledge,
-						KnowledgeHit{
-							Category: h.Type,
-							Summary:  h.Summary,
-							Polarity: "neutral",
-						},
-					)
-				}
-			}
-		case "correlated_tools":
-			ct, err := a.mem.QueryCorrelatedTools(ctx, params.Query, limit)
-			if err == nil {
-				result.CorrelatedTools = ct
-			}
-		case "tool_prefs":
-			hits, err := a.searchKnowledge(
-				ctx, params.Query, "", limit,
-			)
-			if err == nil {
-				var prefs []KnowledgeHit
-				for _, h := range hits {
-					if h.Category == "tool_pref" {
-						prefs = append(prefs, h)
-					}
-				}
-				result.ToolPrefs = prefs
+		default:
+			// event / reasoning / artifact / registry / snapshot —
+			// surfaced like the old "archive" (events) aspect did.
+			if want["knowledge"] || want["archive"] {
+				result.Knowledge = append(result.Knowledge, KnowledgeHit{
+					Category: r.Type,
+					Summary:  r.Summary,
+					Polarity: "neutral",
+				})
 			}
 		}
 	}
 
-	// Reasoning-guided retrieval boost (D-62, D-98)
+	// Recent tail (recency feed, not search) — on top of engine hits.
+	if want["messages"] {
+		lastN := a.cfg.DefaultLastN
+		if isRotation {
+			lastN = a.cfg.RotationLastN
+		}
+		tail, err := a.recentMessages(ctx, lastN)
+		if err != nil {
+			log.Printf("WARN pika/archivist: recent msgs: %v", err)
+		}
+		for _, h := range tail {
+			ck := normalizeContentKey(h.Content)
+			if ck == "" || seenMsg[ck] {
+				continue
+			}
+			seenMsg[ck] = true
+			result.Messages = append(result.Messages, h)
+		}
+	}
+
+	if want["reasoning"] {
+		if kw, err := a.extractReasoningKeywords(ctx); err == nil {
+			result.ReasoningKeywords = kw
+		}
+	}
+	if want["correlated_tools"] {
+		if ct, err := a.mem.QueryCorrelatedTools(
+			ctx, params.Query, limit,
+		); err == nil {
+			result.CorrelatedTools = ct
+		}
+	}
+
+	// Reasoning-guided retrieval boost (D-62, D-98).
 	if a.cfg.ReasoningGuidedRetrieval &&
 		len(result.ReasoningKeywords) > 0 {
-		if !a.hasDrift(
-			params.Query, result.ReasoningKeywords,
-		) {
+		if !a.hasDrift(params.Query, result.ReasoningKeywords) {
 			boosted, err := a.boostWithReasoning(
-				ctx, result.ReasoningKeywords,
-				params.Polarity, limit,
+				ctx, result.ReasoningKeywords, params.Polarity, limit,
 			)
 			if err == nil && len(boosted) > 0 {
 				result.Knowledge = deduplicateKnowledge(
@@ -805,56 +858,14 @@ func (a *Archivist) executeSearchContext(
 	return result, nil
 }
 
-// searchKnowledge queries knowledge_atoms via FTS5.
-func (a *Archivist) searchKnowledge(
+// recentMessages — guaranteed chat tail (lastN): a recency feed, NOT
+// search (the engine has no "last N without query" mode). Scope
+// semantics unchanged (D-AUDIT-104). Wave 122 (slice D): FTS search
+// moved to the engine; only the tail stays here.
+func (a *Archivist) recentMessages(
 	ctx context.Context,
-	query, polarity string,
-	limit int,
-) ([]KnowledgeHit, error) {
-	// Волна 86: сырой multiword-запрос в FTS MATCH работал как AND
-	// (слишком строго). buildFTSQuery — OR по словам, как везде.
-	fq := buildFTSQuery(query)
-	if fq == "" {
-		return nil, nil
-	}
-	atoms, err := a.mem.QueryKnowledgeFTS(
-		ctx, fq, limit*2,
-	)
-	if err != nil {
-		return nil, err
-	}
-	var hits []KnowledgeHit
-	for _, atom := range atoms {
-		if polarity != "" && polarity != "all" &&
-			atom.Polarity != polarity {
-			continue
-		}
-		// PIKA-V3: record atom_usage (TZ-v2-9a F-2)
-		tid, _ := a.mem.GetMaxPikaSessionID(ctx, a.currentSessionKey)
-		_ = a.mem.InsertAtomUsage(ctx, atom.AtomID, a.currentSpanID, tid, "BRIEF", nil, nil, "", "", a.currentSpanID)
-		hits = append(hits, KnowledgeHit{
-			Category:   atom.Category,
-			Summary:    atom.Summary,
-			Polarity:   atom.Polarity,
-			Confidence: atom.Confidence,
-		})
-		if len(hits) >= limit {
-			break
-		}
-	}
-	return hits, nil
-}
-
-// searchMessages searches messages across all sessions.
-func (a *Archivist) searchMessages(
-	ctx context.Context,
-	query string,
-	limit, lastN int,
+	lastN int,
 ) ([]MessageHit, error) {
-	var hits []MessageHit
-
-	// D-AUDIT-104: per-chat memory scope — session mode restricts to the
-	// current chat (chat_id); all mode searches the whole base.
 	scopeWhere := ""
 	var scopeArgs []any
 	if a.mem.GetMemoryScope(ctx, a.currentSessionKey) == "session" &&
@@ -862,103 +873,47 @@ func (a *Archivist) searchMessages(
 		scopeWhere = " WHERE chat_id = ?"
 		scopeArgs = append(scopeArgs, a.currentSessionKey)
 	}
-
-	// Guaranteed last N messages (most recent, any session)
-	// #nosec G202 -- scopeWhere is a static string; value parameterized
+	// #nosec G202 -- scopeWhere is a static string; values parameterized
 	rows, err := a.mem.db.QueryContext(ctx,
-		`SELECT role, content, pika_session_id
-		FROM messages`+scopeWhere+` ORDER BY id DESC LIMIT ?`,
+		"SELECT role, content, pika_session_id FROM messages"+
+			scopeWhere+" ORDER BY id DESC LIMIT ?",
 		append(append([]any{}, scopeArgs...), lastN)...)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"pika/archivist: recent msgs: %w", err,
-		)
+		return nil, fmt.Errorf("pika/archivist: recent msgs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
-	seen := make(map[string]bool)
+	var hits []MessageHit
 	for rows.Next() {
 		var role string
 		var content sql.NullString
 		var turnRaw sql.NullString
-		if err := rows.Scan(
-			&role, &content, &turnRaw,
-		); err != nil {
+		if err := rows.Scan(&role, &content, &turnRaw); err != nil {
 			continue
 		}
-		turn := parseTurnID(turnRaw)
-		c := content.String
-		key := fmt.Sprintf("%s:%d", role, turn)
-		seen[key] = true
 		hits = append(hits, MessageHit{
 			Role:    role,
-			Content: truncateStr(c, 500),
-			Turn:    turn,
+			Content: truncateStr(content.String, 500),
+			Turn:    parseTurnID(turnRaw),
 		})
 	}
-	if err := rows.Err(); err != nil {
-		return hits, nil
-	}
+	return hits, rows.Err()
+}
 
-	// Волна 86 (бой 20 авг): FTS5 вместо однофразного LIKE.
-	// LIKE '%весь запрос%' не находил многословное, а регистр кириллицы
-	// («СИНИЙ» vs «синий») SQLite не складывает. messages_fts (unicode61)
-	// решает оба; buildFTSQuery — тот же, что в search_memory.
-	if query != "" {
-		fq := buildFTSQuery(query)
-		if fq != "" {
-			ftsQ := `SELECT m.role, m.content, m.pika_session_id
-				FROM messages_fts f
-				JOIN messages m ON m.id = f.rowid
-				WHERE messages_fts MATCH ?`
-			ftsArgs := []any{fq}
-			if scopeWhere != "" {
-				ftsQ += ` AND m.chat_id = ?`
-				ftsArgs = append(ftsArgs, a.currentSessionKey)
-			}
-			// Волна 90: over-fetch x4 + tie-break, как в search_memory.
-			ftsQ += ` ORDER BY bm25(messages_fts), m.id LIMIT ?`
-			ftsArgs = append(ftsArgs, limit*4)
-			// #nosec G202 -- статические фрагменты; значения параметризованы
-			rows2, err2 := a.mem.db.QueryContext(ctx, ftsQ, ftsArgs...)
-			if err2 != nil {
-				log.Printf("WARN pika/archivist: messages FTS: %v (q=%q)", err2, fq)
-			}
-			if err2 == nil {
-				defer rows2.Close()
-				// Волна 90: дедуп эха по содержимому — N копий вопроса
-				// схлопываются в одну строку, слоты достаются фактам.
-				seenContent := make(map[string]bool)
-				for rows2.Next() {
-					var role string
-					var content sql.NullString
-					var turnRaw sql.NullString
-					if err := rows2.Scan(&role, &content, &turnRaw); err != nil {
-						continue
-					}
-					turn := parseTurnID(turnRaw)
-					key := fmt.Sprintf("%s:%d", role, turn)
-					if seen[key] {
-						continue
-					}
-					seen[key] = true
-					ck := normalizeContentKey(content.String)
-					if seenContent[ck] {
-						continue
-					}
-					seenContent[ck] = true
-					hits = append(hits, MessageHit{
-						Role:    role,
-						Content: truncateStr(content.String, 500),
-						Turn:    turn,
-					})
-				}
-				_ = rows2.Err()
-			}
-		}
+// stripRolePrefix / stripCatPrefix remove the engine's "[role] " and
+// "[cat] " Summary prefixes so MessageHit/KnowledgeHit stay clean.
+func stripRolePrefix(summary, role string) string {
+	if role == "" {
+		return summary
 	}
+	return strings.TrimPrefix(summary, "["+role+"] ")
+}
 
-	return hits, nil
+func stripCatPrefix(summary, cat string) string {
+	if cat == "" {
+		return summary
+	}
+	return strings.TrimPrefix(summary, "["+cat+"] ")
 }
 
 func (a *Archivist) extractReasoningKeywords(
@@ -1044,8 +999,24 @@ func (a *Archivist) boostWithReasoning(
 	if len(keywords) > maxKW {
 		keywords = keywords[:maxKW]
 	}
-	q := strings.Join(keywords, " OR ")
-	return a.searchKnowledge(ctx, q, polarity, limit)
+	q := strings.Join(keywords, " ")
+	ms := NewMemorySearch(a.mem)
+	var hits []KnowledgeHit
+	for _, r := range ms.Search(ctx, q, limit, a.currentSessionKey) {
+		if r.Type != "knowledge" {
+			continue
+		}
+		if polarity != "" && polarity != "all" && r.Polarity != polarity {
+			continue
+		}
+		hits = append(hits, KnowledgeHit{
+			Category:   r.Category,
+			Summary:    stripCatPrefix(r.Summary, r.Category),
+			Polarity:   r.Polarity,
+			Confidence: r.Confidence,
+		})
+	}
+	return hits, nil
 }
 
 // compressBrief asks the LLM to compress the brief.

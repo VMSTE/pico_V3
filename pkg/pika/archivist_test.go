@@ -539,15 +539,12 @@ func TestArchivist_SearchMessages_FTS(t *testing.T) {
 		return false
 	}
 
-	hits, err := a.searchMessages(ctx, "любимый цвет пользователя Gar", 10, 5)
-	if err != nil {
-		t.Fatalf("searchMessages: %v", err)
-	}
+	hits := archSearchMessages(t, a, ctx, "любимый цвет пользователя Gar")
 	if !hasFact(hits) {
 		t.Fatalf("verbose query: fact not found in %d hits", len(hits))
 	}
 
-	hits2, _ := a.searchMessages(ctx, "синий", 10, 5)
+	hits2 := archSearchMessages(t, a, ctx, "синий")
 	if !hasFact(hits2) {
 		t.Fatal("caps fact not found by lowercase query")
 	}
@@ -655,10 +652,7 @@ func TestArchivist_SearchMessages_NonNumericSessionID(t *testing.T) {
 	}
 	a.currentSessionKey = "sk_v1_old"
 
-	hits, err := a.searchMessages(ctx, "любимый цвет", 10, 5)
-	if err != nil {
-		t.Fatalf("searchMessages: %v", err)
-	}
+	hits := archSearchMessages(t, a, ctx, "любимый цвет")
 	found := false
 	for _, h := range hits {
 		if strings.Contains(h.Content, "СИНИЙ") {
