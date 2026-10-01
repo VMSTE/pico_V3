@@ -1275,12 +1275,12 @@ func (bm *BotMemory) BackfillMessagesArchiveFTS(ctx context.Context) (int, error
 	for rows.Next() {
 		var id int64
 		if sErr := rows.Scan(&id); sErr != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, sErr
 		}
 		ids = append(ids, id)
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return 0, err
 	}
