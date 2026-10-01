@@ -767,7 +767,7 @@ func (ms *MemorySearch) searchReasoning(
 		`SELECT id, task, mode, ts
 		FROM reasoning_log
 		WHERE EXISTS (
-			SELECT 1 FROM json_each(reasoning_keywords)
+			SELECT 1 FROM json_each(CASE WHEN json_valid(reasoning_keywords) THEN reasoning_keywords END)
 			WHERE value LIKE ?
 		)
 		ORDER BY ts DESC LIMIT ?`,
@@ -812,7 +812,7 @@ func (ms *MemorySearch) searchReasoning(
 		`SELECT id, task, mode, ts
 		FROM reasoning_log_archive
 		WHERE EXISTS (
-			SELECT 1 FROM json_each(reasoning_keywords)
+			SELECT 1 FROM json_each(CASE WHEN json_valid(reasoning_keywords) THEN reasoning_keywords END)
 			WHERE value LIKE ?
 		)
 		ORDER BY ts DESC LIMIT ?`,

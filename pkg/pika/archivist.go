@@ -907,7 +907,7 @@ func (a *Archivist) searchMessages(
 	if query != "" {
 		fq := buildFTSQuery(query)
 		if fq != "" {
-			ftsQ := `SELECT role, content, pika_session_id
+			ftsQ := `SELECT m.role, m.content, m.pika_session_id
 				FROM messages_fts f
 				JOIN messages m ON m.id = f.rowid
 				WHERE messages_fts MATCH ?`
