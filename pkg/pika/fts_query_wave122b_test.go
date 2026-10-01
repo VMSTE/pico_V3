@@ -111,3 +111,48 @@ func TestScoreResults_RRFPerLayer(t *testing.T) {
 		t.Fatalf("knowledge best = %v, want >=1.0", knowBest)
 	}
 }
+
+// Срез 5: слой с хитами не исчезает из выдачи целиком (и наоборот —
+// слабый слой не впрыскивается).
+func TestEnsureLayerDiversity(t *testing.T) {
+	var scored []SearchResult
+	for i := 0; i < 10; i++ {
+		scored = append(scored, SearchResult{
+			Type: "session", Source: "messages",
+			Score: 1.5 - float64(i)*0.01,
+		})
+	}
+	scored = append(scored, SearchResult{
+		Type: "knowledge", Source: "knowledge_atoms", Score: 1.0,
+	})
+	out := ensureLayerDiversity(scored, 10)
+	found := false
+	for _, r := range out {
+		if r.Source == "knowledge_atoms" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("knowledge layer not injected")
+	}
+	if len(out) != 10 {
+		t.Fatalf("len = %d, want 10", len(out))
+	}
+
+	// Свежий слайс: ensureLayerDiversity мутирует окно (общий backing).
+	var weak []SearchResult
+	for i := 0; i < 10; i++ {
+		weak = append(weak, SearchResult{
+			Type: "session", Source: "messages", Score: 1.5,
+		})
+	}
+	weak = append(weak, SearchResult{
+		Type: "knowledge", Source: "knowledge_atoms", Score: 0.5,
+	})
+	out2 := ensureLayerDiversity(weak, 10)
+	for _, r := range out2 {
+		if r.Source == "knowledge_atoms" {
+			t.Fatal("weak layer must not be injected")
+		}
+	}
+}

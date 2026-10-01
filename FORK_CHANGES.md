@@ -1409,3 +1409,16 @@ Each entry maps to a single wave/phase and its merged PR.
 - **cmd/searchbench (NEW):** прогон кейсов (запрос → ожидаемая подстрока) через настоящий search_memory поверх КОПИИ живой bot_memory.db. Метрика hit@5, отчёт таблицей с рангом и слоем. cases.json — эталоны с боёв (№1: «в какое репо решили переносить» → «Используй atomind-docs», messages.id=3128).
 - **Базовая линия (копия живой базы 30 сен): hit@5 = 0/1 (0%)** — стенд воспроизвёл бой 29 сен точно. Все срезы этапа 1 обязаны двигать эту цифру (гейт ТЗ-122).
 - Бонус-улика стенда: слой reasoning падает с «malformed JSON» (WARN layer reasoning failed) — рядом с известным «ambiguous column name: content», в скоуп этапа 1.
+
+## Волна 122 (срезы Б) — Качество search_memory: стемминг, RRF, кластеры с gap-fill, федеративный минимум (ТЗ-122) · 1 окт 2026
+
+- **ТЗ:** ТЗ-122 этап 1 (срезы 1-5 по бою 30 сен, стенд 122-А)
+- **PR:** pending (wave-122-b-fts)
+- **Стенд (копия живой базы):** база hit@5 0/1 (цель эталона №1, id=3128, вне топ-100) → hit@10 1/1 (кластер [3127-3129] с дословной цитатой, rank 7); выдача 10/10 по теме; слои session/knowledge/archive все представлены. hit@5 честно 0/1: топ-7 — равнорелевантные кластеры одной недельной темы; калибровка констант под n=1 = оверфиттинг, ждём cases.json v2
+- **Files:**
+  - `pkg/pika/memory_tools.go` — MODIFIED: buildFTSQuery — дыры в OR-цепочке (пустые термы из предаллоцированного слайса → syntax error → слой молча пустой), чистка пунктуации/регистра, дедуп термов; гарды пустого fq во всех FTS-слоях (errNoUsableFTSTerms); RRF (Cormack 2009, k=60) по позициям в слоях вместо общего min-max котла bm25; RU-стемминг запроса (kljensen/snowball, префикс stem* — «ноушена»=«ноушен», без переиндексации); мягкие веса слоёв 0.8-1.0 вместо потолка messages=0.5; кластерный мердж сообщений с gap-fill (mergeMessageClusters/mergeCluster — EmergenceMem session scoring + sentence-window); ensureLayerDiversity — федеративный минимум (слой с хитами не исчезает из выдачи); пул over-fetch = константа 100
+  - `go.mod`, `go.sum` — MODIFIED: + github.com/kljensen/snowball v0.10.0
+  - `cmd/searchbench/main.go` — MODIFIED: дамп топ-N (type/score/snippet) при не-OK + расклад слоёв; limit 20
+  - `workspace/AGENT.md` — MODIFIED: «Память: веер запросов» — параллельные search_memory, CRAG-цикл релевантности, режимы feedback/full/around/limit
+  - `pkg/pika/fts_query_wave122_test.go`, `pkg/pika/fts_query_wave122b_test.go` — NEW: 11 тестов (дыры/чистка/дедуп, гарды слоёв, кластер+gap-fill, RRF per-layer, федеративный минимум)
+- **Breaking:** None — изменено ранжирование search_memory (осознанно, цифры выше); схема БД не тронута

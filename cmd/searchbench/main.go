@@ -70,7 +70,7 @@ func main() {
 	fmt.Printf("%-4s %-60s %-6s %s\n", "#", "query", "hit@5", "rank/layer")
 	for i, c := range cases {
 		res := ms.Execute(toolCtx, map[string]any{
-			"query": c.Q, "limit": float64(10),
+			"query": c.Q, "limit": float64(20),
 		})
 		if res == nil || res.IsError {
 			fmt.Printf("%-4d %-60s %-6s ERROR: %s\n", i+1, trunc(c.Q, 60), "-", res.ForLLM)
@@ -102,7 +102,7 @@ func main() {
 		}
 		fmt.Printf("     слои в выдаче: %v (всего %d)\n", types, len(results))
 		if mark != "OK" {
-			for j := 0; j < len(results) && j < 10; j++ {
+			for j := 0; j < len(results); j++ {
 				fmt.Printf("     top%d [%s %.3f] %s\n",
 					j+1, results[j].Type, results[j].Score, trunc(results[j].Summary, 90))
 			}

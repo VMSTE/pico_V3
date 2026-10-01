@@ -194,9 +194,7 @@ func (ms *MemorySearch) Execute(
 	sort.Slice(scored, func(i, j int) bool {
 		return scored[i].Score > scored[j].Score
 	})
-	if len(scored) > parsed.Limit {
-		scored = scored[:parsed.Limit]
-	}
+	scored = ensureLayerDiversity(scored, parsed.Limit)
 
 	out, _ := json.Marshal(scored)
 	return toolshared.SilentResult(string(out))
@@ -428,7 +426,9 @@ func (ms *MemorySearch) searchMessages(
 	q += ` ORDER BY score, m.id LIMIT ?` // bm25: меньше = лучше
 	// ТЗ-122 (срез 1.5): over-fetch x10 — эталон №1 сидел на ранге 46
 	// при отсечке 40 и не доезжал до скоринга в принципе (стенд 30 сен).
-	args = append(args, limit*10)
+	// Pool size is constant, not a function of limit: otherwise the
+	// top composition drifts with the requested limit (wave 122 bench).
+	args = append(args, 100)
 	rows, err := ms.bm.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -1254,4 +1254,37 @@ func (ms *MemorySearch) mergeCluster(
 	best.FullContent = summary
 	best.Boost = boost
 	return best
+}
+
+// ensureLayerDiversity — ТЗ-122 (срез 5): федеративный минимум.
+// Пользователь не обязан знать, где лежит ответ (атом/горячее/архив) —
+// значит ни один слой с хитами не исчезает из выдачи целиком
+// (маятник боя 30 сен–1 окт: сначала топ был только атомы, после
+// срезов 2-4 — только сообщения). Слой с лучшим хитом >= 60% лидера
+// окна получает последний слот, вытесняя самый слабый хвост.
+func ensureLayerDiversity(scored []SearchResult, limit int) []SearchResult {
+	if len(scored) <= limit {
+		return scored
+	}
+	top := scored[:limit]
+	rest := scored[limit:]
+	inTop := map[string]bool{}
+	topScore := 0.0
+	for _, r := range top {
+		inTop[r.Source] = true
+		if r.Score > topScore {
+			topScore = r.Score
+		}
+	}
+	for _, r := range rest {
+		if inTop[r.Source] {
+			continue
+		}
+		if topScore > 0 && r.Score < 0.6*topScore {
+			continue // слишком слабый слой не впрыскиваем
+		}
+		top[len(top)-1] = r
+		inTop[r.Source] = true
+	}
+	return top
 }
