@@ -1271,16 +1271,15 @@ func (bm *BotMemory) BackfillMessagesArchiveFTS(ctx context.Context) (int, error
 	if err != nil {
 		return 0, fmt.Errorf("pika/botmemory: archive fts backfill scan: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 	var ids []int64
 	for rows.Next() {
 		var id int64
 		if sErr := rows.Scan(&id); sErr != nil {
-			_ = rows.Close()
 			return 0, sErr
 		}
 		ids = append(ids, id)
 	}
-	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return 0, err
 	}
