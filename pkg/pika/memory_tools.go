@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -17,6 +18,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/kljensen/snowball"
 	"golang.org/x/sync/errgroup"
 
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
@@ -52,19 +54,32 @@ type rawResult struct {
 	LayerPrio float64
 	MsgID     int64
 	ChatID    string
+	// ТЗ-122 (срез 1.5): буст «горячего кластера» — соседи хита по id
+	// тоже матчатся (ответ размазан по 2-3 сообщениям диалога).
+	Boost float64
 	// D-AUDIT-126: сырой текст хита (до обрезки) — отдаётся при full=true.
 	FullContent string
 }
 
+// errNoUsableFTSTerms — в запросе не осталось ни одного пригодного
+// терма после чистки (ТЗ-122, срез 1): FTS-слои пропускаются, а не
+// падают syntax error.
+var errNoUsableFTSTerms = errors.New("fts: no usable terms")
+
 // PIKA-V3: Layer priority constants for scoring.
+// ТЗ-122 (срез 3): мягкие веса слоёв вместо жёсткого потолка.
+// Пользователь не обязан знать, где лежит ответ (атом/горячее/архив) —
+// слой это происхождение, а не приговор. Потолок messages=0.5 структурно
+// не пускал живое сообщение в топ-5 при пяти атомах (стенд 30 сен:
+// макс. скор сообщения 0.82 против 0.938 у пятого атома).
 const (
 	prioKnowledge   = 1.0
-	prioEvents      = 0.9
-	prioArchive     = 0.8
-	prioReasoning   = 0.7
-	prioRegistry    = 0.6
-	prioArtifacts   = 0.65 // волна 108: паспорта артефактов
-	prioMessages    = 0.5
+	prioEvents      = 0.95
+	prioArchive     = 0.95
+	prioMessages    = 0.95
+	prioReasoning   = 0.85
+	prioArtifacts   = 0.85 // волна 108: паспорта артефактов
+	prioRegistry    = 0.8
 	recencyMaxDays  = 30.0
 	recencyMaxBoost = 0.1
 	searchTimeout   = 5 * time.Second
@@ -178,9 +193,7 @@ func (ms *MemorySearch) Execute(
 	sort.Slice(scored, func(i, j int) bool {
 		return scored[i].Score > scored[j].Score
 	})
-	if len(scored) > parsed.Limit {
-		scored = scored[:parsed.Limit]
-	}
+	scored = ensureLayerDiversity(scored, parsed.Limit)
 
 	out, _ := json.Marshal(scored)
 	return toolshared.SilentResult(string(out))
@@ -382,6 +395,9 @@ func (ms *MemorySearch) searchMessages(
 	// LIKE+счётчика слов: IDF взвешивает редкие слова выше шума.
 	// Scope session — фильтр chat_id (D-AUDIT-104); all — вся база.
 	fq := buildFTSQuery(query) // слова через OR, каждое в кавычках
+	if fq == "" {
+		return nil, nil
+	}
 	var args []any
 	// #nosec G202 -- WHERE из статических фрагментов; значения параметризованы
 	// Волна 86 (бой 20 авг): role=tool вне выдачи — иначе поиск находит
@@ -407,7 +423,11 @@ func (ms *MemorySearch) searchMessages(
 	// и слоты достаются разным сообщениям. Финальный срез до limit —
 	// в Execute после скоринга, как и было.
 	q += ` ORDER BY score, m.id LIMIT ?` // bm25: меньше = лучше
-	args = append(args, limit*4)
+	// ТЗ-122 (срез 1.5): over-fetch x10 — эталон №1 сидел на ранге 46
+	// при отсечке 40 и не доезжал до скоринга в принципе (стенд 30 сен).
+	// Pool size is constant, not a function of limit: otherwise the
+	// top composition drifts with the requested limit (wave 122 bench).
+	args = append(args, 100)
 	rows, err := ms.bm.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -460,6 +480,14 @@ func (ms *MemorySearch) searchMessages(
 			),
 		})
 	}
+
+	// ТЗ-122 (срез 4): кластер как единица выдачи — хиты, идущие подряд
+	// по id в одном чате, сливаются в один результат (EmergenceMem:
+	// скоринг сессии + sentence-window small-to-big). Дословный ответ
+	// часто в НЕматчнувшемся сообщении между хитами (эталон №1: цитата
+	// в 3128, в топ-10 вошли только соседи 3127/3129) — gap-fill
+	// дотягивает цепочку целиком.
+	out = ms.mergeMessageClusters(ctx, out)
 	return out, rows.Err()
 }
 
@@ -470,6 +498,9 @@ func (ms *MemorySearch) searchKnowledge(
 	limit int,
 ) ([]rawResult, error) {
 	fq := buildFTSQuery(query)
+	if fq == "" {
+		return nil, nil
+	}
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT ka.id, ka.atom_id, ka.category,
 		ka.summary, ka.confidence, ka.created_at,
@@ -522,6 +553,9 @@ func (ms *MemorySearch) searchArchive(
 	limit int,
 ) ([]rawResult, error) {
 	fq := buildFTSQuery(query)
+	if fq == "" {
+		return nil, nil
+	}
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT ka.id, ka.source_message_id,
 		ka.summary, ka.created_at,
@@ -598,6 +632,9 @@ func (ms *MemorySearch) searchEventsArchive(
 	limit int,
 ) ([]rawResult, error) {
 	fq := buildFTSQuery(query)
+	if fq == "" {
+		return nil, nil
+	}
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT ea.id, ea.type, ea.outcome,
 		ea.summary, ea.ts,
@@ -663,14 +700,20 @@ func (ms *MemorySearch) searchReasoning(
 	// Ключевой слой для «о чём она думала, когда…» — keywords-ярлыки
 	// такого не содержат. Сниппет — существующий extractSnippet (окно).
 	fq := buildFTSQuery(query)
-	rows, err := ms.bm.db.QueryContext(ctx,
-		`SELECT rl.id, rl.task, rl.mode, rl.ts, rl.reasoning_text,
+	var rows *sql.Rows
+	var err error
+	if fq == "" {
+		err = errNoUsableFTSTerms
+	} else {
+		rows, err = ms.bm.db.QueryContext(ctx,
+			`SELECT rl.id, rl.task, rl.mode, rl.ts, rl.reasoning_text,
 		bm25(reasoning_fts) AS score
 		FROM reasoning_log rl
 		JOIN reasoning_fts rf ON rl.id = rf.rowid
 		WHERE reasoning_fts MATCH ?
 		ORDER BY score LIMIT ?`,
-		fq, limit)
+			fq, limit)
+	}
 	if err != nil {
 		logLayerWarn("reasoning_fts", err)
 	} else {
@@ -865,44 +908,44 @@ func dedupResults(results []rawResult) []rawResult {
 }
 
 // scoreResults applies normalized_bm25 * layer_priority + recency.
+// ТЗ-122 (срез 1.5): RRF (reciprocal rank fusion, Cormack 2009) —
+// слияние слоёв по ПОЗИЦИЯМ, не по сырым bm25: шкалы таблиц
+// несопоставимы, позиции сопоставимы. k=60 — классика без тюнинга;
+// вес слоя = LayerPrio. Индустриальный дефолт hybrid search (Redis,
+// Elasticsearch). Склейка min-max по общему котлу — антипаттерн:
+// слой с "более отрицательной" шкалой получал систематическое
+// преимущество независимо от релевантности.
+const rrfK = 60.0
+
 func scoreResults(results []rawResult) []SearchResult {
 	if len(results) == 0 {
 		return []SearchResult{}
 	}
 
-	// Collect BM25 range for normalization
-	var minBM, maxBM float64
-	hasFTS := false
-	for _, r := range results {
-		if !r.IsFTS {
-			continue
-		}
-		if !hasFTS {
-			minBM = r.RawBM25
-			maxBM = r.RawBM25
-			hasFTS = true
-		} else {
-			if r.RawBM25 < minBM {
-				minBM = r.RawBM25
+	// Ранг внутри своего слоя: FTS — по bm25 (меньше = лучше),
+	// при равенстве и для не-FTS слоёв — по свежести.
+	byLayer := map[string][]int{}
+	for i, r := range results {
+		byLayer[r.Source] = append(byLayer[r.Source], i)
+	}
+	rrf := make([]float64, len(results))
+	for _, idxs := range byLayer {
+		sort.Slice(idxs, func(a, b int) bool {
+			ra, rb := results[idxs[a]], results[idxs[b]]
+			if ra.IsFTS && rb.IsFTS && ra.RawBM25 != rb.RawBM25 {
+				return ra.RawBM25 < rb.RawBM25
 			}
-			if r.RawBM25 > maxBM {
-				maxBM = r.RawBM25
-			}
+			return ra.CreatedAt.After(rb.CreatedAt)
+		})
+		for rank0, i := range idxs {
+			rrf[i] = results[i].LayerPrio *
+				(rrfK + 1) / (rrfK + float64(rank0) + 1)
 		}
 	}
 
 	now := time.Now()
 	out := make([]SearchResult, 0, len(results))
-	for _, r := range results {
-		// Normalized BM25: 0..1 (1 = best match)
-		// bm25() returns negative; more negative = better
-		var norm float64
-		if r.IsFTS && maxBM != minBM {
-			norm = (maxBM - r.RawBM25) / (maxBM - minBM)
-		} else {
-			norm = 1.0 // non-FTS or single FTS result
-		}
-
+	for i, r := range results {
 		// Recency: linear decay 30d, clamp 0..0.1
 		days := now.Sub(r.CreatedAt).Hours() / 24.0
 		recency := 0.0
@@ -911,7 +954,9 @@ func scoreResults(results []rawResult) []SearchResult {
 				(1.0 - days/recencyMaxDays)
 		}
 
-		s := norm*r.LayerPrio + recency
+		// Кластерный буст (горячие соседи) мультипликативно усиливает
+		// позиционный скор слоя.
+		s := rrf[i]*(1+r.Boost) + recency
 		s = math.Round(s*1000) / 1000
 
 		out = append(out, SearchResult{
@@ -927,20 +972,51 @@ func scoreResults(results []rawResult) []SearchResult {
 
 // buildFTSQuery converts natural language to FTS5 OR query.
 // Each word is quoted for literal matching.
+// ТЗ-122 (срез 1): пунктуация срезается с краёв, термы приводятся к
+// нижнему регистру и дедупятся; пустые НЕ попадают в запрос — старый
+// код оставлял дыры в заранее аллоцированном слайсе (continue при
+// пустом слове), давая `"a" OR  OR "b"` -> syntax error -> FTS-слой
+// молча возвращал пусто на любом запросе с "пустым" словом.
 func buildFTSQuery(query string) string {
 	words := strings.Fields(query)
 	if len(words) == 0 {
 		return query
 	}
-	quoted := make([]string, len(words))
-	for i, w := range words {
-		w = strings.ReplaceAll(w, "\"", "")
-		if w == "" {
+	seen := make(map[string]bool, len(words))
+	quoted := make([]string, 0, len(words)*2)
+	for _, w := range words {
+		w = strings.ToLower(strings.Trim(w, "\"'`.,;:!?()[]{}<>*+^~—–-=|/\\"))
+		if w == "" || seen[w] {
 			continue
 		}
-		quoted[i] = "\"" + w + "\""
+		seen[w] = true
+		quoted = append(quoted, "\""+w+"\"")
+		// ТЗ-122 (срез 2): RU-стемминг на стороне ЗАПРОСА (snowball) —
+		// стем идёт префиксным термом stem*: "ноушена" находит "ноушен"
+		// (бой 30 сен, эталон №1) без переиндексации контента.
+		if !hasCyrillic(w) {
+			continue
+		}
+		stem, err := snowball.Stem(w, "russian", true)
+		if err != nil || stem == "" || stem == w ||
+			len([]rune(stem)) < 3 || seen[stem] {
+			continue
+		}
+		seen[stem] = true
+		quoted = append(quoted, stem+"*")
 	}
 	return strings.Join(quoted, " OR ")
+}
+
+// hasCyrillic — стеммим только русские слова; прочее snowball-ru
+// переваривает непредсказуемо.
+func hasCyrillic(s string) bool {
+	for _, r := range s {
+		if unicode.Is(unicode.Cyrillic, r) {
+			return true
+		}
+	}
+	return false
 }
 
 // extractSnippet finds query in content, returns context.
@@ -1064,4 +1140,153 @@ func (ms *MemorySearch) searchArtifacts(
 		})
 	}
 	return out, rows.Err()
+}
+
+// mergeMessageClusters — срез 4: слияние сообщений-кластеров.
+// Сортировка по (chat_id, id), цепочка = тот же чат и разрыв <= 3.
+func (ms *MemorySearch) mergeMessageClusters(
+	ctx context.Context,
+	in []rawResult,
+) []rawResult {
+	if len(in) == 0 {
+		return in
+	}
+	sorted := make([]rawResult, len(in))
+	copy(sorted, in)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].ChatID != sorted[j].ChatID {
+			return sorted[i].ChatID < sorted[j].ChatID
+		}
+		return sorted[i].MsgID < sorted[j].MsgID
+	})
+
+	var out []rawResult
+	cluster := []rawResult{sorted[0]}
+	flush := func() {
+		if len(cluster) == 1 {
+			out = append(out, cluster[0])
+		} else {
+			out = append(out, ms.mergeCluster(ctx, cluster))
+		}
+		cluster = nil
+	}
+	for i := 1; i < len(sorted); i++ {
+		prev := cluster[len(cluster)-1]
+		cur := sorted[i]
+		if cur.ChatID == prev.ChatID && cur.MsgID-prev.MsgID <= 3 {
+			cluster = append(cluster, cur)
+			continue
+		}
+		flush()
+		cluster = []rawResult{cur}
+	}
+	flush()
+	return out
+}
+
+// mergeCluster — один кластер: скор = лучший bm25 члена + буст за
+// размер (0.2 за члена сверх первого, кап 0.6); текст — ВСЯ цепочка
+// сообщений от первого до последнего id (gap-fill из базы, без
+// role=tool), кап 800 символов.
+func (ms *MemorySearch) mergeCluster(
+	ctx context.Context,
+	members []rawResult,
+) rawResult {
+	best := members[0]
+	for _, m := range members[1:] {
+		if m.RawBM25 < best.RawBM25 {
+			best = m
+		}
+	}
+	lo := members[0].MsgID
+	hi := members[len(members)-1].MsgID
+
+	type msgLine struct{ role, content string }
+	var lines []msgLine
+	gapRows, err := ms.bm.db.QueryContext(ctx,
+		`SELECT role, content FROM messages
+		WHERE chat_id = ? AND id BETWEEN ? AND ? AND role != 'tool'
+		ORDER BY id LIMIT 12`,
+		best.ChatID, lo, hi)
+	if err == nil {
+		defer gapRows.Close()
+		for gapRows.Next() {
+			var role string
+			var content sql.NullString
+			if scanErr := gapRows.Scan(&role, &content); scanErr != nil {
+				break
+			}
+			lines = append(lines, msgLine{role, content.String})
+		}
+		if rowsErr := gapRows.Err(); rowsErr != nil {
+			lines = nil // упадём в fallback на сами хиты
+		}
+	}
+	if len(lines) == 0 {
+		for _, m := range members {
+			lines = append(lines, msgLine{"", m.Summary})
+		}
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "[диалог %d-%d] ", lo, hi)
+	for i, l := range lines {
+		if i > 0 {
+			sb.WriteString(" | ")
+		}
+		if l.role != "" {
+			fmt.Fprintf(&sb, "%s: ", l.role)
+		}
+		sb.WriteString(truncateStr(l.content, 150))
+	}
+	summary := truncateStr(sb.String(), 800)
+
+	// Скор кластера = СУММА bm25 членов (аддитивное доказательство,
+	// как RRF суммирует по спискам; EmergenceMem: скор сессии = число
+	// turn'ов в топе). Три подтверждения сильнее одного яркого.
+	sumBM := 0.0
+	for _, m := range members {
+		sumBM += m.RawBM25
+	}
+	best.RawBM25 = sumBM
+	boost := 0.2 * float64(len(members)-1)
+	if boost > 0.6 {
+		boost = 0.6
+	}
+	best.Summary = summary
+	best.FullContent = summary
+	best.Boost = boost
+	return best
+}
+
+// ensureLayerDiversity — ТЗ-122 (срез 5): федеративный минимум.
+// Пользователь не обязан знать, где лежит ответ (атом/горячее/архив) —
+// значит ни один слой с хитами не исчезает из выдачи целиком
+// (маятник боя 30 сен–1 окт: сначала топ был только атомы, после
+// срезов 2-4 — только сообщения). Слой с лучшим хитом >= 60% лидера
+// окна получает последний слот, вытесняя самый слабый хвост.
+func ensureLayerDiversity(scored []SearchResult, limit int) []SearchResult {
+	if len(scored) <= limit {
+		return scored
+	}
+	top := scored[:limit]
+	rest := scored[limit:]
+	inTop := map[string]bool{}
+	topScore := 0.0
+	for _, r := range top {
+		inTop[r.Source] = true
+		if r.Score > topScore {
+			topScore = r.Score
+		}
+	}
+	for _, r := range rest {
+		if inTop[r.Source] {
+			continue
+		}
+		if topScore > 0 && r.Score < 0.6*topScore {
+			continue // слишком слабый слой не впрыскиваем
+		}
+		top[len(top)-1] = r
+		inTop[r.Source] = true
+	}
+	return top
 }
