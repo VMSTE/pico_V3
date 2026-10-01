@@ -57,6 +57,9 @@ func TestExecuteSearchContext_ArchiveVisibleViaEngine(t *testing.T) {
 	for _, m := range res.Messages {
 		if strings.Contains(m.Content, "конвергенция") {
 			found = true
+			if m.Ts == "" {
+				t.Error("hit missing ts")
+			}
 		}
 	}
 	if !found {

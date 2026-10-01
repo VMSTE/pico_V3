@@ -1446,3 +1446,13 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/archivist_test.go` — MODIFIED: 2 теста (волны 90/93) переведены на адаптер archSearchMessages → executeSearchContext
   - `pkg/pika/archivist_convergence_wave122e_test.go` — NEW: холодный архив доезжает до Архивариуса дословно (на старом коде MISS); polarity-фильтр сохранён
 - **Breaking:** None (JSON-контракты тула search_memory и SearchContextResult промпта неизменны)
+
+## Волна 122 (срез Д2) — Промпт Архивариуса под правду + ts в MessageHit · 1 окт 2026
+
+- **ТЗ:** ТЗ-122; аудит buildPrompt 1 окт + решения founder'а (active_plan — вход, словарь пользователя из входа И поиска, словарь не наследуется при дрейфе темы)
+- **PR:** pending (wave-122-d2-prompt-truth)
+- **Files:**
+  - `workspace/prompts/archivist_build.md` — REWRITE (~вдвое короче): реальный вход (markdown-секции, не «structured JSON»), настоящие имена лимитов (max_recommended_*), active_plan — вход для FOCUS (фантомная инструкция про выход удалена), веер 3–4 с потолком max_tool_calls (убрано самопротиворечие «3–5 при ≤4»), messages = хиты всей памяти + ts, словарь пользователя в brief, −фантомы (tiktoken, совет aspects:[archive], 4 раздутых примера → 1)
+  - `pkg/pika/archivist.go` — MODIFIED: MessageHit += ts (omitempty); mapMessage берёт CreatedAt движка, recentMessages читает ts из базы
+  - `pkg/pika/archivist_convergence_wave122e_test.go` — MODIFIED: сторож ts у хитов
+- **Breaking:** None (поле omitempty; промпт — хот-релоад)
