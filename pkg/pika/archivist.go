@@ -129,6 +129,7 @@ type MessageHit struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 	Turn    int    `json:"turn"`
+	Ts      string `json:"ts,omitempty"` // wave 122 D2: hit timestamp
 }
 
 // archivistLLMOutput is the structured JSON from the LLM.
@@ -751,6 +752,7 @@ func (a *Archivist) executeSearchContext(
 		result.Messages = append(result.Messages, MessageHit{
 			Role:    r.Role,
 			Content: truncateStr(content, 500),
+			Ts:      r.CreatedAt,
 		})
 	}
 	keepKnowledge := func(r SearchResult) bool {
@@ -875,7 +877,7 @@ func (a *Archivist) recentMessages(
 	}
 	// #nosec G202 -- scopeWhere is a static string; values parameterized
 	rows, err := a.mem.db.QueryContext(ctx,
-		"SELECT role, content, pika_session_id FROM messages"+
+		"SELECT role, content, pika_session_id, ts FROM messages"+
 			scopeWhere+" ORDER BY id DESC LIMIT ?",
 		append(append([]any{}, scopeArgs...), lastN)...)
 	if err != nil {
@@ -888,13 +890,15 @@ func (a *Archivist) recentMessages(
 		var role string
 		var content sql.NullString
 		var turnRaw sql.NullString
-		if err := rows.Scan(&role, &content, &turnRaw); err != nil {
+		var ts string
+		if err := rows.Scan(&role, &content, &turnRaw, &ts); err != nil {
 			continue
 		}
 		hits = append(hits, MessageHit{
 			Role:    role,
 			Content: truncateStr(content.String, 500),
 			Turn:    parseTurnID(turnRaw),
+			Ts:      ts,
 		})
 	}
 	return hits, rows.Err()
