@@ -1435,3 +1435,14 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/fts_archive_wave122c_test.go` — NEW: прямой FTS после архивации (без атома); бэкфилл + идемпотентность
   - `cmd/searchbench/cases.json` — MODIFIED: эталон №4 = дословный фрагмент архивного сообщения (22 сен)
 - **Breaking:** None (новая таблица; поведение остальных слоёв не тронуто)
+
+## Волна 122 (срез Д) — Конвергенция Архивариуса на движок search_memory (SSOT retrieval) · 1 окт 2026
+
+- **ТЗ:** ТЗ-122 этап 1; решение founder'а 1 окт — один движок retrieval на всех потребителей
+- **PR:** pending (wave-122-e-archivist-convergence)
+- **Files:**
+  - `pkg/pika/memory_tools.go` — MODIFIED: rawResult/SearchResult += Role/Category/Polarity/Confidence/AtomID/MsgID (аддитивно, omitempty — JSON-контракт тула не изменился); слой knowledge читает ka.polarity; слои messages/archive заполняют Role; NEW Search — конвейер Execute (fanOut → dedup → RRF → diversity) без JSON-обёртки для внутренних потребителей
+  - `pkg/pika/archivist.go` — MODIFIED: executeSearchContext переписана на движок (аспекты knowledge/messages/archive/tool_prefs одним вызовом); polarity-фильтр и atom_usage сохранены; NEW recentMessages (recency-хвост, не поиск) + stripRolePrefix/stripCatPrefix; удалены старые searchKnowledge/searchMessages (~160 строк параллельного движка); boostWithReasoning — через движок
+  - `pkg/pika/archivist_test.go` — MODIFIED: 2 теста (волны 90/93) переведены на адаптер archSearchMessages → executeSearchContext
+  - `pkg/pika/archivist_convergence_wave122e_test.go` — NEW: холодный архив доезжает до Архивариуса дословно (на старом коде MISS); polarity-фильтр сохранён
+- **Breaking:** None (JSON-контракты тула search_memory и SearchContextResult промпта неизменны)
