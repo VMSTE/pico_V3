@@ -83,14 +83,22 @@ func TestSearchMessages_NeighborClusterMerge(t *testing.T) {
 // чужой шкалы bm25 (старый общий min-max котёл давал знаниям ~0.15).
 func TestScoreResults_RRFPerLayer(t *testing.T) {
 	results := []rawResult{
-		{Type: "session", Source: "messages", RawBM25: -10, IsFTS: true,
-			LayerPrio: prioMessages, CreatedAt: time.Now()},
-		{Type: "session", Source: "messages", RawBM25: -5, IsFTS: true,
-			LayerPrio: prioMessages, CreatedAt: time.Now()},
-		{Type: "knowledge", Source: "knowledge_atoms", RawBM25: -1, IsFTS: true,
-			LayerPrio: prioKnowledge, CreatedAt: time.Now()},
-		{Type: "knowledge", Source: "knowledge_atoms", RawBM25: -0.5, IsFTS: true,
-			LayerPrio: prioKnowledge, CreatedAt: time.Now()},
+		{
+			Type: "session", Source: "messages", RawBM25: -10, IsFTS: true,
+			LayerPrio: prioMessages, CreatedAt: time.Now(),
+		},
+		{
+			Type: "session", Source: "messages", RawBM25: -5, IsFTS: true,
+			LayerPrio: prioMessages, CreatedAt: time.Now(),
+		},
+		{
+			Type: "knowledge", Source: "knowledge_atoms", RawBM25: -1, IsFTS: true,
+			LayerPrio: prioKnowledge, CreatedAt: time.Now(),
+		},
+		{
+			Type: "knowledge", Source: "knowledge_atoms", RawBM25: -0.5, IsFTS: true,
+			LayerPrio: prioKnowledge, CreatedAt: time.Now(),
+		},
 	}
 	scored := scoreResults(results)
 	var msgBest, knowBest float64

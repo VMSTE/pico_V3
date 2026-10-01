@@ -19,7 +19,6 @@ import (
 	"unicode"
 
 	"github.com/kljensen/snowball"
-
 	"golang.org/x/sync/errgroup"
 
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
@@ -1218,6 +1217,9 @@ func (ms *MemorySearch) mergeCluster(
 				break
 			}
 			lines = append(lines, msgLine{role, content.String})
+		}
+		if rowsErr := gapRows.Err(); rowsErr != nil {
+			lines = nil // упадём в fallback на сами хиты
 		}
 	}
 	if len(lines) == 0 {
