@@ -1041,6 +1041,16 @@ func buildFTSQuery(query string) string {
 			len([]rune(stem)) < 3 || seen[stem] {
 			continue
 		}
+		ok := true
+		for _, r := range stem {
+			if !unicode.IsLetter(r) {
+				ok = false
+				break
+			}
+		}
+		if !ok {
+			continue // bench v3: hyphenated stems break FTS5 (no such column)
+		}
 		seen[stem] = true
 		quoted = append(quoted, stem+"*")
 	}
