@@ -22,16 +22,16 @@ func TestSearchMessages_TimeFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bm.SaveMessage(ctx, MessageRow{
+	if _, sErr := bm.SaveMessage(ctx, MessageRow{
 		ChatID: "s2", PikaSessionID: "2", Role: "user",
 		Content: "ось времени свежий сентябрь", Tokens: 5,
-	}); err != nil {
-		t.Fatal(err)
+	}); sErr != nil {
+		t.Fatal(sErr)
 	}
-	if _, err := bm.db.Exec(
+	if _, uErr := bm.db.Exec(
 		"UPDATE messages SET ts='2026-05-12 10:00:00' WHERE id=?", idOld,
-	); err != nil {
-		t.Fatal(err)
+	); uErr != nil {
+		t.Fatal(uErr)
 	}
 
 	all, err := ms.searchMessages(ctx, "ось времени", 10, "s1", "all")
