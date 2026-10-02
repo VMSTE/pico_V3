@@ -22,6 +22,8 @@ type benchCase struct {
 	Q      string `json:"q"`
 	Expect string `json:"expect"`
 	Note   string `json:"note,omitempty"`
+	After  string `json:"after,omitempty"`
+	Before string `json:"before,omitempty"`
 }
 
 func main() {
@@ -69,9 +71,14 @@ func main() {
 	hits := 0
 	fmt.Printf("%-4s %-60s %-6s %s\n", "#", "query", "hit@5", "rank/layer")
 	for i, c := range cases {
-		res := ms.Execute(toolCtx, map[string]any{
-			"query": c.Q, "limit": float64(20),
-		})
+		args := map[string]any{"query": c.Q, "limit": float64(20)}
+		if c.After != "" {
+			args["after"] = c.After
+		}
+		if c.Before != "" {
+			args["before"] = c.Before
+		}
+		res := ms.Execute(toolCtx, args)
 		if res == nil || res.IsError {
 			fmt.Printf("%-4d %-60s %-6s ERROR: %s\n", i+1, trunc(c.Q, 60), "-", res.ForLLM)
 			continue

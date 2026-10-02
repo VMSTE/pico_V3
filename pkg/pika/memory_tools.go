@@ -31,6 +31,9 @@ type SearchMemoryArgs struct {
 	Feedback bool   `json:"feedback"` // D-AUDIT-125: слой разносив
 	Around   int    `json:"around"`   // D-AUDIT-125: ±N соседей вокруг хита
 	Full     bool   `json:"full"`     // D-AUDIT-126: снять обрезку хитов
+	// ТЗ-122 (срез И): time axis — optional ISO date/datetime bounds.
+	After  string `json:"after,omitempty"`
+	Before string `json:"before,omitempty"`
 }
 
 // SearchResult represents a single result from memory search.
@@ -122,7 +125,8 @@ func (ms *MemorySearch) Description() string {
 		"Model sends query \u2014 Go searches everywhere. " +
 		"feedback=true: dissatisfied-user messages with the criticized answer. " +
 		"around=N: N neighbor messages before/after each hit. " +
-		"full=true: untruncated raw content of hits (messages/archive/thoughts)."
+		"full=true: untruncated raw content of hits (messages/archive/thoughts). " +
+		"after/before=YYYY-MM-DD: optional time bounds (messages and archive layers)."
 }
 
 // Parameters returns the JSON schema for the tool arguments.
@@ -136,7 +140,7 @@ func (ms *MemorySearch) Parameters() map[string]any {
 			},
 			"limit": map[string]any{
 				"type":        "integer",
-				"default":     10,
+				"default":     20,
 				"description": "Max results (1-20)",
 			},
 			"feedback": map[string]any{
@@ -187,7 +191,7 @@ func (ms *MemorySearch) Execute(
 	sessionID := toolshared.ToolSessionKey(ctx)
 
 	results := ms.fanOut(
-		ctx, parsed.Query, parsed.Limit, parsed.Feedback, sessionID,
+		ctx, parsed.Query, parsed.Limit, parsed.Feedback, sessionID, parsed.After, parsed.Before,
 	)
 	results = dedupResults(results)
 	// D-AUDIT-126 (волна 103): full=true — снятие обрезки по требованию
@@ -231,7 +235,7 @@ func parseSearchArgs(
 		return parsed, fmt.Errorf("query must not be empty")
 	}
 
-	parsed.Limit = 10
+	parsed.Limit = 20
 	if l, exists := args["limit"]; exists {
 		switch v := l.(type) {
 		case float64:
@@ -260,6 +264,12 @@ func parseSearchArgs(
 	if fl, ok := args["full"].(bool); ok {
 		parsed.Full = fl
 	}
+	if a, ok := args["after"].(string); ok {
+		parsed.After = a
+	}
+	if b, ok := args["before"].(string); ok {
+		parsed.Before = b
+	}
 	return parsed, nil
 }
 
@@ -269,6 +279,8 @@ func (ms *MemorySearch) fanOut(
 	limit int,
 	feedback bool,
 	sessionID string,
+	after string,
+	before string,
 ) []rawResult {
 	var mu sync.Mutex
 	var all []rawResult
@@ -279,7 +291,7 @@ func (ms *MemorySearch) fanOut(
 	g.Go(func() error {
 		scope := ms.bm.GetMemoryScope(gCtx, sessionID)
 		res, err := ms.searchMessages(
-			gCtx, query, limit, sessionID, scope,
+			gCtx, query, limit, sessionID, scope, [2]string{after, before},
 		)
 		if err != nil {
 			logLayerWarn("messages", err)
@@ -306,7 +318,7 @@ func (ms *MemorySearch) fanOut(
 
 	// Layer 3b: messages_archive — ПРЯМОЙ FTS холодного архива (срез 6)
 	g.Go(func() error {
-		res, err := ms.searchMessagesArchive(gCtx, query, limit)
+		res, err := ms.searchMessagesArchive(gCtx, query, limit, [2]string{after, before})
 		if err != nil {
 			logLayerWarn("messages_archive", err)
 			return nil
@@ -417,6 +429,7 @@ func (ms *MemorySearch) searchMessages(
 	limit int,
 	sessionID string,
 	scope string,
+	tb ...[2]string,
 ) ([]rawResult, error) {
 	// D-AUDIT-106: FTS5 + BM25 (индустриальный стандарт) вместо
 	// LIKE+счётчика слов: IDF взвешивает редкие слова выше шума.
@@ -449,6 +462,16 @@ func (ms *MemorySearch) searchMessages(
 	// Теперь SQL тянет с запасом, дедуп ниже схлопывает дубли,
 	// и слоты достаются разным сообщениям. Финальный срез до limit —
 	// в Execute после скоринга, как и было.
+	if len(tb) > 0 {
+		if tb[0][0] != "" {
+			q += ` AND datetime(m.ts) >= datetime(?)`
+			args = append(args, tb[0][0])
+		}
+		if tb[0][1] != "" {
+			q += ` AND datetime(m.ts) <= datetime(?)`
+			args = append(args, tb[0][1])
+		}
+	}
 	q += ` ORDER BY score, m.id LIMIT ?` // bm25: меньше = лучше
 	// ТЗ-122 (срез 1.5): over-fetch x10 — эталон №1 сидел на ранге 46
 	// при отсечке 40 и не доезжал до скоринга в принципе (стенд 30 сен).
@@ -1350,19 +1373,31 @@ func (ms *MemorySearch) searchMessagesArchive(
 	ctx context.Context,
 	query string,
 	limit int,
+	tb ...[2]string,
 ) ([]rawResult, error) {
 	fq := buildFTSQuery(query)
 	if fq == "" {
 		return nil, nil
 	}
-	rows, err := ms.bm.db.QueryContext(ctx,
-		`SELECT ma.id, ma.chat_id, ma.role, ma.ts,
+	archArgs := []any{fq}
+	archQuery := `SELECT ma.id, ma.chat_id, ma.role, ma.ts,
 		bm25(messages_archive_fts) AS score
 		FROM messages_archive_fts f
 		JOIN messages_archive ma ON ma.id = f.rowid
-		WHERE messages_archive_fts MATCH ? AND ma.role != 'tool'
-		ORDER BY score LIMIT ?`,
-		fq, limit)
+		WHERE messages_archive_fts MATCH ? AND ma.role != 'tool'`
+	if len(tb) > 0 {
+		if tb[0][0] != "" {
+			archQuery += ` AND datetime(ma.ts) >= datetime(?)`
+			archArgs = append(archArgs, tb[0][0])
+		}
+		if tb[0][1] != "" {
+			archQuery += ` AND datetime(ma.ts) <= datetime(?)`
+			archArgs = append(archArgs, tb[0][1])
+		}
+	}
+	archQuery += ` ORDER BY score LIMIT ?`
+	archArgs = append(archArgs, limit)
+	rows, err := ms.bm.db.QueryContext(ctx, archQuery, archArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("pika/memory_tools: messages archive fts: %w", err)
 	}
@@ -1432,7 +1467,7 @@ func (ms *MemorySearch) Search(
 	}
 	ctx, cancel := context.WithTimeout(ctx, searchTimeout)
 	defer cancel()
-	results := ms.fanOut(ctx, query, limit, false, sessionID)
+	results := ms.fanOut(ctx, query, limit, false, sessionID, "", "")
 	results = dedupResults(results)
 	scored := scoreResults(results)
 	sort.Slice(scored, func(i, j int) bool {

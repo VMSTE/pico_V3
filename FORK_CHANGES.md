@@ -1468,3 +1468,16 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/memory_tools.go` — MODIFIED: гард «стем только из букв» в buildFTSQuery
   - `pkg/pika/fts_stem_hyphen_wave122h_test.go` — NEW: сторож
 - **Breaking:** None
+
+## Волна 122 (срез И) — Ось времени в search_memory + дефолт limit 20 · 2 окт 2026
+
+- **ТЗ:** ТЗ-122 этап 1 п.2 (ось времени) + решение founder'а 2 окт (дефолт топа)
+- **PR:** pending (wave-122-i-time-axis)
+- **Стенд (cases v3, до/после):** кейс 8 rank 3→1, кейс 10 rank 18→6, остальные без изменений, регрессий нет; hit@5 10/23 (состав сильнее)
+- **Files:**
+  - `pkg/pika/memory_tools.go` — MODIFIED: SearchMemoryArgs += after/before (ISO); parseSearchArgs; fanOut пробрасывает границы; слои messages и messages_archive фильтруют в SQL через datetime() с обеих сторон (форматы ts разные: hot vs RFC3339 — нормализует сравнение); вариадические tb ...[2]string — старые вызовы/тесты не тронуты; дефолт limit 10→20; Description += ось времени (D-AUDIT-107 частично)
+  - `cmd/searchbench/main.go` — MODIFIED: benchCase += after/before + проброс в Execute
+  - `cmd/searchbench/cases.json` — темпоральные кейсы 8/9/10 получили границы
+  - `pkg/pika/search_timeaxis_wave122i_test.go` — NEW: after/before фильтруют корректно (старое/свежее разведены по эпохам)
+- **Breaking:** None (параметры опциональны)
+- **Не вошло:** ось времени для knowledge/events/reasoning/artifacts (после цифр); кейс 9 — конкурентный near-miss, в калибровку покрытия; gap-fill ±1 — после чтения mergeCluster глазами
