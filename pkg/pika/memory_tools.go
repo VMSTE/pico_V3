@@ -1278,8 +1278,12 @@ func (ms *MemorySearch) mergeCluster(
 	gapRows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT role, content FROM messages
 		WHERE chat_id = ? AND id BETWEEN ? AND ? AND role != 'tool'
-		ORDER BY id LIMIT 12`,
-		best.ChatID, lo, hi)
+		ORDER BY id LIMIT 14`,
+		// Wave 122 (slice К): ±1 message beyond the matched edges —
+		// the question carrying the answer's keyword often sits just
+		// outside the chain (bench case 2: answer cluster 3095-3099,
+		// expect word lived in question 3094).
+		best.ChatID, lo-1, hi+1)
 	if err == nil {
 		defer gapRows.Close()
 		for gapRows.Next() {
