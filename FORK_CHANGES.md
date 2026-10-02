@@ -1456,3 +1456,15 @@ Each entry maps to a single wave/phase and its merged PR.
   - `pkg/pika/archivist.go` — MODIFIED: MessageHit += ts (omitempty); mapMessage берёт CreatedAt движка, recentMessages читает ts из базы
   - `pkg/pika/archivist_convergence_wave122e_test.go` — MODIFIED: сторож ts у хитов
 - **Breaking:** None (поле omitempty; промпт — хот-релоад)
+
+## Волна 122 (срез Х) — cases.json v3 (23 кейса, 7 категорий) + фикс дефисных стемов · 2 окт 2026
+
+- **ТЗ:** ТЗ-122 срез А (стенд) — пополнение эталонов после рефлексии PRF/per-term
+- **PR:** pending (wave-122-h-bench-v3)
+- **Стенд (копия живой базы):** первая честная базовая линия: hit@5 10/23 (43%), hit@20 18/23 (78%). Сила: последовательности «после/до фразы» (6/7 OK). Слабость: факты-значения LOW (9-18 ранг), кросс-язык RU→EN (кейс 12)
+- **Баг, найденный стендом:** стем дефисного слова («MCP-серверы») ронял ВСЕ FTS-слои запроса («no such column: сервер») — стем с не-буквами пропускается
+- **Files:**
+  - `cmd/searchbench/cases.json` — v3: 23 кейса, 7 категорий (факты/парафразы/темпоральные до-после/архив/постмортемы/после-фразы/до-фразы)
+  - `pkg/pika/memory_tools.go` — MODIFIED: гард «стем только из букв» в buildFTSQuery
+  - `pkg/pika/fts_stem_hyphen_wave122h_test.go` — NEW: сторож
+- **Breaking:** None
