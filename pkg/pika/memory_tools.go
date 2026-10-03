@@ -93,7 +93,7 @@ const (
 	prioKnowledge   = 1.0
 	prioEvents      = 0.95
 	prioArchive     = 0.95
-	prioMessages    = 0.95
+	prioMessages    = 1.00
 	prioReasoning   = 0.85
 	prioArtifacts   = 0.85 // волна 108: паспорта артефактов
 	prioRegistry    = 0.8
@@ -546,7 +546,7 @@ func (ms *MemorySearch) searchMessages(
 func (ms *MemorySearch) searchKnowledge(
 	ctx context.Context,
 	query string,
-	limit int,
+	_ int, // пул слоя константный (40), см. запрос ниже
 ) ([]rawResult, error) {
 	fq := buildFTSQuery(query)
 	if fq == "" {
@@ -560,7 +560,10 @@ func (ms *MemorySearch) searchKnowledge(
 		JOIN knowledge_fts kf ON ka.id = kf.rowid
 		WHERE knowledge_fts MATCH ?
 		ORDER BY score LIMIT ?`,
-		fq, limit)
+		// ТЗ-122 (срез Л): константный пул 40 вместо limit (как
+		// messages=100, срез 1.5) — стоп-словесный шум резал нужный
+		// атом на LIMIT=20 ещё в SQL, до RRF он не доезжал (кейс 16).
+		fq, 40)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"pika/memory_tools: knowledge: %w", err,
@@ -1032,8 +1035,148 @@ func scoreResults(results []rawResult) []SearchResult {
 	return out
 }
 
+// ТЗ-122 (срез Л): стоп-слова RU+EN — стандарт поставки BM25
+// (Elastic stopwords + Snowball-стеммер). OR по «у/нас/что/не»
+// матчит полбазы и рождает кластеры-хабы, топящие релевантные хиты
+// (стенд 3 окт: топ-1 кейса 3 — диалог про Sogou на запрос про gh cli).
+var ftsStopwords = map[string]bool{
+	"а":       true,
+	"был":     true,
+	"была":    true,
+	"были":    true,
+	"быть":    true,
+	"в":       true,
+	"вам":     true,
+	"все":     true,
+	"вы":      true,
+	"где":     true,
+	"да":      true,
+	"даже":    true,
+	"для":     true,
+	"до":      true,
+	"его":     true,
+	"ее":      true,
+	"если":    true,
+	"есть":    true,
+	"еще":     true,
+	"ещё":     true,
+	"же":      true,
+	"за":      true,
+	"и":       true,
+	"или":     true,
+	"им":      true,
+	"их":      true,
+	"к":       true,
+	"как":     true,
+	"когда":   true,
+	"который": true,
+	"которая": true,
+	"которые": true,
+	"ли":      true,
+	"мне":     true,
+	"меня":    true,
+	"мы":      true,
+	"на":      true,
+	"нам":     true,
+	"нас":     true,
+	"напомни": true,
+	"не":      true,
+	"него":    true,
+	"неё":     true,
+	"нет":     true,
+	"ни":      true,
+	"ним":     true,
+	"но":      true,
+	"о":       true,
+	"об":      true,
+	"он":      true,
+	"она":     true,
+	"они":     true,
+	"оно":     true,
+	"от":      true,
+	"очень":   true,
+	"по":      true,
+	"под":     true,
+	"после":   true,
+	"помнишь": true,
+	"при":     true,
+	"про":     true,
+	"просто":  true,
+	"с":       true,
+	"сейчас":  true,
+	"так":     true,
+	"там":     true,
+	"тебя":    true,
+	"только":  true,
+	"тот":     true,
+	"того":    true,
+	"ты":      true,
+	"у":       true,
+	"уже":     true,
+	"что":     true,
+	"это":     true,
+	"этот":    true,
+	"эта":     true,
+	"я":       true,
+	"a":       true,
+	"an":      true,
+	"and":     true,
+	"are":     true,
+	"as":      true,
+	"at":      true,
+	"be":      true,
+	"been":    true,
+	"but":     true,
+	"by":      true,
+	"can":     true,
+	"could":   true,
+	"did":     true,
+	"do":      true,
+	"does":    true,
+	"for":     true,
+	"from":    true,
+	"had":     true,
+	"has":     true,
+	"have":    true,
+	"he":      true,
+	"her":     true,
+	"his":     true,
+	"how":     true,
+	"i":       true,
+	"if":      true,
+	"in":      true,
+	"is":      true,
+	"it":      true,
+	"its":     true,
+	"me":      true,
+	"my":      true,
+	"no":      true,
+	"not":     true,
+	"of":      true,
+	"on":      true,
+	"or":      true,
+	"our":     true,
+	"she":     true,
+	"so":      true,
+	"that":    true,
+	"the":     true,
+	"them":    true,
+	"they":    true,
+	"this":    true,
+	"to":      true,
+	"us":      true,
+	"was":     true,
+	"we":      true,
+	"were":    true,
+	"what":    true,
+	"with":    true,
+	"you":     true,
+	"your":    true,
+}
+
 // buildFTSQuery converts natural language to FTS5 OR query.
 // Each word is quoted for literal matching.
+// ТЗ-122 (срез Л): стоп-слова RU/EN (ftsStopwords) в запрос не попадают.
 // ТЗ-122 (срез 1): пунктуация срезается с краёв, термы приводятся к
 // нижнему регистру и дедупятся; пустые НЕ попадают в запрос — старый
 // код оставлял дыры в заранее аллоцированном слайсе (continue при
@@ -1048,7 +1191,7 @@ func buildFTSQuery(query string) string {
 	quoted := make([]string, 0, len(words)*2)
 	for _, w := range words {
 		w = strings.ToLower(strings.Trim(w, "\"'`.,;:!?()[]{}<>*+^~—–-=|/\\"))
-		if w == "" || seen[w] {
+		if w == "" || seen[w] || ftsStopwords[w] {
 			continue
 		}
 		seen[w] = true
@@ -1257,7 +1400,7 @@ func (ms *MemorySearch) mergeMessageClusters(
 }
 
 // mergeCluster — один кластер: скор = лучший bm25 члена + буст за
-// размер (0.2 за члена сверх первого, кап 0.6); текст — ВСЯ цепочка
+// размер (0.02 за члена сверх первого, кап 0.1 — срез Л); текст — ВСЯ цепочка
 // сообщений от первого до последнего id (gap-fill из базы, без
 // role=tool), кап 800 символов.
 func (ms *MemorySearch) mergeCluster(
@@ -1316,17 +1459,21 @@ func (ms *MemorySearch) mergeCluster(
 	}
 	summary := truncateStr(sb.String(), 800)
 
-	// Скор кластера = СУММА bm25 членов (аддитивное доказательство,
-	// как RRF суммирует по спискам; EmergenceMem: скор сессии = число
-	// turn'ов в топе). Три подтверждения сильнее одного яркого.
+	// ТЗ-122 (срез Л): скор кластера = best + 0.25*(сумма остальных).
+	// Итерация 1 (чистый best) потеряла дискриминацию «диалог с ответом»
+	// vs «эхо вопроса» (стенд 3 окт: регрессии кейсов 1/5/23) — плотность
+	// нужна как мягкое аддитивное доказательство, а не доминанта.
+	// bm25 отрицателен (меньше = лучше): доля суммы остальных УЛУЧШАЕТ
+	// скор, но вчетверо слабее лучшего члена. Буст размера остаётся
+	// символическим (кап 0.1) — потолок атома (1.0) не перекрывается.
 	sumBM := 0.0
 	for _, m := range members {
 		sumBM += m.RawBM25
 	}
-	best.RawBM25 = sumBM
-	boost := 0.2 * float64(len(members)-1)
-	if boost > 0.6 {
-		boost = 0.6
+	best.RawBM25 += 0.25 * (sumBM - best.RawBM25)
+	boost := 0.02 * float64(len(members)-1)
+	if boost > 0.1 {
+		boost = 0.1
 	}
 	best.Summary = summary
 	best.FullContent = summary

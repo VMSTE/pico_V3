@@ -9,12 +9,13 @@ import (
 	"testing"
 )
 
-// Старый код: запрос `а "" б` давал `"а" OR  OR "б"` (дыра от continue
-// в заранее аллоцированном слайсе) -> syntax error -> слой молча пустой.
+// Старый код: запрос `эй "" бэ` давал `"эй" OR  OR "бэ"` (дыра от
+// continue в заранее аллоцированном слайсе) -> syntax error -> слой
+// молча пустой. (Срез Л: «а» теперь стоп-слово — термы заменены.)
 func TestBuildFTSQuery_NoHolesFromQuotedWords(t *testing.T) {
-	got := buildFTSQuery(`а "" б`)
-	if got != `"а" OR "б"` {
-		t.Fatalf("got %q, want %q", got, `"а" OR "б"`)
+	got := buildFTSQuery(`эй "" бэ`)
+	if got != `"эй" OR "бэ"` {
+		t.Fatalf("got %q, want %q", got, `"эй" OR "бэ"`)
 	}
 }
 
