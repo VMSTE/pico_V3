@@ -155,16 +155,15 @@ func (bm *BotMemory) pendingEmbeddings(
 	if err != nil {
 		return nil, fmt.Errorf("pika/embeddings: pending hot: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id int64
 		var content string
 		if sErr := rows.Scan(&id, &content); sErr != nil {
-			_ = rows.Close()
 			return nil, fmt.Errorf("pika/embeddings: scan hot: %w", sErr)
 		}
 		out = append(out, pendingDoc{source: "hot", id: id, content: content})
 	}
-	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -178,15 +177,18 @@ func (bm *BotMemory) pendingEmbeddings(
 		if aErr != nil {
 			return nil, fmt.Errorf("pika/embeddings: pending archive: %w", aErr)
 		}
+		defer func() { _ = archRows.Close() }()
 		var archIDs []int64
 		for archRows.Next() {
 			var id int64
 			if sErr := archRows.Scan(&id); sErr != nil {
-				break
+				return nil, fmt.Errorf("pika/embeddings: scan archive: %w", sErr)
 			}
 			archIDs = append(archIDs, id)
 		}
-		_ = archRows.Close()
+		if rErr := archRows.Err(); rErr != nil {
+			return nil, fmt.Errorf("pika/embeddings: iterate archive: %w", rErr)
+		}
 		for _, id := range archIDs {
 			content, _, rErr := bm.ReadArchivedMessage(ctx, id)
 			if rErr != nil || strings.TrimSpace(content) == "" {
@@ -205,15 +207,15 @@ func (bm *BotMemory) pendingEmbeddings(
 		if atErr != nil {
 			return nil, fmt.Errorf("pika/embeddings: pending atoms: %w", atErr)
 		}
+		defer func() { _ = atomRows.Close() }()
 		for atomRows.Next() {
 			var id int64
 			var summary string
 			if sErr := atomRows.Scan(&id, &summary); sErr != nil {
-				break
+				return nil, fmt.Errorf("pika/embeddings: scan atom: %w", sErr)
 			}
 			out = append(out, pendingDoc{source: "atom", id: id, content: summary})
 		}
-		_ = atomRows.Close()
 		if err := atomRows.Err(); err != nil {
 			return nil, err
 		}

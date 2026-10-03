@@ -107,6 +107,9 @@ func TestEmbedPending_HotAndAtom_Idempotent(t *testing.T) {
 	if err := rows.Scan(&firstRowID); err != nil {
 		t.Fatal(err)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("knn rows: %v", err)
+	}
 	var src string
 	if err := bm.db.QueryRowContext(ctx,
 		`SELECT source FROM embeddings_meta WHERE id=?`, firstRowID).Scan(&src); err != nil {
