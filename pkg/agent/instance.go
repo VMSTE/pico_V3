@@ -138,6 +138,16 @@ func NewAgentInstance(
 	if p := os.Getenv(config.EnvPikaDBPath); p != "" {
 		memoryDBPath = p
 	}
+	// Волна 122 (срез М0, фикс флаков CI): пустой MemoryDBPath (ручные
+	// конфиги без DefaultConfig) уходил в Migrate("") → SQLite с пустым
+	// именем файла = ПРИВАТНАЯ temp-БД на каждый коннект пула database/sql:
+	// DDL Migrate приземлялись в одну БД, чтения — в другую, пустую →
+	// flake «no such table: messages» (1–3 окт: TestProcessMessage_
+	// MediaTool…, TestAgentLoop_ToolLimitUsesDedicatedFallback).
+	// Пустой путь = документированный дефолт workspace/memory/bot_memory.db.
+	if memoryDBPath == "" {
+		memoryDBPath = filepath.Join(workspace, "memory", "bot_memory.db")
+	}
 	migrateMemoryDB(workspace, memoryDBPath)
 	sessions, botMem := initSessionStore(memoryDBPath)
 

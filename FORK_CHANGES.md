@@ -1,3 +1,11 @@
+### [2026-10-03] fix(agent): пустой MemoryDBPath → workspace/memory/bot_memory.db — корень флаков «no such table: messages» (wave 122, срез М0)
+- **Корень:** ручные тестовые конфиги без MemoryDBPath → Migrate("") → SQLite с пустым именем файла = приватная temp-БД НА КАЖДЫЙ коннект пула database/sql; DDL и чтения попадали в разные БД. Одна подпись у флаков CI 1–3 окт: TestProcessMessage_MediaToolHandledSkipsFollowUpLLMAndFinalText и TestAgentLoop_ToolLimitUsesDedicatedFallback. Частота выросла после апгрейда modernc (сдвиг таймингов коннектов) — сам апгрейд не причём, он проявил латентный баг
+- **PR:** #190
+- **Files:**
+  - `pkg/agent/instance.go` — MODIFIED: пустой MemoryDBPath резолвится в workspace/memory/bot_memory.db (документированный дефолт DefaultConfig)
+  - `pkg/agent/memory_db_default_test.go` — NEW: регресс — запись+чтение истории при пустом MemoryDBPath + файл физически существует в workspace теста
+- **Breaking:** None — прод использует DefaultConfig (путь задан всегда); фолбэк срабатывает только на пустом значении
+
 ### [2026-10-03] chore(deps): modernc.org/sqlite v1.53.0 → v1.60.1 — встроенный sqlite-vec (wave 122, этап 2, срез М0)
 - **ТЗ:** ТЗ-122, этап 2 (векторы): гейт «sqlite-vec если modernc ≥1.57» — v1.57+ несёт пакет vec (sqlite-vec v0.1.9, чистый Go без CGo); запас по объёму записей (решение founder'а 3 окт)
 - **PR:** #190
