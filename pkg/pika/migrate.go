@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite/vec" // ТЗ-122 (срез М1): vec0 — встроенный sqlite-vec (modernc ≥1.57)
 )
 
 // Migrate opens (or creates) the SQLite database at dbPath, applies PRAGMAs,
@@ -128,6 +129,11 @@ func Migrate(dbPath string) (*sql.DB, error) {
 			description: "messages_archive_fts — прямой FTS холодного архива (ТЗ-122, срез 6)",
 			ddl:         migrationV9,
 		},
+		{
+			version:     10,
+			description: "embeddings_meta + embeddings_vec (vec0) — векторный слой (ТЗ-122, этап 2, срез М1)",
+			ddl:         migrationV10,
+		},
 	}
 
 	for _, m := range migrations {
@@ -163,6 +169,27 @@ func Migrate(dbPath string) (*sql.DB, error) {
 
 	return db, nil
 }
+
+// ТЗ-122 (этап 2, срез М1): векторный слой. embeddings_meta — реестр
+// (source/ref_id/model/dims, UNIQUE source+ref_id), embeddings_vec —
+// KNN-индекс sqlite-vec (vec0); rowid vec = id meta. Индекс производный:
+// истина — messages/messages_archive/knowledge_atoms; при архивации
+// сообщения вектор НЕ пересчитывается (id при архивации сохраняется) —
+// только флаг source. Смена модели = теневой ребилд по model != new.
+const migrationV10 = `
+CREATE TABLE IF NOT EXISTS embeddings_meta (
+    id          INTEGER PRIMARY KEY,
+    source      TEXT NOT NULL CHECK(source IN ('hot','archive','atom')),
+    ref_id      INTEGER NOT NULL,
+    model       TEXT NOT NULL,
+    dims        INTEGER NOT NULL,
+    embedded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(source, ref_id)
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS embeddings_vec USING vec0(
+    embedding FLOAT[1024]
+);
+`
 
 // CurrentVersion returns the highest applied migration version (0 if none).
 func CurrentVersion(db *sql.DB) (int, error) {

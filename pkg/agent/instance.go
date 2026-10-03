@@ -151,6 +151,13 @@ func NewAgentInstance(
 	migrateMemoryDB(workspace, memoryDBPath)
 	sessions, botMem := initSessionStore(memoryDBPath)
 
+	// Волна 122 (этап 2, срез М1): фоновый векторный индексер — только
+	// если в model_list нашёлся OpenRouter с ключом; без него слой молча
+	// выключен (тихий фолбэк в чистый BM25 — «Запрещено» ТЗ-122).
+	if emb := resolveEmbedder(cfg); emb != nil {
+		botMem.StartEmbeddingIndexer(emb)
+	}
+
 	// PIKA-V3: 🧠 BRAIN tools — always-on, IsCore=true
 	toolsRegistry.Register(pika.NewMemorySearch(botMem))
 	toolsRegistry.Register(pika.NewDiscoverTools(toolsRegistry))
@@ -529,4 +536,29 @@ func expandHome(path string) string {
 		return home
 	}
 	return path
+}
+
+// resolveEmbedder — ТЗ-122 (срез М1): эмбеддер из model_list.
+// Первый OpenRouter-совместимый вход с ключом; модель — из
+// agents.defaults.embedding_model (пусто = bge-m3). nil = слой выключен.
+func resolveEmbedder(cfg *config.Config) *pika.Embedder {
+	if cfg == nil {
+		return nil
+	}
+	model := cfg.Agents.Defaults.EmbeddingModel
+	for _, mc := range cfg.ModelList {
+		if mc == nil {
+			continue
+		}
+		isOR := strings.EqualFold(mc.Provider, "openrouter") ||
+			strings.Contains(strings.ToLower(mc.APIBase), "openrouter.ai") ||
+			strings.HasPrefix(strings.ToLower(mc.Model), "openrouter/")
+		if !isOR {
+			continue
+		}
+		if emb := pika.NewEmbedder(mc.APIBase, mc.APIKey(), model); emb != nil {
+			return emb
+		}
+	}
+	return nil
 }

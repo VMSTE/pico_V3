@@ -302,6 +302,9 @@ type ToolFeedbackConfig struct {
 }
 
 type AgentDefaults struct {
+	// ТЗ-122 (срез М1): модель эмбеддингов векторного слоя; пусто = bge-m3.
+	EmbeddingModel string `json:"embedding_model,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_EMBEDDING_MODEL"`
+
 	Workspace                 string             `json:"workspace"                        env:"PICOCLAW_AGENTS_DEFAULTS_WORKSPACE"`
 	RestrictToWorkspace       bool               `json:"restrict_to_workspace"            env:"PICOCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"`
 	AllowReadOutsideWorkspace bool               `json:"allow_read_outside_workspace"     env:"PICOCLAW_AGENTS_DEFAULTS_ALLOW_READ_OUTSIDE_WORKSPACE"`
