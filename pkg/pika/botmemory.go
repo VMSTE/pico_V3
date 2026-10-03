@@ -976,6 +976,17 @@ func (bm *BotMemory) ArchiveAndDeleteTurns(ctx context.Context, sid string, turn
 	if rowErr := rRows.Err(); rowErr != nil {
 		return fmt.Errorf("pika/botmemory: archive iter reas: %w", rowErr)
 	}
+	// ТЗ-122 (этап 2, срез М1): перепрописка векторов hot → archive.
+	// Эмбеддинг — функция контента; при архивации контент и id не меняются
+	// (archive пишет тот же id), пересчёт не нужен — только флаг source.
+	// #nosec G202 -- только '?' плейсхолдеры из ph; значения параметризованы
+	if _, err = tx.ExecContext(ctx,
+		`UPDATE embeddings_meta SET source='archive'
+		WHERE source='hot' AND ref_id IN (
+			SELECT id FROM messages WHERE chat_id=? AND pika_session_id IN (`+ph+`)
+		)`, args...); err != nil {
+		return fmt.Errorf("pika/botmemory: archive retag embeddings: %w", err)
+	}
 	// Delete hot data
 	for _, tbl := range []string{"messages", "events", "reasoning_log"} {
 		_, err = tx.ExecContext(ctx,

@@ -29,6 +29,7 @@ type benchCase struct {
 func main() {
 	dbPath := flag.String("db", "", "path to a COPY of bot_memory.db")
 	casesPath := flag.String("cases", "cmd/searchbench/cases.json", "cases file")
+	embed := flag.Bool("embed", false, "backfill embeddings on the copy (OPENROUTER_API_KEY env required)")
 	flag.Parse()
 	if *dbPath == "" {
 		fmt.Fprintln(os.Stderr, "usage: searchbench -db /tmp/bench.db [-cases cases.json]")
@@ -60,6 +61,31 @@ func main() {
 	defer bm.Close()
 
 	ctx := context.Background()
+
+	// ТЗ-122 (срез М1): векторный бэкфилл копии — готовит стенд к М2.
+	if *embed {
+		key := os.Getenv("OPENROUTER_API_KEY")
+		if key == "" {
+			fmt.Fprintln(os.Stderr, "-embed: OPENROUTER_API_KEY is not set")
+			os.Exit(1)
+		}
+		emb := pika.NewEmbedder("", key, os.Getenv("PIKA_EMBED_MODEL"))
+		for {
+			n, eErr := bm.EmbedPending(ctx, emb, 64)
+			if eErr != nil {
+				fmt.Fprintf(os.Stderr, "embed: %v\n", eErr)
+				os.Exit(1)
+			}
+			fmt.Printf("embedded batch: %d\n", n)
+			if n == 0 {
+				break
+			}
+		}
+		done, pend, cErr := bm.EmbeddingCoverage(ctx)
+		if cErr == nil {
+			fmt.Printf("embeddings coverage: %d embedded, %d pending\n", done, pend)
+		}
+	}
 	// Стенд меряет всю базу, не один чат.
 	if err := bm.SetMemoryScope(ctx, "bench", "all"); err != nil {
 		fmt.Fprintf(os.Stderr, "scope: %v\n", err)

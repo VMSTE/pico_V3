@@ -1,3 +1,17 @@
+### [2026-10-03] feat(pika): векторный слой — фундамент: embeddings_meta+vec0, embedder OpenRouter bge-m3, фоновый индексер (wave 122, этап 2, срез М1)
+- **ТЗ:** ТЗ-122, этап 2 (векторы): мишени кейсов 6/12 стенда (нулевое лексическое пересечение, доказано срезами Е/Ж). Бэст-практис (ресёрч 3 окт): векторный индекс ≠ источник истины; append-first + фоновая догонка; модель в метаданных с первого дня (теневой ребилд при смене); метрика покрытия индекса
+- **PR:** pending — founder проставит номер при создании
+- **Files:**
+  - `pkg/pika/migrate.go` — MODIFIED: миграция v10 — embeddings_meta (source/ref_id/model/dims, UNIQUE source+ref_id) + embeddings_vec (vec0, FLOAT[1024]); blank import modernc.org/sqlite/vec
+  - `pkg/pika/embeddings.go` — NEW: Embedder (OpenAI-compatible /embeddings, 3 попытки с бэкоффом, nil без ключа = слой выключен); BotMemory.EmbedPending (антиджойн pending hot/archive/atom; role=tool пропускается — паритет с FTS); EmbeddingCoverage; StartEmbeddingIndexer (догон без паузы, потом 60с тик; стоп на закрытой БД)
+  - `pkg/pika/botmemory.go` — MODIFIED: ArchiveAndDeleteTurns — перепрописка векторов hot→archive одним UPDATE в той же транзакции (контент/id не меняются → пересчёт не нужен, 0 токенов)
+  - `pkg/config/config.go` — MODIFIED: AgentDefaults += embedding_model (пусто = bge-m3; env PICOCLAW_AGENTS_DEFAULTS_EMBEDDING_MODEL)
+  - `pkg/agent/instance.go` — MODIFIED: resolveEmbedder (первый OpenRouter-совместимый вход с ключом из model_list) + старт индексера в NewAgentInstance
+  - `cmd/searchbench/main.go` — MODIFIED: флаг -embed — векторный бэкфилл копии базы для стенда М2 (OPENROUTER_API_KEY; PIKA_EMBED_MODEL для смены модели)
+  - `pkg/pika/embeddings_wave122m1_test.go` — NEW: миграция v10/vec0, EmbedPending hot+atom + идемпотентность, перепрописка при архивации без пересчёта, KNN-связность vec0
+- **Breaking:** None — всё аддитивно; без ключа OpenRouter слой молча выключен (поиск = чистый BM25, «Запрещено» ТЗ-122 соблюдено)
+- **Заметка:** dims=1024 зашиты в vec0-таблице (bge-m3); модель с другими dims = отдельная миграция vec-таблицы (теневой ребилд)
+
 ### [2026-10-03] fix(agent): пустой MemoryDBPath → workspace/memory/bot_memory.db — корень флаков «no such table: messages» (wave 122, срез М0)
 - **Корень:** ручные тестовые конфиги без MemoryDBPath → Migrate("") → SQLite с пустым именем файла = приватная temp-БД НА КАЖДЫЙ коннект пула database/sql; DDL и чтения попадали в разные БД. Одна подпись у флаков CI 1–3 окт: TestProcessMessage_MediaToolHandledSkipsFollowUpLLMAndFinalText и TestAgentLoop_ToolLimitUsesDedicatedFallback. Частота выросла после апгрейда modernc (сдвиг таймингов коннектов) — сам апгрейд не причём, он проявил латентный баг
 - **PR:** #190
