@@ -237,7 +237,7 @@ func (r *RAD) driftDetect(
 	prevKeywords, currKeywords []string,
 ) bool {
 	// Only trigger after MCP calls
-	if lastToolSource != "mcp" {
+	if !strings.EqualFold(lastToolSource, "mcp") {
 		return false
 	}
 	if len(prevKeywords) == 0 || len(currKeywords) == 0 {
@@ -256,7 +256,7 @@ func (r *RAD) escalationDetect(
 	if session == nil || pendingCall == nil {
 		return false
 	}
-	if session.LastToolSource != "mcp" {
+	if !strings.EqualFold(session.LastToolSource, "mcp") {
 		return false
 	}
 	return pendingCall.RiskLevel == "red"
