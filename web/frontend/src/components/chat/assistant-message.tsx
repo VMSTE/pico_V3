@@ -23,6 +23,7 @@ import {
   type ChatAttachment,
   type ChatToolCall,
 } from "@/store/chat"
+import React from "react"
 
 interface AssistantMessageProps {
   content: string
@@ -32,7 +33,8 @@ interface AssistantMessageProps {
   timestamp?: string | number
 }
 
-export function AssistantMessage({
+
+function AssistantMessageRaw({
   content,
   attachments = [],
   kind = "normal",
@@ -272,3 +274,5 @@ export function AssistantMessage({
     </div>
   )
 }
+
+export const AssistantMessage = React.memo(AssistantMessageRaw);
