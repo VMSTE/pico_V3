@@ -108,7 +108,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: go install github.com/securego/gosec/v2/cmd/gosec@main  # latest release x/tools can't read Go 1.27 export data (v5>v4)
 
       - name: Run gosec on fork core (pkg/pika)
         run: gosec -confidence=high ./pkg/pika/...

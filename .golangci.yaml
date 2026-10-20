@@ -10,6 +10,8 @@ linters:
     - dupword
     - err113
     - exhaustruct
+    - exhaustruct_v5  # v2.11+ renamed exhaustruct; same disable policy (see wsl/wsl_v5 precedent)
+    - canonicalheader  # new linter in latest; 8 pre-existing findings, revisit separately
     - funcorder
     - gochecknoglobals
     - gosmopolitan  # Project legitimately uses CJK text in tests (FTS5, token counting)
