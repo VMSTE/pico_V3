@@ -1,12 +1,13 @@
 import { cn } from "@/lib/utils"
 import type { ChatAttachment } from "@/store/chat"
+import React from "react"
 
 interface UserMessageProps {
   content: string
   attachments?: ChatAttachment[]
 }
 
-export function UserMessage({ content, attachments = [] }: UserMessageProps) {
+function UserMessageRaw({ content, attachments = [] }: UserMessageProps) {
   const hasText = content.trim().length > 0
   const isCommand = content.trim().startsWith("/")
   const imageAttachments = attachments.filter(
@@ -52,3 +53,6 @@ export function UserMessage({ content, attachments = [] }: UserMessageProps) {
     </div>
   )
 }
+
+
+export const UserMessage = React.memo(UserMessageRaw);
