@@ -72,6 +72,9 @@
 - **Breaking:** None — GitHub-карточка работает как раньше
 
 ## Волна 123 — Reflector dedup gate + provenance · 26 окт 2026
+### [2026-10-26] fix(deps): Go 1.26.10 — govulncheck green — wave 123
+- **Files:** `go.mod` — MOD: `go 1.26.6` → `go 1.26.10`, `toolchain go1.26.9` → `go1.26.10`. Fixes GO-2026-6809 (crypto/x509, вызов из upstream pkg/channels/irc).
+- **Breaking:** None (patch-level stdlib upgrade only)
 
 ### [2026-10-26] feat(pika): reflector dedup gate + provenance — wave 123
 - **ТЗ:** Рефлексор: идемпотентность pattern/runbook + provenance (бой: дубли P-463/470/478/483/563, R-87/91/95/145/146)
