@@ -364,6 +364,7 @@ func TestReflector_RunbookDraft(t *testing.T) {
 			Steps:           []string{"1. Check logs"},
 			Rollback:        "Revert config",
 		},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("runbook: %v", err)
