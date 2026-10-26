@@ -19,7 +19,9 @@ import (
 
 // prioTemporal — половина веса messages: нога — сигнал корроборации,
 // не замена лексике (урок flooding из ветки М7.2).
-var prioTemporal = prioMessages * 0.5
+// W2: окно активно ТОЛЬКО при явном темпоральном маркере в запросе,
+// значит период — заявленная релевантность, а не шум: полный вес.
+var prioTemporal = prioMessages * 1.3 // явно названный период — сильнейший сигнал (кейс 10)
 
 // temporalPool — константный пул ноги (как messages=100, knowledge=40).
 const temporalPool = 30
@@ -29,20 +31,19 @@ var monthPats = []struct {
 	re *regexp.Regexp
 	m  int
 }{
-	{regexp.MustCompile(`\bянвар[ьяею]\b`), 1},
-	{regexp.MustCompile(`\bфеврал[ьяею]\b`), 2},
-	{regexp.MustCompile(`\bмарт[аеу]?\b`), 3},
-	{regexp.MustCompile(`\bапрел[ьяею]\b`), 4},
-	{regexp.MustCompile(`\bма[йяею]\b`), 5},
-	{regexp.MustCompile(`\bиюн[ьяею]\b`), 6},
-	{regexp.MustCompile(`\bиюл[ьяею]\b`), 7},
-	{regexp.MustCompile(`\bавгуст[аеу]?\b`), 8},
-	{regexp.MustCompile(`\bсентябр[ьяею]\b`), 9},
-	{regexp.MustCompile(`\bоктябр[ьяею]\b`), 10},
-	{regexp.MustCompile(`\bноябр[ьяею]\b`), 11},
-	{regexp.MustCompile(`\bдекабр[ьяею]\b`), 12},
+	{regexp.MustCompile(`(?:^|[^\pL])январ[ьяею](?:[^\pL]|$)`), 1},
+	{regexp.MustCompile(`(?:^|[^\pL])феврал[ьяею](?:[^\pL]|$)`), 2},
+	{regexp.MustCompile(`(?:^|[^\pL])март[аеу]?(?:[^\pL]|$)`), 3},
+	{regexp.MustCompile(`(?:^|[^\pL])апрел[ьяею](?:[^\pL]|$)`), 4},
+	{regexp.MustCompile(`(?:^|[^\pL])ма[йяею](?:[^\pL]|$)`), 5},
+	{regexp.MustCompile(`(?:^|[^\pL])июн[ьяею](?:[^\pL]|$)`), 6},
+	{regexp.MustCompile(`(?:^|[^\pL])июл[ьяею](?:[^\pL]|$)`), 7},
+	{regexp.MustCompile(`(?:^|[^\pL])август[аеу]?(?:[^\pL]|$)`), 8},
+	{regexp.MustCompile(`(?:^|[^\pL])сентябр[ьяею](?:[^\pL]|$)`), 9},
+	{regexp.MustCompile(`(?:^|[^\pL])октябр[ьяею](?:[^\pL]|$)`), 10},
+	{regexp.MustCompile(`(?:^|[^\pL])ноябр[ьяею](?:[^\pL]|$)`), 11},
+	{regexp.MustCompile(`(?:^|[^\pL])декабр[ьяею](?:[^\pL]|$)`), 12},
 }
-
 var yearRe = regexp.MustCompile(`\b(20\d\d)\b`)
 
 // Маркеры направления: «в самом начале, первые» → ранние записи окна.
@@ -181,4 +182,24 @@ func (ms *MemorySearch) searchTemporal(
 		out[i].RawBM25 = float64(i)
 	}
 	return out, nil
+}
+
+// applyTemporalWindow — W2: явный маркер периода = жёсткий приоритет пула:
+// записи окна вперёд (вызов ПОСЛЕ реранка — иначе реранкер топит тонкие эхо
+// окна среди богатых атомов; кейс 10). Единая точка для Execute и Search.
+func (ms *MemorySearch) applyTemporalWindow(query string, scored []SearchResult) []SearchResult {
+	a, b, _, ok := ParseTemporalWindow(query, time.Now())
+	if !ok {
+		return scored
+	}
+	inWin := make([]SearchResult, 0, len(scored))
+	outWin := make([]SearchResult, 0, len(scored))
+	for _, r := range scored {
+		if r.CreatedAt >= a && r.CreatedAt < b {
+			inWin = append(inWin, r)
+		} else {
+			outWin = append(outWin, r)
+		}
+	}
+	return append(inWin, outWin...)
 }

@@ -113,7 +113,9 @@ const rerankSysPrompt = "Ты — реранкер памяти личного �
 	"Тебе дают вопрос пользователя и записи из его истории. Отранжируй " +
 	"записи по тому, насколько запись СОДЕРЖИТ ОТВЕТ на вопрос: конкретный " +
 	"факт, решение, значение. Записи, которые сами являются вопросами или " +
-	"лишь повторяют тему без ответа, ставь НИЖЕ записей с фактами. Верни " +
+	"лишь повторяют тему без ответа, ставь НИЖЕ записей с фактами. Если в " +
+	"вопросе назван период (месяц, даты, «до/после»), записи с датой ВНУТРИ " +
+	"этого периода ставь выше записей вне его. Верни " +
 	"ТОЛЬКО номера записей через запятую, от самой отвечающей к наименее."
 
 // maybeRerank переставляет топ выдачи по мнению LLM-судьи. Никогда не
@@ -145,7 +147,11 @@ func (ms *MemorySearch) maybeRerank(
 		if rr := []rune(snippet); len(rr) > rerankSnippetRunes {
 			snippet = string(rr[:rerankSnippetRunes]) + "…"
 		}
-		fmt.Fprintf(&b, "\n[%d] (%s/%s) %s\n", i+1, r.Type, r.Source, snippet)
+		date := r.CreatedAt
+		if len(date) > 10 {
+			date = date[:10]
+		}
+		fmt.Fprintf(&b, "\n[%d] (%s/%s, %s) %s\n", i+1, r.Type, r.Source, date, snippet)
 	}
 	sys := rerankSysPrompt
 	if wAfter, wBefore, _, tok := ParseTemporalWindow(query, time.Now()); tok {

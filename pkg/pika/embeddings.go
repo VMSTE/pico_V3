@@ -58,6 +58,28 @@ func NewEmbedder(apiBase, apiKey, model string) *Embedder {
 	}
 }
 
+// BGEQueryInstruction — канонический префикс стороны запроса у
+// BGE-семейства (asymmetric retrieval): короткий разговорный запрос
+// эмбеддится «как запрос», документы — сырыми. М2.2: разделение
+// цель/эхо на нашей базе (полосы d 0.84-1.00 vs 0.80-0.99 перекрыты
+// при симметричном эмбеддинге — стенд 3 окт).
+const BGEQueryInstruction = "Represent this sentence for searching relevant passages: "
+
+// EmbedQuery — эмбеддинг ЗАПРОСА с инструкцией; документы идут через
+// Embed без префикса. Переэмбеддинг базы не нужен.
+func (e *Embedder) EmbedQuery(
+	ctx context.Context, query string,
+) ([]float32, error) {
+	vecs, err := e.Embed(ctx, []string{BGEQueryInstruction + query})
+	if err != nil {
+		return nil, err
+	}
+	if len(vecs) != 1 {
+		return nil, fmt.Errorf("pika/embeddings: query count %d", len(vecs))
+	}
+	return vecs[0], nil
+}
+
 type embedRequest struct {
 	Model string   `json:"model"`
 	Input []string `json:"input"`
@@ -189,20 +211,25 @@ func (bm *BotMemory) pendingEmbeddings(
 		if rErr := archRows.Err(); rErr != nil {
 			return nil, fmt.Errorf("pika/embeddings: iterate archive: %w", rErr)
 		}
+		var skipped []int64
 		for _, id := range archIDs {
 			content, _, rErr := bm.ReadArchivedMessage(ctx, id)
 			if rErr != nil || strings.TrimSpace(content) == "" {
+				skipped = append(skipped, id)
 				continue
 			}
 			out = append(out, pendingDoc{source: "archive", id: id, content: content})
 		}
+		// ТЗ-122 (срез М2): пустой/нечитаемый архив помечаем — иначе
+		// висит в pending вечно и врёт метрике покрытия (М3).
+		bm.markEmbeddingsSkipped(ctx, "archive", skipped)
 	}
 
 	if len(out) < limit {
 		atomRows, atErr := bm.db.QueryContext(ctx, `
 			SELECT ka.id, ka.summary FROM knowledge_atoms ka
 			LEFT JOIN embeddings_meta em ON em.source='atom' AND em.ref_id=ka.id
-			WHERE em.id IS NULL
+			WHERE em.id IS NULL AND ka.summary != ''
 			ORDER BY ka.id LIMIT ?`, limit-len(out))
 		if atErr != nil {
 			return nil, fmt.Errorf("pika/embeddings: pending atoms: %w", atErr)
@@ -288,7 +315,7 @@ func (bm *BotMemory) EmbeddingCoverage(
 	ctx context.Context,
 ) (embedded int, pending int, err error) {
 	if err = bm.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM embeddings_meta`).Scan(&embedded); err != nil {
+		`SELECT COUNT(*) FROM embeddings_meta WHERE dims > 0`).Scan(&embedded); err != nil {
 		return 0, 0, fmt.Errorf("pika/embeddings: coverage embedded: %w", err)
 	}
 	counts := []string{
@@ -301,7 +328,11 @@ func (bm *BotMemory) EmbeddingCoverage(
 		WHERE em.id IS NULL AND ma.role != 'tool'`,
 		`SELECT COUNT(*) FROM knowledge_atoms ka
 		LEFT JOIN embeddings_meta em ON em.source='atom' AND em.ref_id=ka.id
-		WHERE em.id IS NULL`,
+		WHERE em.id IS NULL AND ka.summary != ''`,
+		`SELECT COUNT(*) FROM reasoning_log rl
+		LEFT JOIN embeddings_meta em ON em.source='reasoning' AND em.ref_id=rl.id
+		WHERE em.id IS NULL AND rl.reasoning_text IS NOT NULL
+		  AND length(trim(rl.reasoning_text)) > 20`,
 	}
 	for _, q := range counts {
 		var c int
@@ -323,6 +354,13 @@ func (bm *BotMemory) StartEmbeddingIndexer(e *Embedder) {
 	go func() {
 		for {
 			n, err := bm.EmbedPending(context.Background(), e, embeddingBatchSize)
+			if err == nil {
+				// М2.1: мысли — отдельный проход, тот же тик.
+				var nr int
+				nr, err = bm.EmbedPendingReasoning(
+					context.Background(), e, embeddingBatchSize)
+				n += nr
+			}
 			if err != nil {
 				if strings.Contains(err.Error(), "database is closed") {
 					return
@@ -351,4 +389,20 @@ func vecToJSON(v []float32) string {
 	}
 	sb.WriteByte(']')
 	return sb.String()
+}
+
+// markEmbeddingsSkipped — пустой/нечитаемый контент получает метку
+// (model='skipped-empty', dims=0, без вектора): запись не висит в
+// pending вечно и не врёт покрытию. Идемпотентно (UNIQUE source+ref_id).
+func (bm *BotMemory) markEmbeddingsSkipped(
+	ctx context.Context, source string, ids []int64,
+) {
+	for _, id := range ids {
+		if _, err := bm.db.ExecContext(ctx,
+			`INSERT OR IGNORE INTO embeddings_meta (source, ref_id, model, dims)
+			VALUES (?,?,'skipped-empty',0)`, source, id); err != nil {
+			log.Printf("WARN pika/embeddings: mark skipped: %v", err)
+			return
+		}
+	}
 }

@@ -64,7 +64,7 @@ func TestSearchLayers_EmptyFTSQueryNoError(t *testing.T) {
 	if _, err := ms.searchEventsArchive(ctx, "?!", 10); err != nil {
 		t.Fatalf("events: %v", err)
 	}
-	if _, err := ms.searchReasoning(ctx, "?!", 10); err != nil {
+	if _, err := ms.searchReasoning(ctx, "?!", 10, [2]string{}); err != nil {
 		t.Fatalf("reasoning: %v", err)
 	}
 }

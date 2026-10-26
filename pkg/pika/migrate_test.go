@@ -24,8 +24,8 @@ func TestMigrateNewDB(t *testing.T) {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
 	// ТЗ-122 (срез М1): канон версии 9 → 10 (векторный слой).
-	if ver != 10 {
-		t.Fatalf("expected version 10, got %d", ver)
+	if ver != 11 {
+		t.Fatalf("expected version 11, got %d", ver)
 	}
 
 	// Check key tables exist
@@ -102,8 +102,8 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if ver != 10 {
-		t.Fatalf("expected version 10 after second Migrate, got %d", ver)
+	if ver != 11 {
+		t.Fatalf("expected version 11 after second Migrate, got %d", ver)
 	}
 }
 

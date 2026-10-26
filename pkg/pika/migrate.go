@@ -134,6 +134,11 @@ func Migrate(dbPath string) (*sql.DB, error) {
 			description: "embeddings_meta + embeddings_vec (vec0) — векторный слой (ТЗ-122, этап 2, срез М1)",
 			ddl:         migrationV10,
 		},
+		{
+			version:     11,
+			description: "embeddings_meta CHECK + 'reasoning' (ТЗ-122, этап 2, срез М2.1)",
+			ddl:         migrationV11,
+		},
 	}
 
 	for _, m := range migrations {
@@ -189,6 +194,26 @@ CREATE TABLE IF NOT EXISTS embeddings_meta (
 CREATE VIRTUAL TABLE IF NOT EXISTS embeddings_vec USING vec0(
     embedding FLOAT[1024]
 );
+`
+
+// PIKA-V3: ТЗ-122 (этап 2, срез М2.1): source='reasoning' для векторной
+// ноги по мыслям. SQLite не умеет ALTER CHECK → пересоздание таблицы;
+// id и строки сохраняются, embeddings_vec (rowid = meta.id) не трогаем.
+// Миграция атомарна: весь DDL в одной транзакции реестра Migrate().
+const migrationV11 = `
+CREATE TABLE IF NOT EXISTS embeddings_meta_v11 (
+    id          INTEGER PRIMARY KEY,
+    source      TEXT NOT NULL CHECK(source IN ('hot','archive','atom','reasoning')),
+    ref_id      INTEGER NOT NULL,
+    model       TEXT NOT NULL,
+    dims        INTEGER NOT NULL,
+    embedded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(source, ref_id)
+);
+INSERT INTO embeddings_meta_v11 (id, source, ref_id, model, dims, embedded_at)
+    SELECT id, source, ref_id, model, dims, embedded_at FROM embeddings_meta;
+DROP TABLE embeddings_meta;
+ALTER TABLE embeddings_meta_v11 RENAME TO embeddings_meta;
 `
 
 // CurrentVersion returns the highest applied migration version (0 if none).

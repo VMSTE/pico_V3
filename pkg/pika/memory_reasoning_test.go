@@ -19,7 +19,7 @@ func TestSearchReasoning_FtsFindsThoughtText(t *testing.T) {
 		t.Fatal(err)
 	}
 	ms := NewMemorySearch(bm)
-	res, err := ms.searchReasoning(ctx, "подожду система покажет", 10)
+	res, err := ms.searchReasoning(ctx, "подожду система покажет", 10, [2]string{})
 	if err != nil {
 		t.Fatal(err)
 	}

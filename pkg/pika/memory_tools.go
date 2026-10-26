@@ -253,6 +253,7 @@ func (ms *MemorySearch) Execute(
 	})
 	scored = ms.episodeFilter(sessionID, parsed.Query, scored)
 	scored = ms.maybeRerank(ctx, parsed.Query, scored)
+	scored = ms.applyTemporalWindow(parsed.Query, scored)
 	scored = ensureLayerDiversity(scored, parsed.Limit)
 	ms.episodeMark(sessionID, scored)
 
@@ -1797,6 +1798,7 @@ func (ms *MemorySearch) Search(
 	})
 	scored = ms.episodeFilter(sessionID, query, scored)
 	scored = ms.maybeRerank(ctx, query, scored)
+	scored = ms.applyTemporalWindow(query, scored)
 	out := ensureLayerDiversity(scored, limit)
 	ms.episodeMark(sessionID, out)
 	return out
