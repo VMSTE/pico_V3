@@ -14,7 +14,7 @@ func TestNewReflectorCommand(t *testing.T) {
 	assert.Equal(t, "reflector", cmd.Use)
 	assert.True(t, cmd.HasSubCommands())
 
-	var names []string
+	names := make([]string, 0, len(cmd.Commands()))
 	for _, c := range cmd.Commands() {
 		names = append(names, c.Name())
 	}
