@@ -454,12 +454,17 @@ const readerJudgeSysPrompt = "Ты — строгий проверяющий. Т
 // judgeReaderValue — холодный судья reader-метрики: смысловое совпадение
 // извлечённого значения с эталоном кейса.
 func judgeReaderValue(ctx context.Context, caller pika.RankCaller, q, expect, value string) bool {
-	raw, err := caller(ctx, readerJudgeSysPrompt,
-		fmt.Sprintf("Вопрос: %s\nЭталон: %s\nОтвет: %s", q, expect, value))
-	if err != nil {
-		return false
+	// majority-vote 2/3: одиночный судья флипает на пограничных ответах
+	// (кейс 11: «credentials» дословно в ответе, verdict=false).
+	votes := 0
+	for i := 0; i < 3; i++ {
+		raw, err := caller(ctx, readerJudgeSysPrompt,
+			fmt.Sprintf("Вопрос: %s\nЭталон: %s\nОтвет: %s", q, expect, value))
+		if err == nil && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(raw)), "HIT") {
+			votes++
+		}
 	}
-	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(raw)), "HIT")
+	return votes >= 2
 }
 
 const answerSysPrompt = "Ты — личный ассистент с памятью. Тебе дают вопрос " +
