@@ -538,33 +538,45 @@ func validateReflectorOutput(
 	resp *reflectorLLMResponse,
 	validIDs map[string]bool,
 ) error {
-	// Validate duplicates
+	// PIKA-V3 (wave 125): мягкая валидация duplicates — по прецеденту
+	// confidence_updates ниже. LLM иногда тащит ID из текстов
+	// history/detail (мержнутые родители прошлых прогонов; бой
+	// 2026-10-27: merge_id "S-392" не из входа). Это не повод валить
+	// весь прогон: неизвестные ID выкидываем с warn, запись без
+	// валидных merge_ids — целиком.
+	kept := resp.Duplicates[:0]
 	for i, d := range resp.Duplicates {
-		if d.KeepID == "" {
-			return fmt.Errorf(
-				"duplicates[%d]: empty keep_id", i,
-			)
-		}
-		if !validIDs[d.KeepID] {
-			return fmt.Errorf(
-				"duplicates[%d]: keep_id %q not found",
+		if d.KeepID == "" || !validIDs[d.KeepID] {
+			log.Printf(
+				"[reflector] warn: duplicates[%d]: "+
+					"keep_id %q unknown, skip entry",
 				i, d.KeepID,
 			)
+			continue
 		}
-		if len(d.MergeIDs) == 0 {
-			return fmt.Errorf(
-				"duplicates[%d]: empty merge_ids", i,
-			)
-		}
+		valid := d.MergeIDs[:0]
 		for _, mid := range d.MergeIDs {
 			if !validIDs[mid] {
-				return fmt.Errorf(
-					"duplicates[%d]: merge_id %q not found",
+				log.Printf(
+					"[reflector] warn: duplicates[%d]: "+
+						"merge_id %q unknown, dropped",
 					i, mid,
 				)
+				continue
 			}
+			valid = append(valid, mid)
 		}
+		if len(valid) == 0 {
+			log.Printf(
+				"[reflector] warn: duplicates[%d]: "+
+					"no valid merge_ids left, skip entry", i,
+			)
+			continue
+		}
+		d.MergeIDs = valid
+		kept = append(kept, d)
 	}
+	resp.Duplicates = kept
 	// Validate patterns
 	for i, p := range resp.Patterns {
 		if p.Summary == "" {
