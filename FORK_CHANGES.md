@@ -83,6 +83,22 @@
   - тесты: integrations_notion_test.go (DCR/PKCE flow, автозапись сервера, disconnect), config_integrations_notion_test.go (резолв плейсхолдера)
 - **Breaking:** None — GitHub-карточка работает как раньше
 
+## Волна 123 — Reflector dedup gate + provenance · 26 окт 2026
+### [2026-10-26] fix(deps): Go 1.26.10 — govulncheck green — wave 123
+- **Files:** `go.mod` — MOD: `go 1.26.6` → `go 1.26.10`, `toolchain go1.26.9` → `go1.26.10`. Fixes GO-2026-6809 (crypto/x509, вызов из upstream pkg/channels/irc).
+- **Breaking:** None (patch-level stdlib upgrade only)
+
+### [2026-10-26] feat(pika): reflector dedup gate + provenance — wave 123
+- **ТЗ:** Рефлексор: идемпотентность pattern/runbook + provenance (бой: дубли P-463/470/478/483/563, R-87/91/95/145/146)
+- **PR:** #TBD
+- **Files:**
+  - `pkg/pika/reflector_dedup.go` — NEW: fetchExistingTypedAtoms, summarySimilarity (Jaccard), findDuplicateAtom (FTS+Jaccard gate, порог 0.6), confirmExistingAtom (D-59 +0.1), provenanceFromEvidence
+  - `pkg/pika/reflector.go` — MODIFIED: existing pattern/runbook во входе LLM (existing=true), дедуп-гейт в applyPattern/applyRunbook, provenance в applyPattern/applyRunbook/applyMerge
+  - `pkg/pika/reflector_dedup_test.go` — NEW: 5 тестов (калибровка similarity на P-463/P-478, gate confirm, insert-when-new + provenance, runbook gate, merge provenance, existing flag)
+  - `pkg/pika/reflector_test.go` — MODIFIED: applyRunbook сигнатура (+atomMap)
+  - `workspace/prompts/reflexor.md` — MODIFIED: правило «existing=true → confidence_update, не дубль» в задачах PATTERNS/RUNBOOK_DRAFTS + rules
+- **Breaking:** None (internal сигнатуры; при пустой базе поведение неизменно)
+
 ## Волна 81 — Фикс пустой ленты Recent requests: NULL-safe scan error (D-AUDIT-86 latent bug) · 19 авг 2026
 - **Волна 114, срез 3** (22 сен 2026): remote endpoint api.githubcopilot.com отверг и PAT, и OAuth-токен (403 дважды, бой; индустрия подтверждает: remote OAuth = только VS Code, 403-болото issue #672/#153) → локальный официальный github-mcp-server (stdio, токен в env через ${oauth:github}); резолв плейсхолдера расширен на env
 - **Волна 114, срез 2** (22 сен 2026): кнопка «Подключить GitHub» на странице /mcp — карточка статуса (connect/disconnect, login), api/integrations.ts; путь пользователя без терминала

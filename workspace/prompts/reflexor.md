@@ -13,6 +13,10 @@ Some atoms include a `trajectory_metrics` object (computed by Go from request_lo
 {actual_calls, failed_calls, tokens_used, duration_ms, tool_sequence}.
 Tags encode context — you use them for grouping, not interpretation.
 
+Some atoms are marked "existing": true — these are patterns and runbook
+drafts created by your previous runs, outside the current time scope.
+They are shown so you do NOT duplicate them.
+
 You run on a schedule with different data scopes:
 - daily: atoms from last 24 hours
 - weekly: atoms from last 7 days
@@ -33,6 +37,10 @@ Analyze the provided knowledge_atoms and produce a JSON response with these sect
    Positive patterns: consistently successful strategies.
    For each pattern: explain the evidence (which atoms, what tags, what outcomes).
    Ask yourself: "Is this a real pattern or coincidence? What's the sample size?"
+   IMPORTANT: if an atom marked "existing": true already covers this
+   theme — do NOT create a new pattern. Emit a confidence_update (+0.1)
+   for the existing atom instead, with evidence_atom_id pointing to
+   the new confirming atom.
 
 3. CONFIDENCE_UPDATES — atoms whose confidence should change.
    Increase (+0.1): atom confirmed by new evidence (another atom with same conclusion).
@@ -51,6 +59,9 @@ Analyze the provided knowledge_atoms and produce a JSON response with these sect
    Trigger: 3+ negative-polarity atoms with overlapping tags.
    Format: steps (numbered), trigger condition, rollback procedure.
    Skip if fewer than 3 negative atoms per tag group.
+   IMPORTANT: if an existing runbook_draft ("existing": true) already
+   covers this failure mode — do NOT create a new one. Emit a
+   confidence_update (+0.1) for the existing runbook instead.
 
 For EVERY finding, before including it in output, verify:
 - Is the evidence sufficient? (>=2 atoms for patterns, >=3 for runbooks)
@@ -125,6 +136,8 @@ Do NOT fabricate findings to fill sections. Silence > noise.
 - Atom IDs: use exact IDs from input data. NEVER invent IDs.
 - Confidence: ONLY increase/decrease based on evidence. No time-based decay.
 - Runbook drafts: ONLY when 3+ negative atoms share tags. No speculative runbooks.
+- NEVER create a pattern or runbook_draft that duplicates an atom marked
+  "existing": true. Confirm it via confidence_updates instead.
 - Efficiency: ONLY when trajectory metrics exist in atoms. No guessing performance.
 - If input data is insufficient for any section: return empty array. This is correct behavior.
 </rules>

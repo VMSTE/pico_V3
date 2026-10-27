@@ -113,6 +113,9 @@ type reflectorAtomForLLM struct {
 	CreatedAt  string   `json:"created_at"`
 	// PIKA-V3 (D-AUDIT-62): метрики задачи, пишет Атомизатор (Go-only)
 	TrajectoryMetrics json.RawMessage `json:"trajectory_metrics,omitempty"`
+	// PIKA-V3 (dedup-ctx): атом создан прошлыми прогонами вне текущего
+	// scope — LLM не должен создавать его дубль, только confidence_update.
+	Existing bool `json:"existing,omitempty"`
 }
 
 // --- Reflector Pipeline ---
@@ -217,6 +220,30 @@ func (r *ReflectorPipeline) Run(
 		}
 	}
 
+	// PIKA-V3 (dedup-ctx): существующие pattern/runbook_draft во входе
+	// LLM. Иначе LLM не видит созданное прошлыми прогонами, и каждый
+	// investigate регенерирует тот же паттерн/ранбук (P-463..P-563).
+	existingTyped, exErr := r.fetchExistingTypedAtoms(
+		ctx, existingTypedAtomsLimit,
+	)
+	if exErr != nil {
+		log.Printf("[reflector] existing typed atoms: %v", exErr)
+	}
+	existingIDs := make(map[string]bool, len(existingTyped))
+	if len(existingTyped) > 0 {
+		inScope := make(map[string]bool, len(atoms))
+		for _, a := range atoms {
+			inScope[a.AtomID] = true
+		}
+		for _, ea := range existingTyped {
+			if inScope[ea.AtomID] {
+				continue // уже в scope — не дублируем и не маркируем
+			}
+			existingIDs[ea.AtomID] = true
+			atoms = append(atoms, ea)
+		}
+	}
+
 	// Step 2: Load prompt (hot-reload, 0 restart)
 	promptText, err := r.loadPromptFile()
 	if err != nil {
@@ -227,7 +254,7 @@ func (r *ReflectorPipeline) Run(
 	}
 
 	// Step 3: Build user content
-	userContent := r.buildUserContent(atoms, mode)
+	userContent := r.buildUserContent(atoms, mode, existingIDs)
 	if mode == reflectorInvestigate {
 		userContent += r.buildInvestigateContext(ctx)
 	}
@@ -376,6 +403,7 @@ func scanKnowledgeAtomRows(
 
 func (r *ReflectorPipeline) buildUserContent(
 	atoms []KnowledgeAtomRow, mode string,
+	existingIDs ...map[string]bool,
 ) string {
 	type payload struct {
 		Scope string                `json:"scope"`
@@ -396,6 +424,9 @@ func (r *ReflectorPipeline) buildUserContent(
 			Polarity:   a.Polarity,
 			Confidence: a.Confidence,
 			CreatedAt:  a.CreatedAt.Format(time.RFC3339),
+		}
+		if len(existingIDs) > 0 && existingIDs[0][a.AtomID] {
+			item.Existing = true
 		}
 		// PIKA-V3 (D-AUDIT-62): прикрепляем trajectory-метрики из history
 		if tm := trajectoryMetricsFromHistory(a.History); tm != nil {
@@ -507,33 +538,45 @@ func validateReflectorOutput(
 	resp *reflectorLLMResponse,
 	validIDs map[string]bool,
 ) error {
-	// Validate duplicates
+	// PIKA-V3 (wave 125): мягкая валидация duplicates — по прецеденту
+	// confidence_updates ниже. LLM иногда тащит ID из текстов
+	// history/detail (мержнутые родители прошлых прогонов; бой
+	// 2026-10-27: merge_id "S-392" не из входа). Это не повод валить
+	// весь прогон: неизвестные ID выкидываем с warn, запись без
+	// валидных merge_ids — целиком.
+	kept := resp.Duplicates[:0]
 	for i, d := range resp.Duplicates {
-		if d.KeepID == "" {
-			return fmt.Errorf(
-				"duplicates[%d]: empty keep_id", i,
-			)
-		}
-		if !validIDs[d.KeepID] {
-			return fmt.Errorf(
-				"duplicates[%d]: keep_id %q not found",
+		if d.KeepID == "" || !validIDs[d.KeepID] {
+			log.Printf(
+				"[reflector] warn: duplicates[%d]: "+
+					"keep_id %q unknown, skip entry",
 				i, d.KeepID,
 			)
+			continue
 		}
-		if len(d.MergeIDs) == 0 {
-			return fmt.Errorf(
-				"duplicates[%d]: empty merge_ids", i,
-			)
-		}
+		valid := d.MergeIDs[:0]
 		for _, mid := range d.MergeIDs {
 			if !validIDs[mid] {
-				return fmt.Errorf(
-					"duplicates[%d]: merge_id %q not found",
+				log.Printf(
+					"[reflector] warn: duplicates[%d]: "+
+						"merge_id %q unknown, dropped",
 					i, mid,
 				)
+				continue
 			}
+			valid = append(valid, mid)
 		}
+		if len(valid) == 0 {
+			log.Printf(
+				"[reflector] warn: duplicates[%d]: "+
+					"no valid merge_ids left, skip entry", i,
+			)
+			continue
+		}
+		d.MergeIDs = valid
+		kept = append(kept, d)
 	}
+	resp.Duplicates = kept
 	// Validate patterns
 	for i, p := range resp.Patterns {
 		if p.Summary == "" {
@@ -615,7 +658,7 @@ func (r *ReflectorPipeline) applyResults(
 	// 2. Insert patterns
 	for _, pat := range resp.Patterns {
 		if err := r.applyPattern(
-			ctx, pat,
+			ctx, pat, atomMap,
 		); err != nil {
 			log.Printf(
 				"[reflector] pattern error: %v", err,
@@ -637,7 +680,7 @@ func (r *ReflectorPipeline) applyResults(
 	// 4. Runbook drafts (D-87, F9-5)
 	for _, rd := range resp.Runbooks {
 		if err := r.applyRunbook(
-			ctx, rd,
+			ctx, rd, atomMap,
 		); err != nil {
 			log.Printf(
 				"[reflector] runbook error: %v", err,
@@ -737,13 +780,17 @@ func (r *ReflectorPipeline) applyMerge(
 	}
 	defer tx.Rollback() //nolint:errcheck
 
+	// PIKA-V3: merged-атом наследует provenance keeper'а
+	// (раньше молча терялся — атом обрывался от первоисточника).
 	_, err = tx.ExecContext(ctx,
 		`INSERT INTO knowledge_atoms
-		(atom_id, chat_id, pika_session_id, category,
+		(atom_id, chat_id, pika_session_id,
+		 source_event_id, source_message_id, category,
 		 summary, detail, confidence, polarity,
 		 tags, source_turns, history)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		newAtomID, keeper.ChatID, keeper.PikaSessionID,
+		keeper.SourceEventID, keeper.SourceMessageID,
 		keeper.Category, keeper.Summary,
 		strOrNil(keeper.Detail), avgConf,
 		keeper.Polarity, jsonArg(tagsJSON),
@@ -779,7 +826,25 @@ func (r *ReflectorPipeline) applyMerge(
 
 func (r *ReflectorPipeline) applyPattern(
 	ctx context.Context, pat reflectorPattern,
+	atomMap map[string]*KnowledgeAtomRow,
 ) error {
+	polarity := pat.Polarity
+	if !validPolarities[polarity] {
+		polarity = "negative"
+	}
+
+	// PIKA-V3 (dedup-gate): похожий pattern уже есть — подтверждаем
+	// существующий (D-59), а не плодим дубль.
+	if dup, dErr := r.findDuplicateAtom(
+		ctx, "pattern", polarity, pat.Summary,
+	); dErr != nil {
+		log.Printf("[reflector] pattern dedup gate: %v", dErr)
+	} else if dup != nil {
+		return r.confirmExistingAtom(
+			ctx, dup, pat.EvidenceAtomIDs,
+		)
+	}
+
 	atomID, err := r.atomGen.Next(ctx, "pattern")
 	if err != nil {
 		return fmt.Errorf("gen atom_id: %w", err)
@@ -793,22 +858,24 @@ func (r *ReflectorPipeline) applyPattern(
 		pat.EvidenceAtomIDs,
 	)
 
-	polarity := pat.Polarity
-	if !validPolarities[polarity] {
-		polarity = "negative"
-	}
+	// PIKA-V3: provenance от первого evidence-атома.
+	evID, msgID := provenanceFromEvidence(
+		pat.EvidenceAtomIDs, atomMap,
+	)
 
 	row := KnowledgeAtomRow{
-		AtomID:        atomID,
-		ChatID:        "reflector",
-		PikaSessionID: "",
-		Category:      "pattern",
-		Summary:       pat.Summary,
-		Detail:        pat.SuggestedAction,
-		Confidence:    0.5,
-		Polarity:      polarity,
-		Tags:          tagsJSON,
-		SourceTurns:   evidenceJSON,
+		AtomID:          atomID,
+		SourceEventID:   evID,
+		SourceMessageID: msgID,
+		ChatID:          "reflector",
+		PikaSessionID:   "",
+		Category:        "pattern",
+		Summary:         pat.Summary,
+		Detail:          pat.SuggestedAction,
+		Confidence:      0.5,
+		Polarity:        polarity,
+		Tags:            tagsJSON,
+		SourceTurns:     evidenceJSON,
 	}
 	return r.mem.InsertAtom(ctx, row)
 }
@@ -841,7 +908,20 @@ func (r *ReflectorPipeline) applyConfUpdate(
 
 func (r *ReflectorPipeline) applyRunbook(
 	ctx context.Context, rd reflectorRunbook,
+	atomMap map[string]*KnowledgeAtomRow,
 ) error {
+	// PIKA-V3 (dedup-gate): тот же триггер уже есть — подтверждаем
+	// существующий runbook (D-59), а не плодим дубль.
+	if dup, dErr := r.findDuplicateAtom(
+		ctx, "runbook_draft", "negative", rd.Trigger,
+	); dErr != nil {
+		log.Printf("[reflector] runbook dedup gate: %v", dErr)
+	} else if dup != nil {
+		return r.confirmExistingAtom(
+			ctx, dup, rd.EvidenceAtomIDs,
+		)
+	}
+
 	atomID, err := r.atomGen.Next(
 		ctx, "runbook_draft",
 	)
@@ -863,17 +943,24 @@ func (r *ReflectorPipeline) applyRunbook(
 		rd.EvidenceAtomIDs,
 	)
 
+	// PIKA-V3: provenance от первого evidence-атома.
+	evID, msgID := provenanceFromEvidence(
+		rd.EvidenceAtomIDs, atomMap,
+	)
+
 	row := KnowledgeAtomRow{
-		AtomID:        atomID,
-		ChatID:        "reflector",
-		PikaSessionID: "",
-		Category:      "runbook_draft",
-		Summary:       rd.Trigger,
-		Detail:        string(detail),
-		Confidence:    0.5,
-		Polarity:      "negative",
-		Tags:          tagsJSON,
-		SourceTurns:   evidenceJSON,
+		AtomID:          atomID,
+		SourceEventID:   evID,
+		SourceMessageID: msgID,
+		ChatID:          "reflector",
+		PikaSessionID:   "",
+		Category:        "runbook_draft",
+		Summary:         rd.Trigger,
+		Detail:          string(detail),
+		Confidence:      0.5,
+		Polarity:        "negative",
+		Tags:            tagsJSON,
+		SourceTurns:     evidenceJSON,
 	}
 	return r.mem.InsertAtom(ctx, row)
 }
@@ -983,6 +1070,9 @@ Analyze the provided knowledge_atoms and produce JSON:
 3. CONFIDENCE_UPDATES — confirmed (+0.1) or
    contradicted (-0.2) atoms.
 4. RUNBOOK_DRAFTS — 3+ negative atoms with same tag.
+Atoms marked "existing": true were created by previous runs —
+do NOT re-create them as patterns/runbooks; if new evidence
+confirms them, emit confidence_updates (+0.1) instead.
 
 For every finding, verify evidence is sufficient.
 </instructions>
