@@ -133,6 +133,8 @@ func TestReflector_ParseInvalidJSON(t *testing.T) {
 	}
 }
 
+// Wave 125: галлюцинированный keep_id больше не валит прогон —
+// запись мягко выкидывается (по прецеденту confidence_updates).
 func TestReflector_ValidateHallucinatedID(t *testing.T) {
 	resp := &reflectorLLMResponse{
 		Duplicates: []reflectorDuplicate{
@@ -140,9 +142,35 @@ func TestReflector_ValidateHallucinatedID(t *testing.T) {
 		},
 	}
 	valid := map[string]bool{"S-1": true}
-	err := validateReflectorOutput(resp, valid)
-	if err == nil {
-		t.Fatal("expected error for hallucinated ID")
+	if err := validateReflectorOutput(resp, valid); err != nil {
+		t.Fatalf("soft validation must not error: %v", err)
+	}
+	if len(resp.Duplicates) != 0 {
+		t.Errorf(
+			"expected hallucinated entry dropped, got %d",
+			len(resp.Duplicates),
+		)
+	}
+}
+
+// Wave 125: неизвестный merge_id выкидывается точечно, запись
+// с валидными ID выживает (бой 2026-10-27: merge_id "S-392").
+func TestReflector_ValidateUnknownMergeID(t *testing.T) {
+	resp := &reflectorLLMResponse{
+		Duplicates: []reflectorDuplicate{
+			{KeepID: "S-1", MergeIDs: []string{"S-2", "S-392"}},
+		},
+	}
+	valid := map[string]bool{"S-1": true, "S-2": true}
+	if err := validateReflectorOutput(resp, valid); err != nil {
+		t.Fatalf("soft validation must not error: %v", err)
+	}
+	if len(resp.Duplicates) != 1 {
+		t.Fatalf("entry should survive, got %d", len(resp.Duplicates))
+	}
+	got := resp.Duplicates[0].MergeIDs
+	if len(got) != 1 || got[0] != "S-2" {
+		t.Errorf("merge_ids = %v, want [S-2]", got)
 	}
 }
 
