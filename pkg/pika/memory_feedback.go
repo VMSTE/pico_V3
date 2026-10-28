@@ -125,10 +125,15 @@ func (ms *MemorySearch) neighborsAround(
 	msgID int64,
 	around int,
 ) []string {
+	// М7.4: tool-эхо включается как КОНТЕКСТ соседей (строки [tool]),
+	// никогда самостоятельным хитом — волна 86 не отменяется: слоты
+	// выдачи tool не занимает, self-match невозможен (соседи по
+	// близости id, не по тексту). Следы действий (пути артефактов,
+	// команды) живут именно тут — кейс 10, эра picoclaw_media.
 	rows, err := ms.bm.db.QueryContext(ctx,
 		`SELECT id, role, substr(COALESCE(content,''),1,120)
 		FROM messages
-		WHERE chat_id=? AND id BETWEEN ? AND ? AND role != 'tool'
+		WHERE chat_id=? AND id BETWEEN ? AND ? 
 		ORDER BY id`,
 		chatID, msgID-int64(around), msgID+int64(around),
 	)

@@ -25,7 +25,7 @@ func TestSearchReasoning_LegacyEmptyKeywordsNoError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ms.searchReasoning(ctx, "legacy keywords", 10); err != nil {
+	if _, err := ms.searchReasoning(ctx, "legacy keywords", 10, [2]string{}); err != nil {
 		t.Fatalf("reasoning layer died on legacy empty keywords: %v", err)
 	}
 }

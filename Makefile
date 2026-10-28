@@ -486,3 +486,6 @@ help:
 	@echo "  Binary: $(BINARY_PATH)"
 	@echo "  Install Prefix: $(INSTALL_PREFIX)"
 	@echo "  Workspace: $(WORKSPACE_DIR)"
+
+bench:
+	PIKA_QGEN_MODEL= go run ./cmd/searchbench -db /tmp/bench2.db -cases cmd/searchbench/cases.json -rerank -qgen -answer

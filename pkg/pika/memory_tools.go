@@ -105,12 +105,32 @@ const (
 // MemorySearch is a stateless singleton implementing toolshared.Tool.
 // Registered via toolsRegistry.Register() in instance.go — IsCore=true.
 type MemorySearch struct {
-	bm *BotMemory
+	// М2.1: белый список источников векторной ноги (nil = все).
+	vecSources map[string]bool
+	bm         *BotMemory
+	// ТЗ-122 (этап 2, срез М2): векторная нога. nil embedder = нога
+	// выключена (чистый BM25); vecWeight — калибровочный вес слоёв
+	// ноги (дефолт 1.0, сетка на стенде searchbench -vecweight).
+	embedder  *Embedder
+	vecWeight float64
+	// ТЗ-122 (срез М2, проба дистанций): порог L2 — без него нога
+	// льёт «наименее нерелевантное» на КАЖДЫЙ запрос и при весе ≥1
+	// топит лексику (стенд 3 окт: w=1.0 → 10/23, w=1.25 → 5/23).
+	// 0 = без порога (калибровка).
+	vecMaxDist float64
+	// ТЗ-122 (срез М3): LLM-реранкер топ-30 после фьюжна (окно 30: oversampling против вытеснения, бой 20 окт). nil = выкл.
+	reranker RankCaller
+
+	// ТЗ-122 (срез М5): seen-set поискового эпизода (ReFind,
+	// arXiv 2608.12888): повторные раунды переформулировки скрывают
+	// уже показанное. Граница эпизода — по запросу, не по времени.
+	episodesMu sync.Mutex
+	episodes   map[string]*searchEpisode
 }
 
 // NewMemorySearch creates a new MemorySearch tool.
 func NewMemorySearch(bm *BotMemory) *MemorySearch {
-	return &MemorySearch{bm: bm}
+	return &MemorySearch{bm: bm, vecWeight: 1.0}
 }
 
 // Name returns the tool name.
@@ -126,7 +146,10 @@ func (ms *MemorySearch) Description() string {
 		"feedback=true: dissatisfied-user messages with the criticized answer. " +
 		"around=N: N neighbor messages before/after each hit. " +
 		"full=true: untruncated raw content of hits (messages/archive/thoughts). " +
-		"after/before=YYYY-MM-DD: optional time bounds (messages and archive layers)."
+		"after/before=YYYY-MM-DD: optional time bounds (messages and archive layers). " +
+		"MULTI-ROUND: if the first search does not answer, search again 1-2 times, " +
+		"reformulating with distinctive terms/names/dates seen in the hits; " +
+		"repeat rounds on the same topic automatically hide already-shown results."
 }
 
 // Parameters returns the JSON schema for the tool arguments.
@@ -149,11 +172,19 @@ func (ms *MemorySearch) Parameters() map[string]any {
 			},
 			"around": map[string]any{
 				"type":        "integer",
-				"description": "N neighbor messages before/after each hit (0=off, max 5)",
+				"description": "N neighbor messages before/after each hit (default 2, -1=off, max 5)",
 			},
 			"full": map[string]any{
 				"type":        "boolean",
 				"description": "Return untruncated raw content of hits (default: snippets)",
+			},
+			"after": map[string]any{
+				"type":        "string",
+				"description": "Only records created on/after this date, YYYY-MM-DD (all layers incl. reasoning). For in-May / before-X / since-we-migrated questions resolve the phrase to a concrete date from conversation context.",
+			},
+			"before": map[string]any{
+				"type":        "string",
+				"description": "Only records created on/before this date, YYYY-MM-DD",
 			},
 		},
 		"required": []string{"query"},
@@ -193,7 +224,6 @@ func (ms *MemorySearch) Execute(
 	results := ms.fanOut(
 		ctx, parsed.Query, parsed.Limit, parsed.Feedback, sessionID, parsed.After, parsed.Before,
 	)
-	results = dedupResults(results)
 	// D-AUDIT-126 (волна 103): full=true — снятие обрезки по требованию
 	// (двухстадийный retrieval: сниппет → полный текст).
 	if parsed.Full {
@@ -203,15 +233,29 @@ func (ms *MemorySearch) Execute(
 			}
 		}
 	}
-	if parsed.Around > 0 {
-		results = ms.expandAround(ctx, results, parsed.Around)
+	// ТЗ-122 (срез М5): ±2 соседа по умолчанию — локальный контекст
+	// есть в каждом хите (ReFind control). around=-1 отключает.
+	around := parsed.Around
+	if around == 0 {
+		around = 2
 	}
+	results = ms.expandAround(ctx, results, around)
 	scored := scoreResults(results)
 
-	sort.Slice(scored, func(i, j int) bool {
-		return scored[i].Score > scored[j].Score
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].Score != scored[j].Score {
+			return scored[i].Score > scored[j].Score
+		}
+		if scored[i].CreatedAt != scored[j].CreatedAt {
+			return scored[i].CreatedAt > scored[j].CreatedAt // string: ISO-таймстемпы, лексикографически корректно
+		}
+		return scored[i].Summary < scored[j].Summary // детерминизм стенда (бой 20 окт)
 	})
+	scored = ms.episodeFilter(sessionID, parsed.Query, scored)
+	scored = ms.maybeRerank(ctx, parsed.Query, scored)
+	scored = ms.applyTemporalWindow(parsed.Query, scored)
 	scored = ensureLayerDiversity(scored, parsed.Limit)
+	ms.episodeMark(sessionID, scored)
 
 	out, _ := json.Marshal(scored)
 	return toolshared.SilentResult(string(out))
@@ -303,11 +347,58 @@ func (ms *MemorySearch) fanOut(
 		return nil
 	})
 
+	// Layer 1t (М7.3): temporal window — «в мае/в начале июня» →
+	// сообщения окна по ts, без лексики. Ноль LLM (кейс 10).
+	g.Go(func() error {
+		wAfter, wBefore, asc, ok := ParseTemporalWindow(query, time.Now())
+		if !ok {
+			return nil
+		}
+		res, err := ms.searchTemporal(gCtx, wAfter, wBefore, asc)
+		if err != nil {
+			logLayerWarn("temporal", err)
+			return nil
+		}
+		mu.Lock()
+		all = append(all, res...)
+		mu.Unlock()
+		return nil
+	})
+
+	// Layer 2e (М7.3): горячие events — свежие действия с исходом.
+	// До сих пор поиск читал только events_archive (в лучшем случае):
+	// дела невидимы до архивации (аудит: FROM events в поиске не было).
+	g.Go(func() error {
+		res, err := ms.searchEventsHot(gCtx, query, limit)
+		if err != nil {
+			logLayerWarn("events", err)
+			return nil
+		}
+		mu.Lock()
+		all = append(all, res...)
+		mu.Unlock()
+		return nil
+	})
+
 	// Layer 2: knowledge (FTS5)
 	g.Go(func() error {
 		res, err := ms.searchKnowledge(gCtx, query, limit)
 		if err != nil {
 			logLayerWarn("knowledge", err)
+			return nil
+		}
+		mu.Lock()
+		all = append(all, res...)
+		mu.Unlock()
+		return nil
+	})
+
+	// Layer 2q: questions (ТЗ-122, срез М4) — QuOTE-мост к документам,
+	// чьи формулировки не совпадают с запросом (recall-промахи 6/9/14/20)
+	g.Go(func() error {
+		res, err := ms.searchQuestions(gCtx, query, limit, sessionID)
+		if err != nil {
+			logLayerWarn("questions", err)
 			return nil
 		}
 		mu.Lock()
@@ -360,7 +451,7 @@ func (ms *MemorySearch) fanOut(
 	// Layer 5: reasoning (json_each LIKE)
 	g.Go(func() error {
 		res, err := ms.searchReasoning(
-			gCtx, query, limit,
+			gCtx, query, limit, [2]string{after, before},
 		)
 		if err != nil {
 			logLayerWarn("reasoning", err)
@@ -413,6 +504,23 @@ func (ms *MemorySearch) fanOut(
 			return nil
 		})
 	}
+
+	// Layer 7: vector leg — KNN по embeddings_vec (ТЗ-122, этап 2, М2).
+	// Параллельная нога рядом с BM25 (канон hybrid, ресёрч 3 окт:
+	// последовательный каскад −22 п.п. — запрещён). Нет эмбеддера или
+	// мёртвый API → нога молча пуста, чистый BM25 продолжает работать.
+	g.Go(func() error {
+		scope := ms.bm.GetMemoryScope(gCtx, sessionID)
+		res, err := ms.searchVector(gCtx, query, sessionID, scope, [2]string{after, before})
+		if err != nil {
+			logLayerWarn("vector", err)
+			return nil
+		}
+		mu.Lock()
+		all = append(all, res...)
+		mu.Unlock()
+		return nil
+	})
 
 	_ = g.Wait()
 	return all
@@ -751,6 +859,7 @@ func (ms *MemorySearch) searchReasoning(
 	ctx context.Context,
 	query string,
 	limit int,
+	tb [2]string,
 ) ([]rawResult, error) {
 	pat := "%" + query + "%"
 	var out []rawResult
@@ -764,14 +873,23 @@ func (ms *MemorySearch) searchReasoning(
 	if fq == "" {
 		err = errNoUsableFTSTerms
 	} else {
-		rows, err = ms.bm.db.QueryContext(ctx,
-			`SELECT rl.id, rl.task, rl.mode, rl.ts, rl.reasoning_text,
-		bm25(reasoning_fts) AS score
-		FROM reasoning_log rl
-		JOIN reasoning_fts rf ON rl.id = rf.rowid
-		WHERE reasoning_fts MATCH ?
-		ORDER BY score LIMIT ?`,
-			fq, limit)
+		rq := `SELECT rl.id, rl.task, rl.mode, rl.ts, rl.reasoning_text,
+			bm25(reasoning_fts) AS score
+			FROM reasoning_log rl
+			JOIN reasoning_fts rf ON rl.id = rf.rowid
+			WHERE reasoning_fts MATCH ?`
+		rargs := []any{fq}
+		if tb[0] != "" {
+			rq += ` AND datetime(rl.ts) >= datetime(?)`
+			rargs = append(rargs, tb[0])
+		}
+		if tb[1] != "" {
+			rq += ` AND datetime(rl.ts) <= datetime(?)`
+			rargs = append(rargs, tb[1])
+		}
+		rq += ` ORDER BY score LIMIT ?`
+		rargs = append(rargs, limit)
+		rows, err = ms.bm.db.QueryContext(ctx, rq, rargs...)
 	}
 	if err != nil {
 		logLayerWarn("reasoning_fts", err)
@@ -952,19 +1070,9 @@ func (ms *MemorySearch) searchRegistry(
 	return out, rows.Err()
 }
 
-// dedupResults removes duplicate results by DedupKey.
-func dedupResults(results []rawResult) []rawResult {
-	seen := make(map[string]bool, len(results))
-	out := make([]rawResult, 0, len(results))
-	for _, r := range results {
-		if seen[r.DedupKey] {
-			continue
-		}
-		seen[r.DedupKey] = true
-		out = append(out, r)
-	}
-	return out
-}
+// (ТЗ-122, срез М2): dedupResults снесён — кросс-ножные дубли фьюзятся
+// суммированием в scoreResults (document-level RRF), а не выкидыванием
+// в недетерминированном порядке goroutine.
 
 // scoreResults applies normalized_bm25 * layer_priority + recency.
 // ТЗ-122 (срез 1.5): RRF (reciprocal rank fusion, Cormack 2009) —
@@ -994,17 +1102,76 @@ func scoreResults(results []rawResult) []SearchResult {
 			if ra.IsFTS && rb.IsFTS && ra.RawBM25 != rb.RawBM25 {
 				return ra.RawBM25 < rb.RawBM25
 			}
-			return ra.CreatedAt.After(rb.CreatedAt)
+			if !ra.CreatedAt.Equal(rb.CreatedAt) {
+				return ra.CreatedAt.After(rb.CreatedAt)
+			}
+			return ra.DedupKey < rb.DedupKey // детерминизм стенда (бой 20 окт)
 		})
-		for rank0, i := range idxs {
+		// Дубль внутри слоя занимает одну (лучшую) позицию.
+		seenInLayer := map[string]bool{}
+		effectiveRank := 0
+		for _, i := range idxs {
+			k2 := results[i].DedupKey
+			if k2 != "" && seenInLayer[k2] {
+				continue
+			}
+			if k2 != "" {
+				seenInLayer[k2] = true
+			}
 			rrf[i] = results[i].LayerPrio *
-				(rrfK + 1) / (rrfK + float64(rank0) + 1)
+				(rrfK + 1) / (rrfK + float64(effectiveRank) + 1)
+			effectiveRank++
+		}
+	}
+
+	// ТЗ-122 (срез М2): document-level RRF — вклады ног СУММИРУЮТСЯ по
+	// документу (DedupKey). Раньше dedupResults выкидывал кросс-ножные
+	// дубли ДО скоринга, и выжившая копия зависела от порядка goroutine
+	// (недетерминизм стенда: кейс 6 мигал LOW 17 ↔ MISS между прогонами).
+	// Канон гибрида: документ, найденный обеими ногами, сильнее одноножного.
+	type fusedDoc struct {
+		score float64
+		rep   int
+		best  float64
+	}
+	byDoc := map[string]*fusedDoc{}
+	order := []string{}
+	for i, r := range results {
+		key := r.DedupKey
+		if key == "" {
+			key = fmt.Sprintf("_nodupkey_%d", i)
+		}
+		f := byDoc[key]
+		if f == nil {
+			f = &fusedDoc{rep: i, best: rrf[i]}
+			byDoc[key] = f
+			order = append(order, key)
+		}
+		// ТЗ-122 (срез М2.1): proximity-вес для vec-ноги (RSF, Weaviate/
+		// MongoDB; arXiv 2210.11934 — RRF от позиций выбрасывает магнитуду).
+		// RawBM25 vec-хита = L2-дистанция; для нормализованных bge-m3
+		// cos = 1 - d^2/2. Близкий хит получает свои позиционные очки
+		// почти целиком, эхо на грани порога — вполовину, за √2 — ноль.
+		contrib := rrf[i]
+		if strings.HasPrefix(r.Source, "vec_") {
+			prox := 1.0 - r.RawBM25*r.RawBM25/2.0
+			if prox < 0 {
+				prox = 0
+			}
+			contrib *= prox
+		}
+		f.score += contrib
+		if rrf[i] > f.best {
+			f.best = rrf[i]
+			f.rep = i
 		}
 	}
 
 	now := time.Now()
-	out := make([]SearchResult, 0, len(results))
-	for i, r := range results {
+	out := make([]SearchResult, 0, len(byDoc))
+	for _, key := range order {
+		f := byDoc[key]
+		r := results[f.rep]
 		// Recency: linear decay 30d, clamp 0..0.1
 		days := now.Sub(r.CreatedAt).Hours() / 24.0
 		recency := 0.0
@@ -1014,8 +1181,8 @@ func scoreResults(results []rawResult) []SearchResult {
 		}
 
 		// Кластерный буст (горячие соседи) мультипликативно усиливает
-		// позиционный скор слоя.
-		s := rrf[i]*(1+r.Boost) + recency
+		// сфьюженный скор документа.
+		s := f.score*(1+r.Boost) + recency
 		s = math.Round(s*1000) / 1000
 
 		out = append(out, SearchResult{
@@ -1619,10 +1786,87 @@ func (ms *MemorySearch) Search(
 	ctx, cancel := context.WithTimeout(ctx, searchTimeout)
 	defer cancel()
 	results := ms.fanOut(ctx, query, limit, false, sessionID, "", "")
-	results = dedupResults(results)
 	scored := scoreResults(results)
-	sort.Slice(scored, func(i, j int) bool {
-		return scored[i].Score > scored[j].Score
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].Score != scored[j].Score {
+			return scored[i].Score > scored[j].Score
+		}
+		if scored[i].CreatedAt != scored[j].CreatedAt {
+			return scored[i].CreatedAt > scored[j].CreatedAt // string: ISO-таймстемпы, лексикографически корректно
+		}
+		return scored[i].Summary < scored[j].Summary // детерминизм стенда (бой 20 окт)
 	})
-	return ensureLayerDiversity(scored, limit)
+	scored = ms.episodeFilter(sessionID, query, scored)
+	scored = ms.maybeRerank(ctx, query, scored)
+	scored = ms.applyTemporalWindow(query, scored)
+	out := ensureLayerDiversity(scored, limit)
+	ms.episodeMark(sessionID, out)
+	return out
+}
+
+// eventsHotPool — константный пул горячей events-ноги (как knowledge=40).
+const eventsHotPool = 40
+
+// searchEventsHot — горячая нога действий (М7.3). FTS-таблицы у events
+// нет (объём — сотни строк) → LIKE per word по summary. Архивные копии
+// исключены: архивация копирует без DELETE, иначе каждое событие дало бы
+// дубль events:%d + events_archive:%d в одной выдаче.
+func (ms *MemorySearch) searchEventsHot(
+	ctx context.Context,
+	query string,
+	_ int,
+) ([]rawResult, error) {
+	var words []string
+	for _, w := range strings.Fields(query) {
+		w = strings.Trim(w, ".,!?\"'«»():;")
+		if len([]rune(w)) >= 3 {
+			words = append(words, w)
+		}
+	}
+	if len(words) == 0 {
+		return nil, nil
+	}
+	conds := make([]string, len(words))
+	args := make([]any, 0, len(words)+1)
+	for i, w := range words {
+		conds[i] = "e.summary LIKE '%' || ? || '%'"
+		args = append(args, w)
+	}
+	// #nosec G202 -- conds из одного литерала; слова параметризованы через ?
+	q := `SELECT e.id, e.type, e.outcome, e.summary, e.ts
+		FROM events e
+		WHERE (` + strings.Join(conds, " OR ") + `)
+			AND e.id NOT IN (SELECT id FROM events_archive)
+		ORDER BY e.ts DESC, e.id LIMIT ?`
+	args = append(args, eventsHotPool)
+	rows, err := ms.bm.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("pika/memory_tools: events hot: %w", err)
+	}
+	defer rows.Close()
+
+	var out []rawResult
+	for rows.Next() {
+		var id int64
+		var typ, summary, ts string
+		var outcome sql.NullString
+		if scanErr := rows.Scan(&id, &typ, &outcome, &summary, &ts); scanErr != nil {
+			return nil, fmt.Errorf("pika/memory_tools: events hot scan: %w", scanErr)
+		}
+		label := "[" + typ
+		if outcome.Valid && outcome.String != "" {
+			label += ":" + outcome.String
+		}
+		label += "] " + summary
+		out = append(out, rawResult{
+			Type:        "event",
+			Summary:     label,
+			Source:      "events",
+			CreatedAt:   parseSQLiteTime(ts),
+			DedupKey:    fmt.Sprintf("events:%d", id),
+			LayerPrio:   prioEvents,
+			FullContent: label,
+		})
+	}
+	return out, rows.Err()
 }
