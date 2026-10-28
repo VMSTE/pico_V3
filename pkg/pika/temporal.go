@@ -135,8 +135,8 @@ func (ms *MemorySearch) searchTemporal(
 			FullContent: fmt.Sprintf("[%s] %s", role, content.String),
 		})
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("pika/memory_tools: temporal messages rows: %w", err)
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, fmt.Errorf("pika/memory_tools: temporal messages rows: %w", rowsErr)
 	}
 
 	// События окна — действия с исходом (память дел).
@@ -173,8 +173,8 @@ func (ms *MemorySearch) searchTemporal(
 			FullContent: label,
 		})
 	}
-	if err := rows2.Err(); err != nil {
-		return nil, fmt.Errorf("pika/memory_tools: temporal events rows: %w", err)
+	if rowsErr := rows2.Err(); rowsErr != nil {
+		return nil, fmt.Errorf("pika/memory_tools: temporal events rows: %w", rowsErr)
 	}
 
 	// Единый ts-порядок окна; позиция → синтетический bm25.

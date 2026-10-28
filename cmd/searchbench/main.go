@@ -33,17 +33,45 @@ type benchCase struct {
 func main() {
 	dbPath := flag.String("db", "", "path to a COPY of bot_memory.db")
 	casesPath := flag.String("cases", "cmd/searchbench/cases.json", "cases file")
-	embed := flag.Bool("embed", false, "backfill embeddings on the copy (OPENROUTER_API_KEY env required)")
+	embed := flag.Bool(
+		"embed",
+		false,
+		"backfill embeddings on the copy (OPENROUTER_API_KEY env required)",
+	)
 	vec := flag.Bool("vec", false, "enable vector leg (OPENROUTER_API_KEY env required)")
 	vecWeight := flag.Float64("vecweight", 1.0, "vector leg weight multiplier (calibration grid)")
-	vecProbe := flag.Bool("vecprobe", false, "print raw KNN distances per case (needs OPENROUTER_API_KEY)")
-	rerank := flag.Bool("rerank", false, "М3: LLM-реранк топ-20 после фьюжна (OPENROUTER_API_KEY; модель из PIKA_RERANK_MODEL)")
-	qgen := flag.Bool("qgen", false, "М4: бэкфилл вопросной индексации (OPENROUTER_API_KEY; модель из PIKA_QGEN_MODEL)")
+	vecProbe := flag.Bool(
+		"vecprobe",
+		false,
+		"print raw KNN distances per case (needs OPENROUTER_API_KEY)",
+	)
+	rerank := flag.Bool(
+		"rerank",
+		false,
+		"М3: LLM-реранк топ-20 после фьюжна (OPENROUTER_API_KEY; модель из PIKA_RERANK_MODEL)",
+	)
+	qgen := flag.Bool(
+		"qgen",
+		false,
+		"М4: бэкфилл вопросной индексации (OPENROUTER_API_KEY; модель из PIKA_QGEN_MODEL)",
+	)
 	rounds := flag.Int("rounds", 1, "М5: поисковых раундов на кейс (агентный цикл, ReFind-style)")
 	vecMaxDist := flag.Float64("vecmaxdist", 0, "vector leg L2 distance cutoff (0 = off)")
-	reader := flag.Bool("reader", false, "М6: Читатель — извлечение значения из топ-пула + голосование (OPENROUTER_API_KEY; модель PIKA_READER_MODEL, фолбэк PIKA_RERANK_MODEL)")
-	answer := flag.Bool("answer", false, "М7: answer-level метрика — сильная модель отвечает по пулу, холодный судья сверяет с expect (OPENROUTER_API_KEY; модель PIKA_ANSWER_MODEL)")
-	hyde := flag.Bool("hyde", false, "М7.2: query expansion — LLM пишет правдоподобный фрагмент ответа, он дописывается к запросу (OPENROUTER_API_KEY; модель PIKA_HYDE_MODEL, фолбэк PIKA_RERANK_MODEL)")
+	reader := flag.Bool(
+		"reader",
+		false,
+		"М6: Читатель — извлечение значения из топ-пула + голосование (OPENROUTER_API_KEY; модель PIKA_READER_MODEL, фолбэк PIKA_RERANK_MODEL)",
+	)
+	answer := flag.Bool(
+		"answer",
+		false,
+		"М7: answer-level метрика — сильная модель отвечает по пулу, холодный судья сверяет с expect (OPENROUTER_API_KEY; модель PIKA_ANSWER_MODEL)",
+	)
+	hyde := flag.Bool(
+		"hyde",
+		false,
+		"М7.2: query expansion — LLM пишет правдоподобный фрагмент ответа, он дописывается к запросу (OPENROUTER_API_KEY; модель PIKA_HYDE_MODEL, фолбэк PIKA_RERANK_MODEL)",
+	)
 	flag.Parse()
 	if *dbPath == "" {
 		fmt.Fprintln(os.Stderr, "usage: searchbench -db /tmp/bench.db [-cases cases.json]")
@@ -315,8 +343,14 @@ func main() {
 		fmt.Printf("     слои в выдаче: %v (всего %d)\n", types, len(results))
 		if mark != "OK" {
 			for j := 0; j < len(results); j++ {
-				fmt.Printf("     top%d [%s/%s %.3f] %s\n",
-					j+1, results[j].Type, results[j].Source, results[j].Score, trunc(results[j].Summary, 90))
+				fmt.Printf(
+					"     top%d [%s/%s %.3f] %s\n",
+					j+1,
+					results[j].Type,
+					results[j].Source,
+					results[j].Score,
+					trunc(results[j].Summary, 90),
+				)
 			}
 		}
 		if readerCaller != nil {

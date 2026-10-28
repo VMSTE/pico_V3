@@ -284,7 +284,7 @@ func TestSearchVector_CrossLegFusion(t *testing.T) {
 	ms.SetEmbedder(NewEmbedder(srv.URL, "k", ""))
 
 	res := ms.Search(ctx, "питомец", 10, "s1")
-	var rankA, rankB = -1, -1
+	rankA, rankB := -1, -1
 	for j, r := range res {
 		if strings.Contains(r.Summary, "питомец") && rankA < 0 {
 			rankA = j
@@ -332,7 +332,7 @@ func TestSearchVector_ProximityWeighsCloser(t *testing.T) {
 	}
 
 	res := ms.Search(ctx, "питомец", 10, "s1")
-	var rankNear, rankFar = -1, -1
+	rankNear, rankFar := -1, -1
 	for j, r := range res {
 		if strings.Contains(r.Summary, "близко") && rankNear < 0 {
 			rankNear = j

@@ -1832,6 +1832,7 @@ func (ms *MemorySearch) searchEventsHot(
 		conds[i] = "e.summary LIKE '%' || ? || '%'"
 		args = append(args, w)
 	}
+	// #nosec G202 -- conds из одного литерала; слова параметризованы через ?
 	q := `SELECT e.id, e.type, e.outcome, e.summary, e.ts
 		FROM events e
 		WHERE (` + strings.Join(conds, " OR ") + `)
