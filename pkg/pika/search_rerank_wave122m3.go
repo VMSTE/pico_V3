@@ -61,7 +61,8 @@ func NewOpenRouterLLMCaller(
 	return func(ctx context.Context, sysPrompt, userContent string) (string, error) {
 		body, _ := json.Marshal(map[string]any{
 			"model":       model,
-			"temperature": 0, // судья холодный: на дефолтной t=1.0 флипы 18↔20/23 (бой 20 окт)
+			"temperature": 0,  // судья холодный: на дефолтной t=1.0 флипы 18↔20/23 (бой 20 окт)
+			"seed":        42, // best-effort детерминизм OpenRouter (не гарантия, но сужает разброс)
 			"messages": []map[string]string{
 				{"role": "system", "content": sysPrompt},
 				{"role": "user", "content": userContent},

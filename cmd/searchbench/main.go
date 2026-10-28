@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sipeed/picoclaw/pkg/pika"
 	toolshared "github.com/sipeed/picoclaw/pkg/tools/shared"
@@ -165,6 +166,7 @@ func main() {
 	}
 
 	var answerCaller pika.RankCaller
+	var judgeCaller pika.RankCaller
 	if *answer {
 		key := os.Getenv("OPENROUTER_API_KEY")
 		if key == "" {
@@ -176,7 +178,12 @@ func main() {
 			model = os.Getenv("PIKA_RERANK_MODEL")
 		}
 		answerCaller = pika.NewOpenRouterRankCaller("", key, model)
-		fmt.Printf("answer: ON (model %s)\n", model)
+		judgeModel := os.Getenv("PIKA_JUDGE_MODEL")
+		if judgeModel == "" {
+			judgeModel = model
+		}
+		judgeCaller = pika.NewOpenRouterRankCaller("", key, judgeModel)
+		fmt.Printf("answer: ON (model %s, judge %s)\n", model, judgeModel)
 	}
 
 	var hydeCaller pika.RankCaller
@@ -334,13 +341,22 @@ func main() {
 			}
 		}
 		if answerCaller != nil {
-			raw, aErr := answerCaller(ctx, answerSysPrompt, readerPrompt(c.Q, results))
+			var raw string
+			var aErr error
+			for attempt := 0; attempt < 3; attempt++ {
+				raw, aErr = answerCaller(ctx, answerSysPrompt, readerPrompt(c.Q, results))
+				if aErr == nil {
+					break
+				}
+				fmt.Printf("    answer err (попытка %d): %v\n", attempt+1, aErr)
+				time.Sleep(time.Duration(5+attempt*7) * time.Second)
+			}
 			if aErr != nil {
 				fmt.Printf("     answer: ERROR %v\n", aErr)
 			} else {
 				ans := strings.TrimSpace(raw)
 				strict := strings.Contains(strings.ToLower(ans), strings.ToLower(c.Expect))
-				judged := judgeReaderValue(ctx, answerCaller, c.Q, c.Expect, ans)
+				judged := judgeReaderValue(ctx, judgeCaller, c.Q, c.Expect, ans)
 				if strict {
 					answerStrictHits++
 				}
@@ -448,6 +464,8 @@ const readerJudgeSysPrompt = "Ты — строгий проверяющий. Т
 	"эталонные слова в нём встречаются; (2) ответ содержит эталонный факт " +
 	"по смыслу. Формулировка может отличаться; факт НЕ обязан быть " +
 	"главной мыслью ответа — достаточно упоминания в любом месте; " +
+	"Если точных данных в записях не было и ответ честно говорит об этом, " +
+	"приводя факты по теме вопроса и упоминая эталонный факт, — это HIT. " +
 	"дополнительные факты рядом с эталонным не мешают. " +
 	"Верни одно слово HIT или MISS. Никаких пояснений."
 
@@ -460,8 +478,14 @@ func judgeReaderValue(ctx context.Context, caller pika.RankCaller, q, expect, va
 	for i := 0; i < 3; i++ {
 		raw, err := caller(ctx, readerJudgeSysPrompt,
 			fmt.Sprintf("Вопрос: %s\nЭталон: %s\nОтвет: %s", q, expect, value))
-		if err == nil && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(raw)), "HIT") {
+		if err != nil {
+			fmt.Printf("    judge vote err: %v\n", err)
+			continue
+		}
+		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(raw)), "HIT") {
 			votes++
+		} else {
+			fmt.Printf("    judge noHIT: %.80q\n", raw)
 		}
 	}
 	return votes >= 2
@@ -474,7 +498,13 @@ const answerSysPrompt = "Ты — личный ассистент с памят�
 	"Отвечай кратко (1-3 предложения); ключевые значения (имена, числа, " +
 	"названия, даты) приводи дословно, как в записях. Если в вопросе назван " +
 	"период (месяц, «в начале», «до/после …») — отвечай ТОЛЬКО по записям этого " +
-	"периода, ориентируясь на даты записей; записи вне периода игнорируй."
+	"периода, ориентируясь на даты записей; записи вне периода игнорируй. " +
+	"Если пользователь повторял одну и ту же просьбу в нескольких записях " +
+	"— это сильный сигнал: обязательно назови, что именно он просил, дословно. Если тема или " +
+	"заголовок записи прямо отвечает на вопрос — процитируй дословно, даже " +
+	"если содержание пересказываешь своими словами. Подходящих фактов несколько " +
+	"— перечисли все, а не один. В конце ответа укажи номера всех " +
+	"использованных записей в квадратных скобках, например [2], [14]."
 
 const hydeSysPrompt = "Пользователь спрашивает память личного ассистента. " +
 	"Напиши короткий (2-3 предложения) правдоподобный фрагмент из истории " +
