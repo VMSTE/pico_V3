@@ -82,16 +82,18 @@ func (bm *BotMemory) pendingQuestionDocs(
 	if err != nil {
 		return nil, fmt.Errorf("pika/questions: pending hot: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id int64
 		var content string
 		if err := rows.Scan(&id, &content); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		out = append(out, pendingDoc{source: "hot", id: id, content: content})
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("pika/questions: hot rows: %w", err)
+	}
 	if len(out) < batch {
 		arows, aErr := bm.db.QueryContext(ctx, `SELECT a.id,
 				a.summary || ' ' || COALESCE(a.detail, '')
@@ -103,16 +105,18 @@ func (bm *BotMemory) pendingQuestionDocs(
 		if aErr != nil {
 			return nil, fmt.Errorf("pika/questions: pending atoms: %w", aErr)
 		}
+		defer func() { _ = arows.Close() }()
 		for arows.Next() {
 			var id int64
 			var content string
 			if err := arows.Scan(&id, &content); err != nil {
-				arows.Close()
 				return nil, err
 			}
 			out = append(out, pendingDoc{source: "atom", id: id, content: content})
 		}
-		arows.Close()
+		if err := arows.Err(); err != nil {
+			return nil, fmt.Errorf("pika/questions: atom rows: %w", err)
+		}
 	}
 	// ТЗ-122 (срез М4.3): мысли модели. Лексически reasoning ищется
 	// (слой prio 0.85), но вопросной индексацией не покрывался — а планы
@@ -131,12 +135,12 @@ func (bm *BotMemory) pendingQuestionDocs(
 			if rErr != nil {
 				return nil, fmt.Errorf("pika/questions: pending reasoning: %w", rErr)
 			}
+			defer func() { _ = rrows.Close() }() // итераций мало, курсор живёт до выхода
 			var got int
 			for rrows.Next() {
 				var id int64
 				var content string
 				if err := rrows.Scan(&id, &content); err != nil {
-					rrows.Close()
 					return nil, err
 				}
 				got++
@@ -147,7 +151,9 @@ func (bm *BotMemory) pendingQuestionDocs(
 				}
 				out = append(out, pendingDoc{source: "reasoning", id: id, content: content})
 			}
-			rrows.Close()
+			if err := rrows.Err(); err != nil {
+				return nil, err
+			}
 			if got == 0 {
 				break
 			}
@@ -168,15 +174,17 @@ func (bm *BotMemory) pendingQuestionDocs(
 			if aErr != nil {
 				return nil, fmt.Errorf("pika/questions: pending archive: %w", aErr)
 			}
+			defer func() { _ = archRows.Close() }()
 			for archRows.Next() {
 				var id int64
 				if err := archRows.Scan(&id); err != nil {
-					archRows.Close()
 					return nil, err
 				}
 				archIDs = append(archIDs, id)
 			}
-			archRows.Close()
+			if err := archRows.Err(); err != nil {
+				return nil, err
+			}
 			if len(archIDs) == 0 {
 				break
 			}

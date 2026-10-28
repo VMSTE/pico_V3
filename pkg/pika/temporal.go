@@ -47,8 +47,10 @@ var monthPats = []struct {
 var yearRe = regexp.MustCompile(`\b(20\d\d)\b`)
 
 // Маркеры направления: «в самом начале, первые» → ранние записи окна.
-var ascRe = regexp.MustCompile(`начал|перв|ранн`)
-var descRe = regexp.MustCompile(`конец|конц|последн|недавн|свеж`)
+var (
+	ascRe  = regexp.MustCompile(`начал|перв|ранн`)
+	descRe = regexp.MustCompile(`конец|конц|последн|недавн|свеж`)
+)
 
 // ParseTemporalWindow — детерминированный парсер темпоральной ссылки.
 // Год: явный из запроса, иначе ближайший не-будущий разворот месяца
@@ -108,21 +110,24 @@ func (ms *MemorySearch) searchTemporal(
 	if err != nil {
 		return nil, fmt.Errorf("pika/memory_tools: temporal messages: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id int64
 		var chatID, role, ts string
 		var content sql.NullString
 		if scanErr := rows.Scan(&id, &chatID, &role, &content, &ts); scanErr != nil {
-			rows.Close()
 			return nil, fmt.Errorf("pika/memory_tools: temporal scan: %w", scanErr)
 		}
 		out = append(out, rawResult{
-			Type:        "session",
-			Summary:     fmt.Sprintf("[%s] %s", role, truncateStr(content.String, 200)),
-			Source:      "temporal",
-			CreatedAt:   parseSQLiteTime(ts),
-			IsFTS:       true,
-			DedupKey:    fmt.Sprintf("messages:%d", id), // ключ messages-ноги: корроборация (срез М2)
+			Type:      "session",
+			Summary:   fmt.Sprintf("[%s] %s", role, truncateStr(content.String, 200)),
+			Source:    "temporal",
+			CreatedAt: parseSQLiteTime(ts),
+			IsFTS:     true,
+			DedupKey: fmt.Sprintf(
+				"messages:%d",
+				id,
+			), // ключ messages-ноги: корроборация (срез М2)
 			Role:        role,
 			LayerPrio:   prioTemporal,
 			MsgID:       id,
@@ -130,7 +135,9 @@ func (ms *MemorySearch) searchTemporal(
 			FullContent: fmt.Sprintf("[%s] %s", role, content.String),
 		})
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("pika/memory_tools: temporal messages rows: %w", err)
+	}
 
 	// События окна — действия с исходом (память дел).
 	qe := `SELECT e.id, e.type, e.outcome, e.summary, e.ts
@@ -142,12 +149,12 @@ func (ms *MemorySearch) searchTemporal(
 	if err != nil {
 		return nil, fmt.Errorf("pika/memory_tools: temporal events: %w", err)
 	}
+	defer func() { _ = rows2.Close() }()
 	for rows2.Next() {
 		var id int64
 		var typ, summary, ts string
 		var outcome sql.NullString
 		if scanErr := rows2.Scan(&id, &typ, &outcome, &summary, &ts); scanErr != nil {
-			rows2.Close()
 			return nil, fmt.Errorf("pika/memory_tools: temporal events scan: %w", scanErr)
 		}
 		label := "[" + typ
@@ -166,7 +173,9 @@ func (ms *MemorySearch) searchTemporal(
 			FullContent: label,
 		})
 	}
-	rows2.Close()
+	if err := rows2.Err(); err != nil {
+		return nil, fmt.Errorf("pika/memory_tools: temporal events rows: %w", err)
+	}
 
 	// Единый ts-порядок окна; позиция → синтетический bm25.
 	sort.SliceStable(out, func(i, j int) bool {

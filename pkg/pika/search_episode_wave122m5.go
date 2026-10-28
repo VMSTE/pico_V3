@@ -216,7 +216,7 @@ func augmentQuery(query string, results []SearchResult) string {
 		t string
 		f int
 	}
-	var tops []tf
+	tops := make([]tf, 0, len(freq))
 	for t, f := range freq {
 		tops = append(tops, tf{t, f})
 	}
