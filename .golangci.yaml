@@ -10,6 +10,7 @@ linters:
     - dupword
     - err113
     - exhaustruct
+    - exhaustruct_v5  # тот же линтер под новым именем в golangci-lint v2.15
     - funcorder
     - gochecknoglobals
     - gosmopolitan  # Project legitimately uses CJK text in tests (FTS5, token counting)
@@ -53,6 +54,7 @@ linters:
     - nilnil
     - paralleltest
     - perfsprint
+    - recvcheck  # mixed receivers у 3 типов — API-разбор отдельной волной
     - revive
     - staticcheck
     - tagalign
@@ -81,6 +83,7 @@ linters:
       enable-all: true
       disable:
         - fieldalignment
+        - inline  # новый анализатор go1.27 (подсказки вида reflect.Ptr) — разбор отдельно
     lll:
       line-length: 120
       tab-width: 4
